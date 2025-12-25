@@ -1,0 +1,175 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Контакты - {{ SITE_NAME }}{% endblock %}
+{% block meta_description %}Контакты {{ SITE_NAME }}. Телефон, адрес, email.{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="breadcrumbs" aria-label="Хлебные крошки">
+    <div class="container">
+        <ol class="breadcrumbs__list" itemscope itemtype="https://schema.org/BreadcrumbList">
+            <li class="breadcrumbs__item" itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
+                <a href="{% url 'core:home' %}" itemprop="item"><span itemprop="name">Главная</span></a>
+                <meta itemprop="position" content="1">
+            </li>
+            <li class="breadcrumbs__item breadcrumbs__item--active" itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
+                <span itemprop="name">Контакты</span>
+                <meta itemprop="position" content="2">
+            </li>
+        </ol>
+    </div>
+</nav>
+{% endblock %}
+
+{% block extra_schema %}
+<script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "LocalBusiness",
+    "name": "{{ SITE_NAME }}",
+    "telephone": "{{ SITE_PHONE }}",
+    "email": "{{ SITE_EMAIL }}",
+    "address": {
+        "@type": "PostalAddress",
+        "streetAddress": "{{ SITE_ADDRESS }}"
+    }
+}
+</script>
+{% endblock %}
+
+{% block content %}
+<section class="page-section">
+    <div class="container">
+        <h1 class="page-title">{% if page %}{{ page.title }}{% else %}Контакты{% endif %}</h1>
+        
+        {% if page and page.content %}
+        <div class="page-content">
+            {{ page.content|safe }}
+        </div>
+        {% endif %}
+        
+        <div class="contacts-grid">
+            <div class="contacts-info">
+                <div class="contact-block">
+                    <div class="contact-block__icon">
+                        <i class="bi bi-telephone-fill"></i>
+                    </div>
+                    <div class="contact-block__content">
+                        <h3>Телефон</h3>
+                        <a href="tel:{{ SITE_PHONE }}">{{ SITE_PHONE }}</a>
+                        {% if SITE_PHONE_2 %}
+                        <br><a href="tel:{{ SITE_PHONE_2 }}">{{ SITE_PHONE_2 }}</a>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <div class="contact-block">
+                    <div class="contact-block__icon">
+                        <i class="bi bi-envelope-fill"></i>
+                    </div>
+                    <div class="contact-block__content">
+                        <h3>Email</h3>
+                        <a href="#" class="email-link" data-email="{{ SITE_EMAIL }}">{{ SITE_EMAIL }}</a>
+                    </div>
+                </div>
+                
+                <div class="contact-block">
+                    <div class="contact-block__icon">
+                        <i class="bi bi-chat-dots-fill"></i>
+                    </div>
+                    <div class="contact-block__content">
+                        <h3>Мессенджеры</h3>
+                        <div class="messengers-list">
+                            {% if WHATSAPP_URL %}
+                            <a href="{{ WHATSAPP_URL }}" target="_blank" rel="noopener noreferrer" class="messenger-link messenger-link--whatsapp">
+                                <img src="{% static 'images/WhatsApp.svg.webp' %}" alt="WhatsApp" class="messenger-link__icon">
+                                <span>Мы в WhatsApp</span>
+                            </a>
+                            {% endif %}
+                            {% if TELEGRAM_URL %}
+                            <a href="{{ TELEGRAM_URL }}" target="_blank" rel="noopener noreferrer" class="messenger-link messenger-link--telegram">
+                                <img src="{% static 'images/Telegram_2019_Logo.svg.webp' %}" alt="Telegram" class="messenger-link__icon">
+                                <span>Связаться через Telegram</span>
+                            </a>
+                            {% endif %}
+                            {% if MAX_URL %}
+                            <a href="{{ MAX_URL }}" target="_blank" rel="noopener noreferrer" class="messenger-link messenger-link--max">
+                                <img src="{% static 'images/Max_logo_2025.png' %}" alt="MAX" class="messenger-link__icon">
+                                <span>Связаться через MAX</span>
+                            </a>
+                            {% endif %}
+                            {% if MAX_OPT_URL %}
+                            <a href="{{ MAX_OPT_URL }}" target="_blank" rel="noopener noreferrer" class="messenger-link messenger-link--max-opt">
+                                <img src="{% static 'images/Max_logo_2025.png' %}" alt="MAX ОПТ" class="messenger-link__icon">
+                                <span>MAX ОПТ</span>
+                            </a>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="contact-block">
+                    <div class="contact-block__icon">
+                        <i class="bi bi-geo-alt-fill"></i>
+                    </div>
+                    <div class="contact-block__content">
+                        <h3>Адрес</h3>
+                        <p>{{ SITE_ADDRESS }}</p>
+                    </div>
+                </div>
+                
+                <div class="contact-block">
+                    <div class="contact-block__icon">
+                        <i class="bi bi-clock-fill"></i>
+                    </div>
+                    <div class="contact-block__content">
+                        <h3>Режим работы</h3>
+                        <p>{{ SITE_HOURS|default:"Пн-Пт: 9:00 - 18:00" }}</p>
+                    </div>
+                </div>
+                
+                {% if FARPOST_PROFILE_URL %}
+                <div class="contact-block">
+                    <div class="contact-block__icon">
+                        <i class="bi bi-shop"></i>
+                    </div>
+                    <div class="contact-block__content">
+                        <h3>Наш магазин на Farpost</h3>
+                        <a href="{{ FARPOST_PROFILE_URL }}" target="_blank" rel="noopener noreferrer">
+                            Перейти в магазин на Farpost
+                        </a>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+            
+            <div class="contacts-map">
+                <div id="map" style="width: 100%; height: 400px;"></div>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://api-maps.yandex.ru/2.1/?lang=ru_RU" type="text/javascript"></script>
+<script>
+ymaps.ready(function () {
+    var map = new ymaps.Map("map", {
+        center: [43.82518, 131.95084], // Координаты: 43.82518 с.ш. 131.95084 в.д.
+        zoom: 16
+    });
+    
+    var placemark = new ymaps.Placemark([43.82518, 131.95084], {
+        balloonContent: '{{ SITE_ADDRESS }}<br>{{ COMPANY_NAME|default:SITE_NAME }}',
+        hintContent: '{{ COMPANY_NAME|default:SITE_NAME }}'
+    }, {
+        preset: 'islands#redDotIcon'
+    });
+    
+    map.geoObjects.add(placemark);
+    placemark.balloon.open();
+});
+</script>
+{% endblock %}
+

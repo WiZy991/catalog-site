@@ -1,0 +1,202 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ category.get_meta_title }} - {{ SITE_NAME }}{% endblock %}
+{% block meta_description %}{{ category.get_meta_description }}{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="breadcrumbs" aria-label="Хлебные крошки">
+    <div class="container">
+        <ol class="breadcrumbs__list" itemscope itemtype="https://schema.org/BreadcrumbList">
+            <li class="breadcrumbs__item" itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
+                <a href="{% url 'core:home' %}" itemprop="item"><span itemprop="name">Главная</span></a>
+                <meta itemprop="position" content="1">
+            </li>
+            <li class="breadcrumbs__item" itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
+                <a href="{% url 'catalog:index' %}" itemprop="item"><span itemprop="name">Каталог</span></a>
+                <meta itemprop="position" content="2">
+            </li>
+            {% for cat in breadcrumbs %}
+            {% if forloop.last %}
+            <li class="breadcrumbs__item breadcrumbs__item--active" itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
+                <span itemprop="name">{{ cat.name }}</span>
+                <meta itemprop="position" content="{{ forloop.counter|add:2 }}">
+            </li>
+            {% else %}
+            <li class="breadcrumbs__item" itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
+                <a href="{{ cat.get_absolute_url }}" itemprop="item"><span itemprop="name">{{ cat.name }}</span></a>
+                <meta itemprop="position" content="{{ forloop.counter|add:2 }}">
+            </li>
+            {% endif %}
+            {% endfor %}
+        </ol>
+    </div>
+</nav>
+{% endblock %}
+
+{% block content %}
+<section class="category-section">
+    <div class="container">
+        <h1 class="page-title">{{ category.name }}</h1>
+        
+        {% if category.description %}
+        <div class="category-description">
+            {{ category.description }}
+        </div>
+        {% endif %}
+        
+        <!-- Подкатегории -->
+        {% if subcategories %}
+        <div class="subcategories-section">
+            <h2 class="subcategories-title">Подкатегории:</h2>
+            <div class="subcategories">
+                {% for sub in subcategories %}
+                <a href="{{ sub.get_absolute_url }}" class="subcategory-link">
+                    <span class="subcategory-name">{{ sub.name }}</span>
+                    <span class="subcategory-count">({{ sub.product_count }})</span>
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+        
+        <div class="catalog-layout">
+            <!-- Фильтры -->
+            <aside class="catalog-sidebar" id="filterSidebar">
+                <div class="sidebar-header">
+                    <h3>Фильтры</h3>
+                    <button class="sidebar-close" id="closeFilters">
+                        <i class="bi bi-x-lg"></i>
+                    </button>
+                </div>
+                
+                <form method="get" id="filterForm" class="filter-form">
+                    <input type="hidden" name="category" value="{{ category.slug }}">
+                    
+                    <!-- Поиск -->
+                    <div class="filter-group">
+                        <label class="filter-label">Поиск</label>
+                        <input type="text" name="search" class="filter-input" placeholder="Кросс-номер, название..." value="{{ request.GET.search }}">
+                    </div>
+                    
+                    <!-- Цена -->
+                    <div class="filter-group">
+                        <label class="filter-label">Цена, ₽</label>
+                        <div class="filter-range">
+                            <input type="number" name="price_min" class="filter-input" placeholder="от" value="{{ request.GET.price_min }}">
+                            <span>—</span>
+                            <input type="number" name="price_max" class="filter-input" placeholder="до" value="{{ request.GET.price_max }}">
+                        </div>
+                    </div>
+                    
+                    <!-- Бренд -->
+                    {% if brands %}
+                    <div class="filter-group">
+                        <label class="filter-label">Бренд</label>
+                        <select name="brand" class="filter-select">
+                            <option value="">Все бренды</option>
+                            {% for value, label in brands %}
+                            <option value="{{ value }}" {% if request.GET.brand == value %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    {% endif %}
+                    
+                    <!-- Состояние -->
+                    <div class="filter-group">
+                        <label class="filter-label">Состояние</label>
+                        <select name="condition" class="filter-select">
+                            <option value="">Любое</option>
+                            <option value="new" {% if request.GET.condition == 'new' %}selected{% endif %}>Новый</option>
+                            <option value="used" {% if request.GET.condition == 'used' %}selected{% endif %}>Б/У</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Наличие -->
+                    <div class="filter-group">
+                        <label class="filter-label">Наличие</label>
+                        <select name="availability" class="filter-select">
+                            <option value="">Любое</option>
+                            <option value="in_stock" {% if request.GET.availability == 'in_stock' %}selected{% endif %}>В наличии</option>
+                            <option value="order" {% if request.GET.availability == 'order' %}selected{% endif %}>Под заказ</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Кросс-номер -->
+                    <div class="filter-group">
+                        <label class="filter-label">Кросс-номер</label>
+                        <input type="text" name="cross_number" class="filter-input" placeholder="Введите номер" value="{{ request.GET.cross_number }}">
+                    </div>
+                    
+                    <!-- Применимость -->
+                    <div class="filter-group">
+                        <label class="filter-label">Применимость</label>
+                        <input type="text" name="applicability" class="filter-input" placeholder="Марка, модель" value="{{ request.GET.applicability }}">
+                    </div>
+                    
+                    <div class="filter-actions">
+                        <button type="submit" class="btn btn--primary btn--block">
+                            Применить
+                        </button>
+                        <a href="{{ category.get_absolute_url }}" class="btn btn--outline btn--block">
+                            Сбросить
+                        </a>
+                    </div>
+                </form>
+            </aside>
+            
+            <!-- Товары -->
+            <div class="catalog-content">
+                <div class="catalog-toolbar">
+                    <div class="catalog-count">
+                        Найдено: <strong>{{ paginator.count }}</strong> товаров
+                    </div>
+                    <button class="filter-toggle" id="showFilters">
+                        <i class="bi bi-funnel"></i> Фильтры
+                    </button>
+                </div>
+                
+                <div class="products-grid" id="productsGrid">
+                    {% include 'catalog/includes/products_grid.html' %}
+                </div>
+                
+                {% include 'catalog/includes/pagination.html' with page_obj=products %}
+            </div>
+        </div>
+        
+        <!-- SEO текст -->
+        {% if category.seo_text %}
+        <div class="seo-text">
+            {{ category.seo_text|safe }}
+        </div>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const filterForm = document.getElementById('filterForm');
+    const showFilters = document.getElementById('showFilters');
+    const closeFilters = document.getElementById('closeFilters');
+    const filterSidebar = document.getElementById('filterSidebar');
+    
+    // Мобильные фильтры
+    if (showFilters) {
+        showFilters.addEventListener('click', function() {
+            filterSidebar.classList.add('is-open');
+            document.body.style.overflow = 'hidden';
+        });
+    }
+    
+    if (closeFilters) {
+        closeFilters.addEventListener('click', function() {
+            filterSidebar.classList.remove('is-open');
+            document.body.style.overflow = '';
+        });
+    }
+});
+</script>
+{% endblock %}
+

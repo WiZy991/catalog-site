@@ -1,0 +1,271 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ product.get_meta_title }} - {{ SITE_NAME }}{% endblock %}
+{% block meta_description %}{{ product.get_meta_description }}{% endblock %}
+
+{% block extra_schema %}
+<script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "Product",
+    "name": "{{ product.name }}",
+    "description": "{{ product.short_description|default:product.description|truncatechars:300 }}",
+    {% if product.get_main_image %}"image": "{{ request.scheme }}://{{ request.get_host }}{{ product.get_main_image.image.url }}",{% endif %}
+    "sku": "{{ product.article }}",
+    "brand": {
+        "@type": "Brand",
+        "name": "{{ product.brand }}"
+    },
+    "offers": {
+        "@type": "Offer",
+        "url": "{{ request.build_absolute_uri }}",
+        "priceCurrency": "RUB",
+        "price": "{{ product.price }}",
+        "availability": "{% if product.availability == 'in_stock' %}https://schema.org/InStock{% elif product.availability == 'order' %}https://schema.org/PreOrder{% else %}https://schema.org/OutOfStock{% endif %}"
+    }
+}
+</script>
+{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="breadcrumbs" aria-label="Хлебные крошки">
+    <div class="container">
+        <ol class="breadcrumbs__list" itemscope itemtype="https://schema.org/BreadcrumbList">
+            <li class="breadcrumbs__item" itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
+                <a href="{% url 'core:home' %}" itemprop="item"><span itemprop="name">Главная</span></a>
+                <meta itemprop="position" content="1">
+            </li>
+            <li class="breadcrumbs__item" itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
+                <a href="{% url 'catalog:index' %}" itemprop="item"><span itemprop="name">Каталог</span></a>
+                <meta itemprop="position" content="2">
+            </li>
+            {% for cat in breadcrumbs %}
+            <li class="breadcrumbs__item" itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
+                <a href="{{ cat.get_absolute_url }}" itemprop="item"><span itemprop="name">{{ cat.name }}</span></a>
+                <meta itemprop="position" content="{{ forloop.counter|add:2 }}">
+            </li>
+            {% endfor %}
+            <li class="breadcrumbs__item breadcrumbs__item--active" itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
+                <span itemprop="name">{{ product.name|truncatechars:50 }}</span>
+                <meta itemprop="position" content="{{ breadcrumbs|length|add:3 }}">
+            </li>
+        </ol>
+    </div>
+</nav>
+{% endblock %}
+
+{% block content %}
+<section class="product-section">
+    <div class="container">
+        <div class="product-page">
+            <!-- Галерея -->
+            <div class="product-gallery">
+                <div class="product-gallery__main">
+                    {% with main_image=product.get_main_image %}
+                    {% if main_image %}
+                    <img src="{{ main_image.image.url }}" alt="{{ main_image.alt|default:product.name }}" id="mainImage" class="product-gallery__image">
+                    {% else %}
+                    <div class="product-gallery__placeholder">
+                        <i class="bi bi-image"></i>
+                        <span>Нет изображения</span>
+                    </div>
+                    {% endif %}
+                    {% endwith %}
+                </div>
+                
+                {% if images.count > 1 %}
+                <div class="product-gallery__thumbs">
+                    {% for image in images %}
+                    <button class="product-gallery__thumb {% if forloop.first %}is-active{% endif %}" 
+                            data-image="{{ image.image.url }}"
+                            data-alt="{{ image.alt|default:product.name }}">
+                        <img src="{{ image.image.url }}" alt="{{ image.alt }}">
+                    </button>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+            
+            <!-- Информация -->
+            <div class="product-info">
+                <h1 class="product-info__title">{{ product.name }}</h1>
+                
+                <div class="product-info__meta">
+                    {% if product.article %}
+                    <span class="product-meta__item">
+                        <strong>Кросс-номер:</strong> {{ product.article }}
+                    </span>
+                    {% endif %}
+                    {% if product.brand %}
+                    <span class="product-meta__item">
+                        <strong>Бренд:</strong> {{ product.brand }}
+                    </span>
+                    {% endif %}
+                </div>
+                
+                <div class="product-info__price-block">
+                    <div class="product-info__price">
+                        {{ product.price|floatformat:0 }} ₽
+                    </div>
+                    {% if product.has_discount %}
+                    <div class="product-info__old-price">
+                        {{ product.old_price|floatformat:0 }} ₽
+                    </div>
+                    <div class="product-info__discount">
+                        -{{ product.discount_percent }}%
+                    </div>
+                    {% endif %}
+                </div>
+                
+                <div class="product-info__availability availability--{{ product.availability }}">
+                    {% if product.availability == 'in_stock' %}
+                    <i class="bi bi-check-circle-fill"></i> В наличии
+                    {% elif product.availability == 'order' %}
+                    <i class="bi bi-clock-fill"></i> Под заказ
+                    {% else %}
+                    <i class="bi bi-x-circle-fill"></i> Нет в наличии
+                    {% endif %}
+                </div>
+                
+                <div class="product-info__condition">
+                    <strong>Состояние:</strong> {{ product.get_condition_display }}
+                </div>
+                
+                {% if product.short_description %}
+                <div class="product-info__short-desc">
+                    {{ product.short_description }}
+                </div>
+                {% endif %}
+                
+                <!-- Табы с информацией внутри карточки -->
+                <div class="product-info__tabs">
+                    <div class="product-tabs__nav">
+                        <button class="product-tabs__btn is-active" data-tab="description">Описание</button>
+                        <button class="product-tabs__btn" data-tab="characteristics">Характеристики</button>
+                        {% if applicability %}
+                        <button class="product-tabs__btn" data-tab="applicability">Применимость</button>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="product-tabs__content">
+                        <div class="product-tab is-active" id="tab-description">
+                            {% if product.description %}
+                            <div class="product-description">
+                                {{ product.description|linebreaks }}
+                            </div>
+                            {% else %}
+                            <p class="text-muted">Описание не добавлено</p>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="product-tab" id="tab-characteristics">
+                            {% if characteristics %}
+                            <table class="characteristics-table">
+                                {% for key, value in characteristics %}
+                                <tr>
+                                    <th>{{ key }}</th>
+                                    <td>{{ value }}</td>
+                                </tr>
+                                {% endfor %}
+                            </table>
+                            {% else %}
+                            <p class="text-muted">Характеристики не указаны</p>
+                            {% endif %}
+                        </div>
+                        
+                        {% if applicability %}
+                        <div class="product-tab" id="tab-applicability">
+                            <ul class="applicability-list">
+                                {% for item in applicability %}
+                                <li>{{ item }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <div class="product-info__actions">
+                    {% if product.availability == 'in_stock' %}
+                    <button class="btn btn--primary btn--lg btn-add-cart" data-product-id="{{ product.id }}" onclick="addToCart({{ product.id }}); return false;">
+                        <i class="bi bi-cart-plus"></i> В корзину
+                    </button>
+                    {% endif %}
+                    {% if product.farpost_url %}
+                    <a href="{{ product.farpost_url }}" target="_blank" rel="noopener noreferrer" class="btn btn--outline btn--lg btn--farpost">
+                        <i class="bi bi-box-arrow-up-right"></i> Перейти на Farpost
+                    </a>
+                    {% endif %}
+                    <a href="tel:{{ SITE_PHONE }}" class="btn btn--outline btn--lg">
+                        <i class="bi bi-telephone"></i> Позвонить
+                    </a>
+                </div>
+                
+                <div class="product-info__share">
+                    <span>Поделиться:</span>
+                    <a href="https://vk.com/share.php?url={{ request.build_absolute_uri }}" target="_blank" class="share-btn">
+                        <i class="bi bi-vk"></i>
+                    </a>
+                    <a href="https://t.me/share/url?url={{ request.build_absolute_uri }}&text={{ product.name }}" target="_blank" class="share-btn">
+                        <i class="bi bi-telegram"></i>
+                    </a>
+                    <a href="https://wa.me/?text={{ product.name }} {{ request.build_absolute_uri }}" target="_blank" class="share-btn">
+                        <i class="bi bi-whatsapp"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Похожие товары -->
+        {% if related_products %}
+        <div class="related-products">
+            <h2 class="section__title">Товары для этого автомобиля</h2>
+            <div class="products-grid">
+                {% for product in related_products %}
+                {% include 'catalog/includes/product_card.html' %}
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Галерея
+    const thumbs = document.querySelectorAll('.product-gallery__thumb');
+    const mainImage = document.getElementById('mainImage');
+    
+    thumbs.forEach(function(thumb) {
+        thumb.addEventListener('click', function() {
+            thumbs.forEach(t => t.classList.remove('is-active'));
+            this.classList.add('is-active');
+            if (mainImage) {
+                mainImage.src = this.dataset.image;
+                mainImage.alt = this.dataset.alt;
+            }
+        });
+    });
+    
+    // Табы
+    const tabBtns = document.querySelectorAll('.product-tabs__btn');
+    const tabs = document.querySelectorAll('.product-tab');
+    
+    tabBtns.forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            const tabId = this.dataset.tab;
+            
+            tabBtns.forEach(b => b.classList.remove('is-active'));
+            tabs.forEach(t => t.classList.remove('is-active'));
+            
+            this.classList.add('is-active');
+            document.getElementById('tab-' + tabId).classList.add('is-active');
+        });
+    });
+});
+</script>
+{% endblock %}
+

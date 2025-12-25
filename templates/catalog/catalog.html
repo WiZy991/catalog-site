@@ -1,0 +1,67 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Каталог товаров - {{ SITE_NAME }}{% endblock %}
+{% block meta_description %}Каталог товаров {{ SITE_NAME }}. Автозапчасти с доставкой.{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="breadcrumbs" aria-label="Хлебные крошки">
+    <div class="container">
+        <ol class="breadcrumbs__list" itemscope itemtype="https://schema.org/BreadcrumbList">
+            <li class="breadcrumbs__item" itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
+                <a href="{% url 'core:home' %}" itemprop="item"><span itemprop="name">Главная</span></a>
+                <meta itemprop="position" content="1">
+            </li>
+            <li class="breadcrumbs__item breadcrumbs__item--active" itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
+                <span itemprop="name">Каталог</span>
+                <meta itemprop="position" content="2">
+            </li>
+        </ol>
+    </div>
+</nav>
+{% endblock %}
+
+{% block content %}
+<section class="catalog-section">
+    <div class="container">
+        <h1 class="page-title">Каталог товаров</h1>
+        
+        <div class="catalog-categories">
+            {% for category in categories %}
+            <div class="catalog-category">
+                <a href="{{ category.get_absolute_url }}" class="catalog-category__main">
+                    <div class="catalog-category__icon">
+                        {% if category.image %}
+                        <img src="{{ category.image.url }}" alt="{{ category.name }}">
+                        {% else %}
+                        <i class="bi bi-folder2"></i>
+                        {% endif %}
+                    </div>
+                    <div class="catalog-category__content">
+                        <h2 class="catalog-category__title">{{ category.name }}</h2>
+                        <span class="catalog-category__count">{{ category.product_count }} товаров</span>
+                    </div>
+                    <i class="bi bi-chevron-right catalog-category__arrow"></i>
+                </a>
+                {% if category.active_children %}
+                <div class="catalog-category__subcategories">
+                    {% for sub in category.active_children %}
+                    <a href="{{ sub.get_absolute_url }}" class="catalog-category__sub">
+                        <span class="catalog-category__sub-name">{{ sub.name }}</span>
+                        <span class="catalog-category__sub-count">({{ sub.product_count }})</span>
+                    </a>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+            {% empty %}
+            <div class="empty-state">
+                <i class="bi bi-inbox"></i>
+                <p>Категории пока не добавлены</p>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</section>
+{% endblock %}
+

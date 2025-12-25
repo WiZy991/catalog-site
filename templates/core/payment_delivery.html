@@ -1,0 +1,365 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Оплата и доставка - {{ SITE_NAME }}{% endblock %}
+{% block meta_description %}Условия оплаты и доставки {{ SITE_NAME }}. Способы оплаты, транспортные компании, калькулятор доставки.{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="breadcrumbs" aria-label="Хлебные крошки">
+    <div class="container">
+        <ol class="breadcrumbs__list" itemscope itemtype="https://schema.org/BreadcrumbList">
+            <li class="breadcrumbs__item" itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
+                <a href="{% url 'core:home' %}" itemprop="item"><span itemprop="name">Главная</span></a>
+                <meta itemprop="position" content="1">
+            </li>
+            <li class="breadcrumbs__item breadcrumbs__item--active" itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
+                <span itemprop="name">Оплата и доставка</span>
+                <meta itemprop="position" content="2">
+            </li>
+        </ol>
+    </div>
+</nav>
+{% endblock %}
+
+{% block content %}
+<section class="page-section">
+    <div class="container">
+        <h1 class="page-title">Оплата и доставка</h1>
+        
+        {% if page and page.content %}
+        <div class="page-content">
+            {{ page.content|safe }}
+        </div>
+        {% else %}
+        
+        <!-- Способы оплаты -->
+        <div class="payment-methods">
+            <h2>Способы оплаты</h2>
+            
+            <div class="payment-method">
+                <h3>Наличный расчет или оплата по терминалу</h3>
+                <p>При самовывозе из нашего склада в г. Уссурийск вы можете оплатить наличными или банковской картой через терминал.</p>
+            </div>
+            
+            <div class="payment-method">
+                <h3>Банковским переводом с карты на карту</h3>
+                <p>Оплата переводом на банковскую карту. После оформления заказа мы вышлем реквизиты для оплаты. Обязательно укажите номер заказа при переводе.</p>
+            </div>
+            
+            <div class="payment-method">
+                <h3>Безналичная оплата для юридических лиц</h3>
+                <p>Для организаций возможна оплата по безналичному расчету. Работаем без НДС. Стоимость запчасти увеличивается на 7% при безналичной оплате.</p>
+            </div>
+        </div>
+        
+        <!-- Доставка -->
+        <div class="delivery-info">
+            <h2>Доставка</h2>
+            
+            <p>Отправку оплаченных заказов мы осуществляем через любые транспортные компании, доступные в нашем городе.</p>
+            
+            <div class="delivery-options">
+                <h3>Доставка до транспортных компаний</h3>
+                <ul>
+                    <li><strong>ТК Энергия и ТК СДЭК:</strong> доставка заказов до терминала — 200 руб.</li>
+                    <li><strong>Другие ТК:</strong> вызываем курьера, стоимость доставки уточняется индивидуально.</li>
+                </ul>
+                
+                <p><strong>Дополнительная упаковка товара:</strong> 100 руб. (рекомендуется для хрупких товаров)</p>
+            </div>
+            
+            <!-- Калькулятор доставки -->
+            <div class="delivery-calculator">
+                <h3>Калькулятор стоимости доставки</h3>
+                <p class="calculator-note"><em>Расчет стоимости доставки является ориентировочным. Точная стоимость будет известна после фактической сдачи груза в транспортную компанию.</em></p>
+                
+                <div class="calculator-form">
+                    <div class="form-group">
+                        <label for="deliveryCity">Город назначения:</label>
+                        <input type="text" id="deliveryCity" class="form-control" placeholder="Например: Москва">
+                    </div>
+                    <div class="form-group">
+                        <label for="deliveryWeight">Вес груза (кг):</label>
+                        <input type="number" id="deliveryWeight" class="form-control" placeholder="Например: 5" min="0.1" step="0.1">
+                    </div>
+                    <div class="form-group">
+                        <label for="deliveryTC">Транспортная компания:</label>
+                        <select id="deliveryTC" class="form-control">
+                            <option value="">Выберите ТК</option>
+                            <option value="cdek">СДЭК</option>
+                            <option value="energia">Энергия</option>
+                            <option value="pochta">Почта России</option>
+                            <option value="dellin">Деловые Линии</option>
+                        </select>
+                    </div>
+                    <div class="form-group form-group--button">
+                        <button type="button" class="btn btn--primary btn--block" onclick="calculateDelivery()">
+                            <i class="bi bi-calculator"></i> Рассчитать стоимость
+                        </button>
+                    </div>
+                    <div id="deliveryResult" class="delivery-result"></div>
+                </div>
+            </div>
+        </div>
+        
+        {% endif %}
+        
+         <!-- Партнеры ТК - всегда отображаются -->
+         <div class="transport-companies">
+                <div class="tc-logos">
+                    <a href="https://www.pochta.ru/shipment?type=PARCEL&weight=200/" target="_blank" rel="noopener noreferrer" class="tc-logo" title="Почта России">
+                        <img src="{% static 'images/free-png.ru-90.png' %}" alt="Почта России" class="tc-logo__img">
+                    </a>
+                    <a href="https://my.cdek.ru/lkfl/delivery/" target="_blank" rel="noopener noreferrer" class="tc-logo" title="СДЭК">
+                        <img src="{% static 'images/CDEK_logo.svg.png' %}" alt="СДЭК" class="tc-logo__img">
+                    </a>
+                    <a href="https://pecom.ru/services-are/shipping-request/" target="_blank" rel="noopener noreferrer" class="tc-logo" title="ПЭК">
+                        <img src="{% static 'images/1643610319_41-papik-pro-p-pek-logotip-44.png' %}" alt="ПЭК" class="tc-logo__img">
+                    </a>
+                    <a href="https://nrg-tk.ru/client/calculator/" target="_blank" rel="noopener noreferrer" class="tc-logo" title="Энергия">
+                        <img src="{% static 'images/Без-имени3-removebg-preview.png' %}" alt="Энергия" class="tc-logo__img">
+                    </a>
+                    <a href="https://www.dellin.ru/requests/?arrival_point_code=&derival_point_code=&height=0.1&length=0.1&sized_volume=0.1&sized_weight=1&width=0.1&step=freight&requestType=cargo-single" target="_blank" rel="noopener noreferrer" class="tc-logo" title="Деловые Линии">
+                        <img src="{% static 'images/Dellin_Logo_Black.svg.png' %}" alt="Деловые Линии" class="tc-logo__img">
+                    </a>
+                </div>
+         </div>
+    </div>
+</section>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function calculateDelivery() {
+    const city = document.getElementById('deliveryCity').value.trim();
+    const weight = parseFloat(document.getElementById('deliveryWeight').value);
+    const tc = document.getElementById('deliveryTC').value;
+    const resultDiv = document.getElementById('deliveryResult');
+    
+    if (!city || !weight || weight <= 0) {
+        resultDiv.innerHTML = '<div class="delivery-result__error"><i class="bi bi-exclamation-circle"></i> Пожалуйста, заполните все поля корректно.</div>';
+        return;
+    }
+    
+    // Базовая стоимость доставки до ТК
+    const basePrice = 200;
+    
+    // Коэффициенты для разных ТК (примерные)
+    const tcRates = {
+        'cdek': { perKg: 45, minPrice: 300 },
+        'energia': { perKg: 50, minPrice: 350 },
+        'pochta': { perKg: 40, minPrice: 250 },
+        'dellin': { perKg: 55, minPrice: 400 },
+        '': { perKg: 50, minPrice: 300 }
+    };
+    
+    const rate = tcRates[tc] || tcRates[''];
+    const estimatedPrice = Math.max(rate.minPrice, basePrice + (weight * rate.perKg));
+    
+    const tcNames = {
+        'cdek': 'СДЭК',
+        'energia': 'Энергия',
+        'pochta': 'Почта России',
+        'dellin': 'Деловые Линии',
+        '': 'выбранной ТК'
+    };
+    
+    resultDiv.innerHTML = `
+        <div class="delivery-result__content">
+            <h4><i class="bi bi-truck"></i> Ориентировочная стоимость доставки</h4>
+            <div class="delivery-result__details">
+                <div class="delivery-result__row">
+                    <span>Город:</span>
+                    <strong>${city}</strong>
+                </div>
+                <div class="delivery-result__row">
+                    <span>Вес:</span>
+                    <strong>${weight} кг</strong>
+                </div>
+                ${tc ? `<div class="delivery-result__row"><span>ТК:</span><strong>${tcNames[tc]}</strong></div>` : ''}
+            </div>
+            <p class="delivery-price">От ${Math.round(estimatedPrice)} ₽</p>
+            <p class="delivery-note">
+                <i class="bi bi-info-circle"></i> 
+                Точная стоимость будет рассчитана при сдаче груза в ТК. 
+                Для точного расчета перейдите на сайт транспортной компании.
+            </p>
+        </div>
+    `;
+}
+</script>
+<style>
+.payment-methods, .delivery-info {
+    margin-bottom: 3rem;
+}
+
+.payment-method, .delivery-options {
+    background: #f7fafc;
+    padding: 1.5rem;
+    border-radius: 8px;
+    margin-bottom: 1.5rem;
+}
+
+.payment-method h3, .delivery-options h3 {
+    color: #dc2626;
+    margin-bottom: 0.75rem;
+}
+
+.delivery-calculator {
+    background: #fff;
+    border: 2px solid #dc2626;
+    border-radius: 8px;
+    padding: 2rem;
+    margin: 2rem 0;
+}
+
+.calculator-note {
+    color: #718096;
+    font-style: italic;
+    margin-bottom: 1.5rem;
+}
+
+.calculator-form {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1.5rem;
+    align-items: end;
+}
+
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.form-group label {
+    font-weight: 600;
+    color: var(--color-gray-700);
+    font-size: 0.9375rem;
+}
+
+.form-control {
+    padding: 0.75rem 1rem;
+    border: 2px solid var(--color-gray-200);
+    border-radius: var(--radius-md);
+    font-size: 1rem;
+    transition: border-color 0.2s;
+}
+
+.form-control:focus {
+    outline: none;
+    border-color: var(--color-brand-red);
+}
+
+.form-group--button {
+    grid-column: 1 / -1;
+}
+
+.delivery-result {
+    margin-top: 1.5rem;
+    grid-column: 1 / -1;
+}
+
+.delivery-result__content {
+    background: #f0fdf4;
+    border: 1px solid #86efac;
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-top: 1.5rem;
+}
+
+.delivery-result__error {
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    border-radius: 8px;
+    padding: 1rem;
+    color: #dc2626;
+    margin-top: 1.5rem;
+}
+
+.delivery-result__details {
+    margin: 1rem 0;
+    padding: 1rem;
+    background: white;
+    border-radius: 6px;
+}
+
+.delivery-result__row {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.delivery-result__row:last-child {
+    border-bottom: none;
+}
+
+.delivery-price {
+    font-size: 2rem;
+    font-weight: bold;
+    color: #dc2626;
+    margin: 1rem 0;
+    text-align: center;
+}
+
+.delivery-note {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid #d1d5db;
+    color: #6b7280;
+    font-size: 0.875rem;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+}
+
+.transport-companies {
+    margin-top: 3rem;
+}
+
+.tc-logos {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1.5rem;
+    margin-top: 1.5rem;
+}
+
+.tc-logo {
+    display: block;
+    text-decoration: none;
+    background: #fff;
+    border: 2px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 2rem;
+    text-align: center;
+    transition: all 0.3s ease;
+}
+
+.tc-logo:hover {
+    border-color: #dc2626;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(220, 38, 38, 0.15);
+}
+
+.tc-logo__img {
+    max-width: 100%;
+    height: auto;
+    max-height: 80px;
+    object-fit: contain;
+    display: block;
+    margin: 0 auto;
+}
+
+@media (max-width: 768px) {
+    .calculator-form {
+        grid-template-columns: 1fr;
+    }
+    
+    .tc-logos {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+{% endblock %}
+

@@ -1,0 +1,202 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Оформление заказа - {{ SITE_NAME }}{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="breadcrumbs" aria-label="Хлебные крошки">
+    <div class="container">
+        <ol class="breadcrumbs__list">
+            <li class="breadcrumbs__item">
+                <a href="{% url 'core:home' %}">Главная</a>
+            </li>
+            <li class="breadcrumbs__item">
+                <a href="{% url 'orders:cart_view' %}">Корзина</a>
+            </li>
+            <li class="breadcrumbs__item breadcrumbs__item--active">
+                Оформление заказа
+            </li>
+        </ol>
+    </div>
+</nav>
+{% endblock %}
+
+{% block content %}
+<section class="order-section">
+    <div class="container">
+        <h1 class="page-title">Оформление заказа</h1>
+        
+        <div class="order-wrapper">
+            <div class="order-form-block">
+                <h2>Данные для связи</h2>
+                <form method="post" class="order-form">
+                    {% csrf_token %}
+                    
+                    <div class="form-group">
+                        <label for="id_customer_name" class="form-label">{{ form.customer_name.label }} *</label>
+                        {{ form.customer_name }}
+                        {% if form.customer_name.errors %}
+                        <div class="form-error">{{ form.customer_name.errors }}</div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="id_customer_phone" class="form-label">{{ form.customer_phone.label }} *</label>
+                        {{ form.customer_phone }}
+                        {% if form.customer_phone.errors %}
+                        <div class="form-error">{{ form.customer_phone.errors }}</div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="id_customer_email" class="form-label">{{ form.customer_email.label }}</label>
+                        {{ form.customer_email }}
+                        {% if form.customer_email.errors %}
+                        <div class="form-error">{{ form.customer_email.errors }}</div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="id_customer_comment" class="form-label">{{ form.customer_comment.label }}</label>
+                        {{ form.customer_comment }}
+                        {% if form.customer_comment.errors %}
+                        <div class="form-error">{{ form.customer_comment.errors }}</div>
+                        {% endif %}
+                    </div>
+                    
+                    <button type="submit" class="btn btn--primary btn--lg btn--block">
+                        <i class="bi bi-check-circle"></i> Подтвердить заказ
+                    </button>
+                </form>
+            </div>
+            
+            <div class="order-summary-block">
+                <h2>Состав заказа</h2>
+                <div class="order-items">
+                    {% for item in cart_items %}
+                    <div class="order-item">
+                        <div class="order-item__name">{{ item.product.name }}</div>
+                        <div class="order-item__details">
+                            <span>{{ item.quantity }} шт. × {{ item.price|floatformat:0 }} ₽</span>
+                            <strong>{{ item.total|floatformat:0 }} ₽</strong>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                
+                <div class="order-total">
+                    <strong>Итого: {{ total|floatformat:0 }} ₽</strong>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Маска для телефона
+    const phoneInput = document.getElementById('id_customer_phone');
+    
+    if (phoneInput) {
+        // Функция форматирования телефона
+        function formatPhone(value) {
+            // Удаляем все нецифровые символы
+            let numbers = value.replace(/\D/g, '');
+            
+            // Если начинается с 8, заменяем на 7
+            if (numbers.startsWith('8')) {
+                numbers = '7' + numbers.substring(1);
+            }
+            
+            // Если не начинается с 7, добавляем 7
+            if (numbers.length > 0 && !numbers.startsWith('7')) {
+                numbers = '7' + numbers;
+            }
+            
+            // Ограничиваем до 11 цифр (7 + 10)
+            numbers = numbers.substring(0, 11);
+            
+            // Форматируем в +7 (XXX) XXX-XX-XX
+            let formatted = '';
+            if (numbers.length > 0) {
+                formatted = '+7';
+                if (numbers.length > 1) {
+                    formatted += ' (' + numbers.substring(1, 4);
+                }
+                if (numbers.length >= 4) {
+                    formatted += ') ' + numbers.substring(4, 7);
+                }
+                if (numbers.length >= 7) {
+                    formatted += '-' + numbers.substring(7, 9);
+                }
+                if (numbers.length >= 9) {
+                    formatted += '-' + numbers.substring(9, 11);
+                }
+            }
+            
+            return formatted;
+        }
+        
+        // Обработка ввода
+        phoneInput.addEventListener('input', function(e) {
+            const cursorPosition = this.selectionStart;
+            const oldValue = this.value;
+            const newValue = formatPhone(this.value);
+            
+            this.value = newValue;
+            
+            // Восстанавливаем позицию курсора
+            let newCursorPosition = cursorPosition;
+            if (oldValue.length !== newValue.length) {
+                // Если длина изменилась, корректируем позицию
+                const diff = newValue.length - oldValue.length;
+                newCursorPosition = Math.max(0, Math.min(newValue.length, cursorPosition + diff));
+            }
+            
+            this.setSelectionRange(newCursorPosition, newCursorPosition);
+        });
+        
+        // Обработка вставки (Ctrl+V)
+        phoneInput.addEventListener('paste', function(e) {
+            e.preventDefault();
+            const pastedText = (e.clipboardData || window.clipboardData).getData('text');
+            const formatted = formatPhone(pastedText);
+            this.value = formatted;
+            
+            // Устанавливаем курсор в конец
+            this.setSelectionRange(formatted.length, formatted.length);
+        });
+        
+        // Обработка фокуса - если поле пустое, добавляем +7
+        phoneInput.addEventListener('focus', function() {
+            if (!this.value || this.value.trim() === '') {
+                this.value = '+7 (';
+                this.setSelectionRange(4, 4);
+            }
+        });
+        
+        // Обработка клавиш Backspace и Delete
+        phoneInput.addEventListener('keydown', function(e) {
+            const cursorPosition = this.selectionStart;
+            
+            // Если пытаемся удалить символ форматирования, удаляем цифру
+            if ((e.key === 'Backspace' || e.key === 'Delete') && cursorPosition > 0) {
+                const char = this.value[cursorPosition - 1];
+                if (char && !/\d/.test(char)) {
+                    e.preventDefault();
+                    // Удаляем предыдущую цифру
+                    const before = this.value.substring(0, cursorPosition - 1);
+                    const after = this.value.substring(cursorPosition);
+                    const combined = before + after;
+                    this.value = formatPhone(combined);
+                    this.setSelectionRange(cursorPosition - 1, cursorPosition - 1);
+                }
+            }
+        });
+    }
+});
+</script>
+{% endblock %}
+

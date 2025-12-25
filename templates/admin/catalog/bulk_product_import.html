@@ -1,0 +1,177 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block title %}{{ title }} | Админ{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">
+            <i class="fas fa-file-import"></i> {{ title }}
+        </h3>
+    </div>
+    <div class="card-body">
+        <div class="alert alert-info">
+            <h5><i class="fas fa-info-circle"></i> Поддерживаемые форматы:</h5>
+            <ul>
+                <li><strong>CSV</strong> — разделитель: точка с запятой (;)</li>
+                <li><strong>Excel</strong> — .xls, .xlsx</li>
+            </ul>
+            <p class="mb-0">
+                <a href="/admin/catalog/import-template/" class="btn btn-sm btn-outline-primary">
+                    <i class="fas fa-download"></i> Скачать шаблон CSV
+                </a>
+            </p>
+        </div>
+        
+        <div class="alert alert-success">
+            <h5><i class="fas fa-magic"></i> Автоматизация:</h5>
+            <ul class="mb-0">
+                <li>Категории создаются по ключевым словам (стартер → Стартеры, амортизатор → Подвеска)</li>
+                <li>Бренды определяются по известным названиям (Toyota, Isuzu, DAIHATSU, HONDA...)</li>
+                <li>Артикулы извлекаются из названия автоматически</li>
+                <li>OEM номера (после слеша) сохраняются в характеристики</li>
+                <li>Применимость извлекается из названия товара</li>
+                <li>Цены с пробелами и запятыми обрабатываются автоматически (формат: "2 000,00")</li>
+                <li>Остатки на складе сохраняются и автоматически определяют наличие товара</li>
+            </ul>
+        </div>
+        <div class="alert alert-warning">
+            <h5><i class="fas fa-info-circle"></i> Поддерживаемые форматы прайс-листов:</h5>
+            <ul class="mb-0">
+                <li>Колонка с названием товара: "Номенклатура", "Наименование", "Характеристика" и др.</li>
+                <li>Колонка с ценой: "Розничная", "Цена", "Farpost" и др.</li>
+                <li>Колонка с остатком: "Остаток", "Склад", "Уссурийск" и др.</li>
+                <li>Система автоматически распознает длинные названия колонок</li>
+            </ul>
+        </div>
+        
+        <form method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+            
+            <div class="form-group mb-3">
+                <label for="id_file" class="form-label">{{ form.file.label }}</label>
+                {{ form.file }}
+                <small class="form-text text-muted">{{ form.file.help_text }}</small>
+            </div>
+            
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <div class="form-check">
+                        {{ form.auto_category }}
+                        <label class="form-check-label" for="id_auto_category">
+                            {{ form.auto_category.label }}
+                        </label>
+                        <br><small class="text-muted">{{ form.auto_category.help_text }}</small>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="form-check">
+                        {{ form.auto_brand }}
+                        <label class="form-check-label" for="id_auto_brand">
+                            {{ form.auto_brand.label }}
+                        </label>
+                        <br><small class="text-muted">{{ form.auto_brand.help_text }}</small>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="form-group mb-3">
+                <div class="form-check">
+                    {{ form.update_existing }}
+                    <label class="form-check-label" for="id_update_existing">
+                        {{ form.update_existing.label }}
+                    </label>
+                    <br><small class="text-muted">{{ form.update_existing.help_text }}</small>
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-file-import"></i> Импортировать
+                </button>
+                <a href="{% url 'admin:catalog_product_changelist' %}" class="btn btn-secondary">
+                    Отмена
+                </a>
+            </div>
+        </form>
+        
+        <hr>
+        
+        <h5>Поддерживаемые колонки:</h5>
+        <table class="table table-sm table-bordered">
+            <thead>
+                <tr>
+                    <th>Колонка</th>
+                    <th>Альтернативные названия</th>
+                    <th>Описание</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr><td><code>Название</code></td><td>name, наименование</td><td>Название товара *</td></tr>
+                <tr><td><code>Артикул</code></td><td>article, код</td><td>Артикул товара</td></tr>
+                <tr><td><code>Бренд</code></td><td>brand, производитель</td><td>Бренд/производитель</td></tr>
+                <tr><td><code>Цена</code></td><td>price, стоимость</td><td>Цена в рублях</td></tr>
+                <tr><td><code>Категория</code></td><td>category, раздел</td><td>Название категории</td></tr>
+                <tr><td><code>Описание</code></td><td>description</td><td>Полное описание</td></tr>
+                <tr><td><code>Применимость</code></td><td>applicability</td><td>Марки/модели техники</td></tr>
+                <tr><td><code>Кросс-номера</code></td><td>cross_numbers, аналоги</td><td>Аналоги через запятую</td></tr>
+                <tr><td><code>Farpost URL</code></td><td>farpost, ссылка</td><td>Ссылка на Farpost</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<style>
+.card { margin: 20px; }
+.form-group { margin-bottom: 1rem; }
+.alert-info {
+    background-color: rgba(23, 162, 184, 0.2) !important;
+    border-color: rgba(23, 162, 184, 0.5) !important;
+    color: #a8d8e6 !important;
+}
+.alert-info h5 {
+    color: #a8d8e6 !important;
+    font-weight: 600;
+}
+.alert-info ul {
+    color: #a8d8e6 !important;
+}
+.alert-success {
+    background-color: rgba(40, 167, 69, 0.2) !important;
+    border-color: rgba(40, 167, 69, 0.5) !important;
+    color: #90ee90 !important;
+}
+.alert-success h5 {
+    color: #90ee90 !important;
+    font-weight: 600;
+}
+.alert-success ul {
+    color: #90ee90 !important;
+}
+code { 
+    background: rgba(255,255,255,0.1) !important; 
+    padding: 2px 6px; 
+    border-radius: 3px;
+    color: #ffd700 !important;
+    font-weight: 500;
+}
+.form-label {
+    color: #fff !important;
+    font-weight: 500;
+}
+.form-text {
+    color: rgba(255,255,255,0.7) !important;
+}
+.form-check-label {
+    color: #fff !important;
+}
+.table th {
+    color: #fff !important;
+}
+.table td {
+    color: rgba(255,255,255,0.9) !important;
+}
+</style>
+{% endblock %}
+

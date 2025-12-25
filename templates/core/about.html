@@ -1,0 +1,83 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}О компании - {{ SITE_NAME }}{% endblock %}
+{% block meta_description %}О компании {{ SITE_NAME }}. Надёжный поставщик автозапчастей.{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="breadcrumbs" aria-label="Хлебные крошки">
+    <div class="container">
+        <ol class="breadcrumbs__list" itemscope itemtype="https://schema.org/BreadcrumbList">
+            <li class="breadcrumbs__item" itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
+                <a href="{% url 'core:home' %}" itemprop="item"><span itemprop="name">Главная</span></a>
+                <meta itemprop="position" content="1">
+            </li>
+            <li class="breadcrumbs__item breadcrumbs__item--active" itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
+                <span itemprop="name">О компании</span>
+                <meta itemprop="position" content="2">
+            </li>
+        </ol>
+    </div>
+</nav>
+{% endblock %}
+
+{% block content %}
+<section class="page-section">
+    <div class="container">
+        <h1 class="page-title">{% if page %}{{ page.title }}{% else %}О компании{% endif %}</h1>
+        
+        {% if page and page.content %}
+        <div class="page-content">
+            {{ page.content|safe }}
+        </div>
+        {% else %}
+        
+        <div class="about-content">
+            <div class="about-text">
+                <p><strong>{{ SITE_NAME }}</strong> — официальные представители китайского бренда Onesimus в России. Мы специализируемся на импорте качественных автозапчастей из Китая и их реализации как оптом, так и в розницу.</p>
+                
+                <p>Наша компания работает напрямую с производителями, что позволяет нам предлагать выгодные цены без посредников. Мы занимаемся импортом запчастей для различных марок автомобилей и обеспечиваем их реализацию по всей России.</p>
+                
+                <h2>Оптовые продажи</h2>
+                <p>Мы предлагаем выгодные условия для оптовых покупателей. При больших объемах закупок предоставляем специальные цены и индивидуальные условия сотрудничества. Свяжитесь с нами для получения оптового прайс-листа и условий работы.</p>
+                
+                <h2>Наши преимущества</h2>
+                <ul>
+                    <li>Большой ассортимент запчастей</li>
+                    <li>Работаем с проверенными производителями</li>
+                    <li>Гарантия качества на все товары</li>
+                    <li>Быстрая доставка по всей России</li>
+                    <li>Консультации специалистов</li>
+                    <li>Индивидуальный подход к каждому клиенту</li>
+                </ul>
+                
+                <h2>Как мы работаем</h2>
+                <ol>
+                    <li>Вы оставляете заявку на сайте или звоните нам</li>
+                    <li>Наш специалист уточняет детали и подбирает товар</li>
+                    <li>Оформляем заказ и отправляем в доставку</li>
+                    <li>Вы получаете качественные запчасти</li>
+                </ol>
+            </div>
+            
+            <div class="about-stats">
+                <div class="stat-card">
+                    <div class="stat-card__number">10+</div>
+                    <div class="stat-card__label">лет на рынке</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-card__number">5000+</div>
+                    <div class="stat-card__label">позиций в каталоге</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-card__number">1000+</div>
+                    <div class="stat-card__label">довольных клиентов</div>
+                </div>
+            </div>
+        </div>
+        
+        {% endif %}
+    </div>
+</section>
+{% endblock %}
+

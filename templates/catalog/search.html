@@ -1,0 +1,69 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Поиск: {{ query }} - {{ SITE_NAME }}{% endblock %}
+{% block meta_description %}Результаты поиска по запросу "{{ query }}"{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="breadcrumbs" aria-label="Хлебные крошки">
+    <div class="container">
+        <ol class="breadcrumbs__list" itemscope itemtype="https://schema.org/BreadcrumbList">
+            <li class="breadcrumbs__item" itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
+                <a href="{% url 'core:home' %}" itemprop="item"><span itemprop="name">Главная</span></a>
+                <meta itemprop="position" content="1">
+            </li>
+            <li class="breadcrumbs__item breadcrumbs__item--active" itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
+                <span itemprop="name">Поиск</span>
+                <meta itemprop="position" content="2">
+            </li>
+        </ol>
+    </div>
+</nav>
+{% endblock %}
+
+{% block content %}
+<section class="search-section">
+    <div class="container">
+        <h1 class="page-title">
+            {% if query %}
+            Результаты поиска: «{{ query }}»
+            {% else %}
+            Поиск по каталогу
+            {% endif %}
+        </h1>
+        
+        <form action="{% url 'catalog:search' %}" method="get" class="search-page-form">
+            <input type="text" name="q" value="{{ query }}" placeholder="Введите кросс-номер, название или бренд..." class="search-page-input">
+            <button type="submit" class="btn btn--primary">
+                <i class="bi bi-search"></i> Найти
+            </button>
+        </form>
+        
+        {% if query %}
+        <div class="search-results">
+            <p class="search-count">Найдено товаров: <strong>{{ paginator.count }}</strong></p>
+            
+            {% if products %}
+            <div class="products-grid">
+                {% for product in products %}
+                {% include 'catalog/includes/product_card.html' %}
+                {% endfor %}
+            </div>
+            
+            {% include 'catalog/includes/pagination.html' with page_obj=products %}
+            {% else %}
+            <div class="empty-state">
+                <i class="bi bi-search"></i>
+                <h3>Ничего не найдено</h3>
+                <p>Попробуйте изменить запрос или поискать в каталоге</p>
+                <a href="{% url 'catalog:index' %}" class="btn btn--primary">
+                    Перейти в каталог
+                </a>
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}
+

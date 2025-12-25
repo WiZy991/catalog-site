@@ -1,0 +1,91 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block title %}{{ title }} | Админ{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">
+            <i class="fas fa-images"></i> {{ title }}
+        </h3>
+    </div>
+    <div class="card-body">
+        <div class="alert alert-info">
+            <h5><i class="fas fa-info-circle"></i> Как это работает:</h5>
+            <ol>
+                <li>Назовите файлы изображений по артикулу товара</li>
+                <li>Например: <code>23300-78090.jpg</code>, <code>ME220745_1.jpg</code>, <code>ME220745_2.jpg</code></li>
+                <li>Система автоматически привяжет фото к товарам</li>
+                <li>Если файл содержит <code>_1</code>, <code>_2</code> в конце — это дополнительные фото</li>
+            </ol>
+        </div>
+        
+        <form method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+            
+            <div class="form-group mb-3">
+                <label for="id_images" class="form-label">{{ form.images.label }}</label>
+                {{ form.images }}
+                <small class="form-text text-muted">{{ form.images.help_text }}</small>
+            </div>
+            
+            <div class="form-group mb-3">
+                <div class="form-check">
+                    {{ form.create_products }}
+                    <label class="form-check-label" for="id_create_products">
+                        {{ form.create_products.label }}
+                    </label>
+                </div>
+                <small class="form-text text-muted">{{ form.create_products.help_text }}</small>
+            </div>
+            
+            <div class="form-group">
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-upload"></i> Загрузить изображения
+                </button>
+                <a href="{% url 'admin:catalog_product_changelist' %}" class="btn btn-secondary">
+                    Отмена
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<style>
+.card { margin: 20px; }
+.form-group { margin-bottom: 1rem; }
+.alert ol { margin-bottom: 0; padding-left: 1.5rem; }
+.alert-info {
+    background-color: rgba(23, 162, 184, 0.2) !important;
+    border-color: rgba(23, 162, 184, 0.5) !important;
+    color: #a8d8e6 !important;
+}
+.alert-info h5 {
+    color: #a8d8e6 !important;
+    font-weight: 600;
+}
+.alert-info ol {
+    color: #a8d8e6 !important;
+}
+code { 
+    background: rgba(255,255,255,0.1) !important; 
+    padding: 2px 6px; 
+    border-radius: 3px;
+    color: #ffd700 !important;
+    font-weight: 500;
+}
+.form-label {
+    color: #fff !important;
+    font-weight: 500;
+}
+.form-text {
+    color: rgba(255,255,255,0.7) !important;
+}
+.form-check-label {
+    color: #fff !important;
+}
+</style>
+{% endblock %}
+
+

@@ -1,0 +1,141 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block title %}{{ title }} | Админ{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">
+            <i class="fas fa-bolt"></i> {{ title }}
+        </h3>
+    </div>
+    <div class="card-body">
+        <div class="alert alert-success">
+            <h5><i class="fas fa-magic"></i> Умное добавление:</h5>
+            <p class="mb-0">
+                Просто введите название товара — система автоматически определит:<br>
+                <strong>Бренд</strong> (Toyota, Isuzu, Bosch...) • 
+                <strong>Артикул</strong> (23300-78090, ME220745...) • 
+                <strong>Категорию</strong> (Стартеры, Фильтры...)
+            </p>
+        </div>
+        
+        <form method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+            
+            <div class="form-group mb-3">
+                <label for="id_name" class="form-label">{{ form.name.label }} *</label>
+                {{ form.name }}
+                <small class="form-text text-muted">{{ form.name.help_text }}</small>
+            </div>
+            
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <label for="id_price" class="form-label">{{ form.price.label }}</label>
+                    {{ form.price }}
+                </div>
+                <div class="col-md-6">
+                    <label for="id_image" class="form-label">{{ form.image.label }}</label>
+                    {{ form.image }}
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-plus"></i> Добавить товар
+                </button>
+                <button type="submit" name="add_another" class="btn btn-success">
+                    <i class="fas fa-plus-circle"></i> Добавить и создать ещё
+                </button>
+                <a href="{% url 'admin:catalog_product_changelist' %}" class="btn btn-secondary">
+                    К списку товаров
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card mt-3">
+    <div class="card-header">
+        <h5 class="card-title mb-0">Примеры названий</h5>
+    </div>
+    <div class="card-body">
+        <table class="table table-sm">
+            <thead>
+                <tr>
+                    <th>Вы вводите</th>
+                    <th>Бренд</th>
+                    <th>Артикул</th>
+                    <th>Категория</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><code>Стартер Isuzu 10PD1 24V ME220745</code></td>
+                    <td>Isuzu</td>
+                    <td>ME220745</td>
+                    <td>Стартеры</td>
+                </tr>
+                <tr>
+                    <td><code>Фильтр масляный Toyota 90915-YZZD4</code></td>
+                    <td>Toyota</td>
+                    <td>90915-YZZD4</td>
+                    <td>Фильтры</td>
+                </tr>
+                <tr>
+                    <td><code>Турбина Mitsubishi Fuso 49179-02260</code></td>
+                    <td>Mitsubishi</td>
+                    <td>49179-02260</td>
+                    <td>Турбины</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<style>
+.card { margin: 20px; }
+.form-group { margin-bottom: 1rem; }
+.alert-success {
+    background-color: rgba(40, 167, 69, 0.2) !important;
+    border-color: rgba(40, 167, 69, 0.5) !important;
+    color: #90ee90 !important;
+}
+.alert-success h5 {
+    color: #90ee90 !important;
+    font-weight: 600;
+}
+.alert-success p {
+    color: #90ee90 !important;
+}
+.alert-success strong {
+    color: #fff !important;
+    font-weight: 700;
+}
+code { 
+    background: rgba(255,255,255,0.1) !important; 
+    padding: 2px 6px; 
+    border-radius: 3px;
+    color: #ffd700 !important;
+    font-weight: 500;
+}
+.form-label {
+    color: #fff !important;
+    font-weight: 500;
+}
+.form-text {
+    color: rgba(255,255,255,0.7) !important;
+}
+.form-check-label {
+    color: #fff !important;
+}
+.table th {
+    color: #fff !important;
+}
+.table td {
+    color: rgba(255,255,255,0.9) !important;
+}
+</style>
+{% endblock %}
+

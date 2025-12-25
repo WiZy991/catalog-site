@@ -1,0 +1,12 @@
+Django==4.2.7
+Pillow>=10.0.0
+django-filter==23.3
+django-mptt==0.14.0
+django-import-export==3.3.3
+openpyxl==3.1.2
+xlrd==2.0.1
+python-slugify==8.0.1
+transliterate==1.10.2
+django-crispy-forms==2.1
+crispy-bootstrap5==2023.10
+django-jazzmin==3.0.0

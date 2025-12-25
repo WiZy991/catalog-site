@@ -1,0 +1,43 @@
+"""
+URL configuration for the catalog project.
+"""
+from django.contrib import admin
+from django.urls import path, include
+from django.conf import settings
+from django.conf.urls.static import static
+from django.contrib.sitemaps.views import sitemap
+from catalog.sitemaps import ProductSitemap, CategorySitemap, StaticViewSitemap
+from catalog.admin_views import (
+    bulk_image_upload, 
+    bulk_product_import, 
+    quick_add_product,
+    download_import_template,
+)
+
+sitemaps = {
+    'products': ProductSitemap,
+    'categories': CategorySitemap,
+    'static': StaticViewSitemap,
+}
+
+urlpatterns = [
+    # Кастомные админ-страницы (до admin/)
+    path('admin/catalog/bulk-images/', bulk_image_upload, name='admin:bulk_image_upload'),
+    path('admin/catalog/bulk-import/', bulk_product_import, name='admin:bulk_product_import'),
+    path('admin/catalog/quick-add/', quick_add_product, name='admin:quick_add_product'),
+    path('admin/catalog/import-template/', download_import_template, name='admin:download_import_template'),
+    
+    # API для 1С
+    path('api/1c/', include('catalog.api_urls')),
+    
+    path('admin/', admin.site.urls),
+    path('', include('core.urls')),
+    path('catalog/', include('catalog.urls')),
+    path('orders/', include('orders.urls')),
+    path('sitemap.xml', sitemap, {'sitemaps': sitemaps}, name='django.contrib.sitemaps.views.sitemap'),
+]
+
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+    urlpatterns += static(settings.STATIC_URL, document_root=settings.STATICFILES_DIRS[0])
+

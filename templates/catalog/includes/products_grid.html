@@ -1,0 +1,11 @@
+{% if products %}
+    {% for product in products %}
+    {% include 'catalog/includes/product_card.html' %}
+    {% endfor %}
+{% else %}
+<div class="empty-state empty-state--inline">
+    <i class="bi bi-inbox"></i>
+    <p>Товары не найдены</p>
+</div>
+{% endif %}
+

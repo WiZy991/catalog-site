@@ -1,0 +1,305 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="{% block meta_description %}{{ SITE_DESCRIPTION }}{% endblock %}">
+    <title>{% block title %}{{ SITE_NAME }}{% endblock %}</title>
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="{% static 'images/favicon.svg' %}">
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&family=Open+Sans:wght@400;500;600&family=Orbitron:wght@400;500;600;700;800;900&family=Exo+2:wght@400;500;600;700;800;900&family=Rajdhani:wght@400;500;600;700&family=Audiowide&family=Righteous&family=Bungee&display=swap" rel="stylesheet">
+    
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    
+    <!-- Styles -->
+    <link rel="stylesheet" href="{% static 'css/style.css' %}">
+    <link rel="stylesheet" href="{% static 'css/cart.css' %}">
+    
+    {% block extra_css %}{% endblock %}
+    
+    <!-- Schema.org -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        "name": "{{ SITE_NAME }}",
+        "description": "{{ SITE_DESCRIPTION }}",
+        "telephone": "{{ SITE_PHONE }}",
+        "email": "{{ SITE_EMAIL }}",
+        "address": {
+            "@type": "PostalAddress",
+            "streetAddress": "{{ SITE_ADDRESS }}"
+        }
+    }
+    </script>
+    {% block extra_schema %}{% endblock %}
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="header__top">
+            <div class="container">
+                <div class="header__top-inner">
+                    <div class="header__contacts">
+                        <a href="tel:{{ SITE_PHONE }}" class="header__phone">
+                            <i class="bi bi-telephone"></i> {{ SITE_PHONE }}
+                        </a>
+                        {% if SITE_PHONE_2 %}
+                        <a href="tel:{{ SITE_PHONE_2 }}" class="header__phone">
+                            <i class="bi bi-telephone"></i> {{ SITE_PHONE_2 }}
+                        </a>
+                        {% endif %}
+                        <a href="#" class="header__email email-link" data-email="{{ SITE_EMAIL }}">
+                            <i class="bi bi-envelope"></i> {{ SITE_EMAIL }}
+                        </a>
+                        <div class="header__messengers">
+                            {% if WHATSAPP_URL %}
+                            <a href="{{ WHATSAPP_URL }}" target="_blank" rel="noopener noreferrer" class="header__messenger header__messenger--whatsapp" title="Написать в WhatsApp">
+                                <img src="{% static 'images/WhatsApp.svg.webp' %}" alt="WhatsApp" class="messenger-icon">
+                            </a>
+                            {% endif %}
+                            {% if TELEGRAM_URL %}
+                            <a href="{{ TELEGRAM_URL }}" target="_blank" rel="noopener noreferrer" class="header__messenger header__messenger--telegram" title="Написать в Telegram">
+                                <img src="{% static 'images/Telegram_2019_Logo.svg.webp' %}" alt="Telegram" class="messenger-icon">
+                            </a>
+                            {% endif %}
+                            {% if MAX_URL %}
+                            <a href="{{ MAX_URL }}" target="_blank" rel="noopener noreferrer" class="header__messenger header__messenger--max" title="Написать в MAX">
+                                <img src="{% static 'images/Max_logo_2025.png' %}" alt="MAX" class="messenger-icon">
+                            </a>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="header__address">
+                        <i class="bi bi-geo-alt"></i> {{ SITE_ADDRESS }}
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="header__main">
+            <div class="container">
+                <div class="header__main-inner">
+                    <a href="{% url 'core:home' %}" class="header__logo">
+                        <img src="{% static 'images/dsBuffer.bmp-removebg-preview.png' %}" alt="{{ COMPANY_NAME|default:SITE_NAME }}" class="logo-img header__logo-img">
+                    </a>
+                    
+                    <nav class="header__nav" id="mainNav">
+                        <ul class="nav-list">
+                            <li><a href="{% url 'core:home' %}" class="nav-link">Главная</a></li>
+                            <li class="nav-dropdown nav-dropdown--mega">
+                                <a href="{% url 'catalog:index' %}" class="nav-link">
+                                    Каталог <i class="bi bi-chevron-down"></i>
+                                </a>
+                                <div class="nav-dropdown__menu nav-dropdown__menu--mega">
+                                    <div class="mega-menu">
+                                        <div class="mega-menu__categories">
+                                            {% for category in root_categories %}
+                                            <a href="{{ category.get_absolute_url }}" 
+                                               class="mega-menu__category {% if forloop.first %}is-active{% endif %}" 
+                                               data-category-id="{{ category.id }}">
+                                                {{ category.name }}
+                                            </a>
+                                            {% endfor %}
+                                        </div>
+                                        <div class="mega-menu__subcategories">
+                                            {% for category in root_categories %}
+                                            <div class="mega-menu__subcategory-group {% if forloop.first %}is-active{% endif %}" 
+                                                 data-category-id="{{ category.id }}">
+                                                {% with active_children=category.children.all|dictsort:"order" %}
+                                                {% if active_children %}
+                                                    {% for sub in active_children %}
+                                                        {% if sub.is_active %}
+                                                        <a href="{{ sub.get_absolute_url }}" class="mega-menu__subcategory">
+                                                            {{ sub.name }}
+                                                        </a>
+                                                        {% endif %}
+                                                    {% endfor %}
+                                                    <a href="{{ category.get_absolute_url }}" class="mega-menu__subcategory mega-menu__subcategory--all">
+                                                        Все товары категории
+                                                    </a>
+                                                {% else %}
+                                                    <a href="{{ category.get_absolute_url }}" class="mega-menu__subcategory">
+                                                        Все товары категории
+                                                    </a>
+                                                {% endif %}
+                                                {% endwith %}
+                                            </div>
+                                            {% endfor %}
+                                        </div>
+                                    </div>
+                                </div>
+                            </li>
+                            <li><a href="{% url 'core:about' %}" class="nav-link">О нас</a></li>
+                            <li><a href="{% url 'core:payment_delivery' %}" class="nav-link">Оплата и доставка</a></li>
+                            <li><a href="{% url 'core:contacts' %}" class="nav-link">Контакты</a></li>
+                        </ul>
+                    </nav>
+                    
+                    <div class="header__search">
+                        <form action="{% url 'catalog:search' %}" method="get" class="search-form">
+                            <input type="text" name="q" placeholder="Поиск по каталогу..." class="search-input" value="{{ request.GET.q }}">
+                            <button type="submit" class="search-btn">
+                                <i class="bi bi-search"></i>
+                            </button>
+                        </form>
+                    </div>
+                    
+                    <a href="{% url 'orders:cart_view' %}" class="header__cart" title="Корзина">
+                        <i class="bi bi-cart"></i>
+                        <span class="header__cart-count" id="cartCount">0</span>
+                    </a>
+                    
+                    <button class="header__burger" id="burgerBtn" aria-label="Меню">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+    
+    <!-- Mobile Menu -->
+    <div class="mobile-menu" id="mobileMenu">
+        <div class="mobile-menu__inner">
+            <form action="{% url 'catalog:search' %}" method="get" class="mobile-search">
+                <input type="text" name="q" placeholder="Поиск..." class="mobile-search__input">
+                <button type="submit" class="mobile-search__btn"><i class="bi bi-search"></i></button>
+            </form>
+            <nav class="mobile-nav">
+                <a href="{% url 'core:home' %}" class="mobile-nav__link">Главная</a>
+                <a href="{% url 'catalog:index' %}" class="mobile-nav__link">Каталог</a>
+                {% for category in root_categories %}
+                <a href="{{ category.get_absolute_url }}" class="mobile-nav__link mobile-nav__link--sub">{{ category.name }}</a>
+                {% endfor %}
+                <a href="{% url 'core:about' %}" class="mobile-nav__link">О нас</a>
+                <a href="{% url 'core:payment_delivery' %}" class="mobile-nav__link">Оплата и доставка</a>
+                <a href="{% url 'core:contacts' %}" class="mobile-nav__link">Контакты</a>
+            </nav>
+            <div class="mobile-menu__contacts">
+                <a href="tel:{{ SITE_PHONE }}"><i class="bi bi-telephone"></i> {{ SITE_PHONE }}</a>
+                {% if SITE_PHONE_2 %}
+                <a href="tel:{{ SITE_PHONE_2 }}"><i class="bi bi-telephone"></i> {{ SITE_PHONE_2 }}</a>
+                {% endif %}
+                <a href="#" class="email-link" data-email="{{ SITE_EMAIL }}"><i class="bi bi-envelope"></i> {{ SITE_EMAIL }}</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Breadcrumbs -->
+    {% block breadcrumbs %}{% endblock %}
+
+    <!-- Main Content -->
+    <main class="main">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Rating Badge -->
+    <div style="text-align: center; padding: 60px 0; background: var(--color-white, #fff);">
+        <div style="display: inline-block; transform: scale(2); transform-origin: center;">
+            <iframe src="https://yandex.ru/sprav/widget/rating-badge/37797356069?type=rating" width="150" height="50" frameborder="0"></iframe>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer__grid">
+                <div class="footer__col">
+                    <div class="footer__logo">
+                        <img src="{% static 'images/Безымянныйвйцвйй-removebg-preview.png' %}" alt="{{ COMPANY_NAME|default:SITE_NAME }}" class="logo-img footer__logo-img footer__logo-img--secondary">
+                        <img src="{% static 'images/Безымянныяяяяяяй-removebg-preview.png' %}" alt="{{ COMPANY_NAME|default:SITE_NAME }}" class="logo-img footer__logo-img">
+                    </div>
+                    <p class="footer__desc">{{ SITE_DESCRIPTION }}</p>
+                </div>
+                
+                <div class="footer__col">
+                    <h4 class="footer__title">Каталог</h4>
+                    <ul class="footer__links">
+                        {% for category in root_categories|slice:":5" %}
+                        <li><a href="{{ category.get_absolute_url }}">{{ category.name }}</a></li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                
+                <div class="footer__col">
+                    <h4 class="footer__title">Информация</h4>
+                    <ul class="footer__links">
+                        <li><a href="{% url 'core:about' %}">О компании</a></li>
+                        <li><a href="{% url 'core:payment_delivery' %}">Оплата и доставка</a></li>
+                        <li><a href="{% url 'core:contacts' %}">Контакты</a></li>
+                        <li><a href="{% url 'catalog:index' %}">Каталог товаров</a></li>
+                    </ul>
+                </div>
+                
+                <div class="footer__col">
+                    <h4 class="footer__title">Контакты</h4>
+                    <div class="footer__contact">
+                        <i class="bi bi-telephone"></i>
+                        <a href="tel:{{ SITE_PHONE }}">{{ SITE_PHONE }}</a>
+                    </div>
+                    {% if SITE_PHONE_2 %}
+                    <div class="footer__contact">
+                        <i class="bi bi-telephone"></i>
+                        <a href="tel:{{ SITE_PHONE_2 }}">{{ SITE_PHONE_2 }}</a>
+                    </div>
+                    {% endif %}
+                    <div class="footer__contact">
+                        <i class="bi bi-envelope"></i>
+                        <a href="#" class="email-link" data-email="{{ SITE_EMAIL }}">{{ SITE_EMAIL }}</a>
+                    </div>
+                    <div class="footer__contact">
+                        <i class="bi bi-geo-alt"></i>
+                        <span>{{ SITE_ADDRESS }}</span>
+                    </div>
+                    {% if SITE_HOURS %}
+                    <div class="footer__contact">
+                        <i class="bi bi-clock"></i>
+                        <span>{{ SITE_HOURS }}</span>
+                    </div>
+                    {% endif %}
+                    {% if FARPOST_PROFILE_URL %}
+                    <div class="footer__contact">
+                        <i class="bi bi-shop"></i>
+                        <a href="{{ FARPOST_PROFILE_URL }}" target="_blank" rel="noopener noreferrer">Магазин на Farpost</a>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <div class="footer__bottom">
+                <p>&copy; {% now "Y" %} {{ SITE_NAME }}. Все права защищены.</p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Scripts -->
+    <script>
+        // Передаем данные email адресов в JavaScript
+        window.SITE_EMAILS = [
+            {% for email_item in SITE_EMAILS %}
+            {
+                email: "{{ email_item.email }}",
+                label: "{{ email_item.label|default:email_item.email }}"
+            }{% if not forloop.last %},{% endif %}
+            {% empty %}
+            {
+                email: "{{ SITE_EMAIL }}",
+                label: "{{ SITE_EMAIL }}"
+            }
+            {% endfor %}
+        ];
+    </script>
+    <script src="{% static 'js/main.js' %}"></script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>
+

@@ -1,0 +1,172 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Корзина - {{ SITE_NAME }}{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="breadcrumbs" aria-label="Хлебные крошки">
+    <div class="container">
+        <ol class="breadcrumbs__list" itemscope itemtype="https://schema.org/BreadcrumbList">
+            <li class="breadcrumbs__item" itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
+                <a href="{% url 'core:home' %}" itemprop="item"><span itemprop="name">Главная</span></a>
+                <meta itemprop="position" content="1">
+            </li>
+            <li class="breadcrumbs__item breadcrumbs__item--active" itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
+                <span itemprop="name">Корзина</span>
+                <meta itemprop="position" content="2">
+            </li>
+        </ol>
+    </div>
+</nav>
+{% endblock %}
+
+{% block content %}
+<section class="cart-section">
+    <div class="container">
+        <h1 class="page-title">Корзина</h1>
+        
+        {% if cart_items %}
+        <div class="cart-wrapper">
+            <div class="cart-items">
+                {% for item in cart_items %}
+                <div class="cart-item" data-product-id="{{ item.product.id }}">
+                    <div class="cart-item__image">
+                        {% with main_image=item.product.get_main_image %}
+                        {% if main_image %}
+                        <img src="{{ main_image.image.url }}" alt="{{ item.product.name }}">
+                        {% else %}
+                        <div class="cart-item__placeholder">
+                            <i class="bi bi-image"></i>
+                        </div>
+                        {% endif %}
+                        {% endwith %}
+                    </div>
+                    
+                    <div class="cart-item__info">
+                        <h3 class="cart-item__title">
+                            <a href="{{ item.product.get_absolute_url }}">{{ item.product.name }}</a>
+                        </h3>
+                        {% if item.product.article %}
+                        <div class="cart-item__article">Кросс-номер: {{ item.product.article }}</div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="cart-item__quantity">
+                        <label>Количество:</label>
+                        <div class="quantity-controls">
+                            <button class="quantity-btn quantity-btn--minus" data-product-id="{{ item.product.id }}">-</button>
+                            <input type="number" class="quantity-input" value="{{ item.quantity }}" min="1" data-product-id="{{ item.product.id }}">
+                            <button class="quantity-btn quantity-btn--plus" data-product-id="{{ item.product.id }}">+</button>
+                        </div>
+                    </div>
+                    
+                    <div class="cart-item__price">
+                        <div class="cart-item__price-unit">{{ item.price|floatformat:0 }} ₽</div>
+                        <div class="cart-item__price-total">{{ item.total|floatformat:0 }} ₽</div>
+                    </div>
+                    
+                    <div class="cart-item__remove">
+                        <button class="btn-remove" data-product-id="{{ item.product.id }}" title="Удалить">
+                            <i class="bi bi-x-lg"></i>
+                        </button>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            
+            <div class="cart-summary">
+                <div class="cart-summary__block">
+                    <div class="cart-summary__row">
+                        <span>Итого:</span>
+                        <strong class="cart-total">{{ total|floatformat:0 }} ₽</strong>
+                    </div>
+                </div>
+                
+                <div class="cart-summary__actions">
+                    <a href="{% url 'orders:order_create' %}" class="btn btn--primary btn--lg btn--block">
+                        <i class="bi bi-cart-check"></i> Оформить заказ
+                    </a>
+                    <a href="{% url 'catalog:index' %}" class="btn btn--outline btn--block">
+                        Продолжить покупки
+                    </a>
+                    <button class="btn btn--outline btn--block" id="clearCart">
+                        Очистить корзину
+                    </button>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <div class="cart-empty">
+            <i class="bi bi-cart-x"></i>
+            <h2>Корзина пуста</h2>
+            <p>Добавьте товары в корзину, чтобы оформить заказ</p>
+            <a href="{% url 'catalog:index' %}" class="btn btn--primary">
+                Перейти в каталог
+            </a>
+        </div>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Обновление количества
+    document.querySelectorAll('.quantity-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            const productId = this.dataset.productId;
+            const input = document.querySelector('.quantity-input[data-product-id="' + productId + '"]');
+            let quantity = parseInt(input.value);
+            
+            if (this.classList.contains('quantity-btn--minus')) {
+                quantity = Math.max(1, quantity - 1);
+            } else {
+                quantity += 1;
+            }
+            
+            input.value = quantity;
+            updateCartItem(productId, quantity);
+        });
+    });
+    
+    // Удаление товара
+    document.querySelectorAll('.btn-remove').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            const productId = this.dataset.productId;
+            removeCartItem(productId);
+        });
+    });
+    
+    // Очистка корзины
+    const clearBtn = document.getElementById('clearCart');
+    if (clearBtn) {
+        clearBtn.addEventListener('click', function() {
+            if (confirm('Очистить корзину?')) {
+                window.location.href = '{% url "orders:cart_clear" %}';
+            }
+        });
+    }
+    
+    function updateCartItem(productId, quantity) {
+        fetch('{% url "orders:cart_update" product_id=0 %}'.replace('0', productId), {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}',
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: 'quantity=' + quantity
+        }).then(function() {
+            location.reload();
+        });
+    }
+    
+    function removeCartItem(productId) {
+        if (confirm('Удалить товар из корзины?')) {
+            window.location.href = '{% url "orders:cart_remove" product_id=0 %}'.replace('0', productId);
+        }
+    }
+});
+</script>
+{% endblock %}
+

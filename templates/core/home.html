@@ -1,0 +1,154 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ SITE_NAME }} - Каталог автозапчастей{% endblock %}
+
+{% block content %}
+<!-- Hero Section -->
+<section class="hero">
+    <div class="container">
+        <div class="hero__content">
+            <div class="hero__title-wrapper">
+                <img src="{% static 'images/Безымянныйвйцвйй-removebg-preview.png' %}" alt="{{ COMPANY_NAME|default:SITE_NAME }}" class="hero__logo">
+            </div>
+        </div>
+    </div>
+    <div class="hero__bg"></div>
+</section>
+
+<!-- Hero CTA Section -->
+<section class="hero-cta">
+    <div class="container">
+        <div class="hero-cta__content">
+            <p class="hero-cta__subtitle">{{ SITE_DESCRIPTION }}</p>
+            <div class="hero-cta__actions">
+                <a href="{% url 'catalog:index' %}" class="btn btn--primary btn--lg">
+                    <i class="bi bi-cart"></i> Перейти в каталог
+                </a>
+                <a href="{% url 'core:contacts' %}" class="btn btn--outline btn--lg">
+                    <i class="bi bi-telephone"></i> Связаться с нами
+                </a>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Advantages -->
+<section class="advantages">
+    <div class="container">
+        <div class="advantages__grid">
+            <div class="advantage">
+                <div class="advantage__icon">
+                    <i class="bi bi-truck"></i>
+                </div>
+                <h3 class="advantage__title">Быстрая доставка</h3>
+                <p class="advantage__text">Доставляем по всей России. Отправка в день заказа.</p>
+            </div>
+            <div class="advantage">
+                <div class="advantage__icon">
+                    <i class="bi bi-shield-check"></i>
+                </div>
+                <h3 class="advantage__title">Гарантия качества</h3>
+                <p class="advantage__text">Только проверенные товары от надёжных производителей.</p>
+            </div>
+            <div class="advantage">
+                <div class="advantage__icon">
+                    <i class="bi bi-cash-coin"></i>
+                </div>
+                <h3 class="advantage__title">Выгодные цены</h3>
+                <p class="advantage__text">Официальные представители бренда Onesimus. Импорт из Китая оптом и в розницу без посредников.</p>
+            </div>
+            <div class="advantage">
+                <div class="advantage__icon">
+                    <i class="bi bi-headset"></i>
+                </div>
+                <h3 class="advantage__title">Консультации</h3>
+                <p class="advantage__text">Поможем подобрать нужную запчасть для вашей техники.</p>
+            </div>
+            <div class="advantage">
+                <div class="advantage__icon">
+                    <i class="bi bi-box-seam"></i>
+                </div>
+                <h3 class="advantage__title">Оптовые продажи</h3>
+                <p class="advantage__text">Выгодные цены для оптовых покупателей. Индивидуальные условия сотрудничества.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Categories -->
+<section class="section categories-section">
+    <div class="container">
+        <h2 class="section__title">Категории товаров</h2>
+        <div class="categories-grid">
+            {% for category in categories %}
+            <a href="{{ category.get_absolute_url }}" class="category-card">
+                <div class="category-card__icon">
+                    {% if category.image %}
+                    <img src="{{ category.image.url }}" alt="{{ category.name }}">
+                    {% else %}
+                    <i class="bi bi-box-seam"></i>
+                    {% endif %}
+                </div>
+                <h3 class="category-card__title">{{ category.name }}</h3>
+                <span class="category-card__count">{{ category.product_count }} товаров</span>
+            </a>
+            {% empty %}
+            <p class="text-center">Категории пока не добавлены</p>
+            {% endfor %}
+        </div>
+        <div class="section__action">
+            <a href="{% url 'catalog:index' %}" class="btn btn--primary">
+                Все категории <i class="bi bi-arrow-right"></i>
+            </a>
+        </div>
+    </div>
+</section>
+
+<!-- Featured Products -->
+{% if featured_products %}
+<section class="section products-section products-section--featured">
+    <div class="container">
+        <h2 class="section__title">Рекомендуемые товары</h2>
+        <div class="products-grid">
+            {% for product in featured_products %}
+            {% include 'catalog/includes/product_card.html' %}
+            {% endfor %}
+        </div>
+    </div>
+</section>
+{% endif %}
+
+<!-- New Products -->
+{% if new_products %}
+<section class="section products-section">
+    <div class="container">
+        <h2 class="section__title">Новые поступления</h2>
+        <div class="products-grid">
+            {% for product in new_products %}
+            {% include 'catalog/includes/product_card.html' %}
+            {% endfor %}
+        </div>
+        <div class="section__action">
+            <a href="{% url 'catalog:index' %}" class="btn btn--outline">
+                Смотреть все товары <i class="bi bi-arrow-right"></i>
+            </a>
+        </div>
+    </div>
+</section>
+{% endif %}
+
+<!-- CTA Section -->
+<section class="cta">
+    <div class="container">
+        <div class="cta__content">
+            <h2 class="cta__title">Не нашли нужную запчасть?</h2>
+            <p class="cta__text">Свяжитесь с нами, и мы поможем подобрать нужный товар!</p>
+            <a href="{% url 'core:contacts' %}" class="btn btn--white btn--lg">
+                <i class="bi bi-chat-dots"></i> Связаться
+            </a>
+        </div>
+    </div>
+</section>
+{% endblock %}
+
