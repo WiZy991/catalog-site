@@ -304,26 +304,76 @@ class ProductView(DetailView):
         
         # Похожие товары - подборка по автомобилю из применимости
         related_products = Product.objects.none()
-        from django.db.models import Q
         
         # Приоритет 1: ВСЕ товары для того же автомобиля (из применимости) - любой бренд, любая категория
         # Например, если товар для "Prius NHW20", показываем все товары для "Prius NHW20"
         if product.applicability:
-            applicability_list = product.get_applicability_list()
-            if applicability_list:
-                q_objects = Q()
-                for item in applicability_list:
-                    # Ищем товары, где в применимости есть эта модель автомобиля
-                    # Используем точное совпадение для основных моделей (например, "NHW20", "FZJ80")
-                    item_clean = item.strip()
-                    # Ищем как точное совпадение, так и частичное (для случаев типа "Prius NHW20")
-                    q_objects |= Q(applicability__icontains=item_clean)
+            product_applicability_list = product.get_applicability_list()
+            if product_applicability_list:
+                import re
                 
-                if q_objects:
-                    related_products = Product.objects.filter(
-                        q_objects,
-                        is_active=True
-                    ).exclude(pk=product.pk).select_related('category').prefetch_related('images').distinct()[:12]
+                # Извлекаем коды моделей из применимости (например, "NHW20" из "NHW20 F/R" или "FZ380" из "FZ380/HZ380")
+                def extract_model_codes(applicability_items):
+                    """Извлекает коды моделей из элементов применимости."""
+                    model_codes = set()
+                    for item in applicability_items:
+                        item_clean = item.strip()
+                        if not item_clean:
+                            continue
+                        
+                        # Ищем коды моделей - обычно это буквы+цифры в начале строки (например, NHW20, FZ380, LC80)
+                        # Паттерн: одна или несколько букв, затем цифры (минимум 2 цифры для кода модели)
+                        model_matches = re.findall(r'\b([A-Z]{1,4}\d{2,})\b', item_clean, re.IGNORECASE)
+                        for code in model_matches:
+                            model_codes.add(code.upper())
+                        
+                        # Также добавляем полную строку (нормализованную) для случаев, когда код модели - это вся строка
+                        item_normalized = re.sub(r'\s+', ' ', item_clean).upper().strip()
+                        if item_normalized:
+                            model_codes.add(item_normalized)
+                    
+                    return model_codes
+                
+                # Извлекаем коды моделей текущего товара
+                product_model_codes = extract_model_codes(product_applicability_list)
+                
+                if product_model_codes:
+                    # Получаем ВСЕ активные товары с применимостью (кроме текущего)
+                    all_candidates = list(Product.objects.filter(
+                        is_active=True,
+                        applicability__isnull=False
+                    ).exclude(
+                        pk=product.pk,
+                        applicability=''
+                    ).select_related('category').prefetch_related('images')[:200])
+                    
+                    # Точная проверка пересечения кодов моделей
+                    matching_products = []
+                    
+                    for candidate_product in all_candidates:
+                        if not candidate_product.applicability:
+                            continue
+                        
+                        # Извлекаем коды моделей кандидата
+                        candidate_applicability_list = candidate_product.get_applicability_list()
+                        candidate_model_codes = extract_model_codes(candidate_applicability_list)
+                        
+                        # Проверяем пересечение кодов моделей
+                        # Товар попадает в подборку только если есть хотя бы один общий код модели
+                        if product_model_codes & candidate_model_codes:  # Пересечение множеств
+                            matching_products.append(candidate_product)
+                        
+                        # Ограничиваем количество результатов
+                        if len(matching_products) >= 12:
+                            break
+                    
+                    # Преобразуем в queryset
+                    if matching_products:
+                        product_ids = [p.pk for p in matching_products if p.pk != product.pk]
+                        if product_ids:
+                            related_products = Product.objects.filter(
+                                pk__in=product_ids
+                            ).exclude(pk=product.pk).select_related('category').prefetch_related('images')
         
         # Приоритет 2: Если не нашли по применимости, ищем товары того же бренда в той же категории
         if not related_products.exists() and product.brand and product.category:

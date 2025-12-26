@@ -219,7 +219,12 @@ class Product(models.Model):
         """Преобразует применимость в список."""
         if not self.applicability:
             return []
-        return [a.strip() for a in self.applicability.split(',') if a.strip()]
+        # Поддерживаем разные разделители: запятая, точка с запятой, перенос строки
+        import re
+        # Разбиваем по запятой, точке с запятой или переносу строки
+        items = re.split(r'[,;\n]', self.applicability)
+        result = [a.strip() for a in items if a.strip()]
+        return result
 
     @property
     def has_discount(self):

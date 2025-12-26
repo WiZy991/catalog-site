@@ -138,52 +138,48 @@
                 </div>
                 {% endif %}
                 
-                <!-- Табы с информацией внутри карточки -->
-                <div class="product-info__tabs">
-                    <div class="product-tabs__nav">
-                        <button class="product-tabs__btn is-active" data-tab="description">Описание</button>
-                        <button class="product-tabs__btn" data-tab="characteristics">Характеристики</button>
-                        {% if applicability %}
-                        <button class="product-tabs__btn" data-tab="applicability">Применимость</button>
+                <!-- Информация о товаре -->
+                <div class="product-info__content">
+                    <!-- Описание -->
+                    <div class="product-info__section">
+                        <h3 class="product-info__section-title">Описание</h3>
+                        {% if product.description %}
+                        <div class="product-description">
+                            {{ product.description|linebreaks }}
+                        </div>
+                        {% else %}
+                        <p class="text-muted">Описание не добавлено</p>
                         {% endif %}
                     </div>
                     
-                    <div class="product-tabs__content">
-                        <div class="product-tab is-active" id="tab-description">
-                            {% if product.description %}
-                            <div class="product-description">
-                                {{ product.description|linebreaks }}
+                    <!-- Характеристики -->
+                    <div class="product-info__section">
+                        <h3 class="product-info__section-title">Характеристики</h3>
+                        {% if characteristics %}
+                        <div class="characteristics-list">
+                            {% for key, value in characteristics %}
+                            <div class="characteristics-item">
+                                <span class="characteristics-key">{{ key }}:</span>
+                                <span class="characteristics-value">{{ value }}</span>
                             </div>
-                            {% else %}
-                            <p class="text-muted">Описание не добавлено</p>
-                            {% endif %}
+                            {% endfor %}
                         </div>
-                        
-                        <div class="product-tab" id="tab-characteristics">
-                            {% if characteristics %}
-                            <table class="characteristics-table">
-                                {% for key, value in characteristics %}
-                                <tr>
-                                    <th>{{ key }}</th>
-                                    <td>{{ value }}</td>
-                                </tr>
-                                {% endfor %}
-                            </table>
-                            {% else %}
-                            <p class="text-muted">Характеристики не указаны</p>
-                            {% endif %}
-                        </div>
-                        
-                        {% if applicability %}
-                        <div class="product-tab" id="tab-applicability">
-                            <ul class="applicability-list">
-                                {% for item in applicability %}
-                                <li>{{ item }}</li>
-                                {% endfor %}
-                            </ul>
-                        </div>
+                        {% else %}
+                        <p class="text-muted">Характеристики не указаны</p>
                         {% endif %}
                     </div>
+                    
+                    <!-- Применимость -->
+                    {% if applicability %}
+                    <div class="product-info__section">
+                        <h3 class="product-info__section-title">Применимость</h3>
+                        <ul class="applicability-list">
+                            {% for item in applicability %}
+                            <li>{{ item }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    {% endif %}
                 </div>
                 
                 <div class="product-info__actions">
@@ -199,19 +195,6 @@
                     {% endif %}
                     <a href="tel:{{ SITE_PHONE }}" class="btn btn--outline btn--lg">
                         <i class="bi bi-telephone"></i> Позвонить
-                    </a>
-                </div>
-                
-                <div class="product-info__share">
-                    <span>Поделиться:</span>
-                    <a href="https://vk.com/share.php?url={{ request.build_absolute_uri }}" target="_blank" class="share-btn">
-                        <i class="bi bi-vk"></i>
-                    </a>
-                    <a href="https://t.me/share/url?url={{ request.build_absolute_uri }}&text={{ product.name }}" target="_blank" class="share-btn">
-                        <i class="bi bi-telegram"></i>
-                    </a>
-                    <a href="https://wa.me/?text={{ product.name }} {{ request.build_absolute_uri }}" target="_blank" class="share-btn">
-                        <i class="bi bi-whatsapp"></i>
                     </a>
                 </div>
             </div>
@@ -247,22 +230,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 mainImage.src = this.dataset.image;
                 mainImage.alt = this.dataset.alt;
             }
-        });
-    });
-    
-    // Табы
-    const tabBtns = document.querySelectorAll('.product-tabs__btn');
-    const tabs = document.querySelectorAll('.product-tab');
-    
-    tabBtns.forEach(function(btn) {
-        btn.addEventListener('click', function() {
-            const tabId = this.dataset.tab;
-            
-            tabBtns.forEach(b => b.classList.remove('is-active'));
-            tabs.forEach(t => t.classList.remove('is-active'));
-            
-            this.classList.add('is-active');
-            document.getElementById('tab-' + tabId).classList.add('is-active');
         });
     });
 });

@@ -1565,6 +1565,8 @@ h1, h2, h3, h4, h5, h6 {
     display: grid;
     grid-template-columns: 1fr 1.5fr;
     gap: var(--space-2xl);
+    margin-bottom: 0;
+    padding-bottom: 0;
 }
 
 .contact-block {
@@ -1672,7 +1674,34 @@ h1, h2, h3, h4, h5, h6 {
 .contacts-map {
     background: var(--color-gray-100);
     border-radius: var(--radius-lg);
-    min-height: 400px;
+    height: 400px;
+    overflow: hidden;
+    margin-bottom: 0 !important;
+    padding: 0 !important;
+    position: relative;
+}
+
+.contacts-map #map {
+    width: 100% !important;
+    height: 100% !important;
+    border-radius: var(--radius-lg);
+    margin: 0;
+    padding: 0;
+    display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+}
+
+/* Убираем лишние отступы от элементов карты Yandex */
+.contacts-map .ymaps-2-1-79-ground-pane,
+.contacts-map .ymaps-2-1-79-map,
+.contacts-map .ymaps-2-1-79-inner-panes,
+.contacts-map .ymaps-2-1-79-balloon {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
 }
 
 .map-placeholder {
@@ -2339,6 +2368,42 @@ h1, h2, h3, h4, h5, h6 {
     display: block;
 }
 
+/* Информация о товаре без вкладок */
+.product-info__content {
+    margin: var(--space-xl) 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2xl);
+}
+
+.product-info__section {
+    background: var(--color-white);
+    border: 1px solid var(--color-gray-200);
+    border-radius: var(--radius-md);
+    padding: var(--space-xl);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.product-info__section-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--color-gray-900);
+    margin: 0 0 var(--space-lg) 0;
+    padding-bottom: var(--space-md);
+    border-bottom: 2px solid var(--color-primary);
+}
+
+.product-info__section .text-muted {
+    color: var(--color-gray-500);
+    font-style: italic;
+    padding: var(--space-lg);
+    text-align: center;
+    background: var(--color-gray-50);
+    border-radius: var(--radius-md);
+    border: 1px dashed var(--color-gray-300);
+    margin-top: var(--space-md);
+}
+
 .product-info__actions {
     display: flex;
     flex-wrap: wrap;
@@ -2421,46 +2486,65 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .product-description {
-    line-height: 1.7;
+    line-height: 1.8;
     color: var(--color-gray-700);
+    margin-top: var(--space-md);
 }
 
-.characteristics-table {
-    width: 100%;
-    border-collapse: collapse;
+.product-description p {
+    margin-bottom: var(--space-md);
 }
 
-.characteristics-table tr {
+.product-description p:last-child {
+    margin-bottom: 0;
+}
+
+.characteristics-list {
+    margin-top: var(--space-md);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+}
+
+.characteristics-item {
+    display: flex;
+    align-items: baseline;
+    padding: var(--space-sm) 0;
     border-bottom: 1px solid var(--color-gray-100);
 }
 
-.characteristics-table th,
-.characteristics-table td {
-    padding: var(--space-md);
-    text-align: left;
+.characteristics-item:last-child {
+    border-bottom: none;
 }
 
-.characteristics-table th {
+.characteristics-key {
+    font-weight: 600;
+    color: var(--color-gray-700);
+    margin-right: var(--space-sm);
+    min-width: fit-content;
+}
+
+.characteristics-value {
+    color: var(--color-gray-900);
     font-weight: 500;
-    color: var(--color-gray-500);
-    width: 40%;
-}
-
-.characteristics-table td {
-    color: var(--color-gray-800);
 }
 
 .applicability-list {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--space-sm);
+    gap: var(--space-md);
+    margin: var(--space-md) 0 0 0;
+    padding: 0;
+    list-style: none;
 }
 
 .applicability-list li {
-    padding: var(--space-sm) var(--space-md);
+    padding: var(--space-md) var(--space-lg);
     background: var(--color-gray-100);
+    border: 1px solid var(--color-gray-200);
     border-radius: var(--radius-md);
-    color: var(--color-gray-700);
+    color: var(--color-gray-800);
+    font-weight: 500;
 }
 
 /* Применимость на странице товара */
