@@ -26,11 +26,14 @@ def categories_processor(request):
         'SITE_ADDRESS': getattr(settings, 'SITE_ADDRESS', ''),
         'SITE_HOURS': getattr(settings, 'SITE_HOURS', ''),
         'FARPOST_PROFILE_URL': getattr(settings, 'FARPOST_PROFILE_URL', ''),
-                'SITE_LOGO': getattr(settings, 'SITE_LOGO', None),
-                'SITE_LOGO_WIDTH': getattr(settings, 'SITE_LOGO_WIDTH', 200),
-                'WHATSAPP_URL': getattr(settings, 'WHATSAPP_URL', None),
-                'TELEGRAM_URL': getattr(settings, 'TELEGRAM_URL', None),
-                'MAX_URL': getattr(settings, 'MAX_URL', None),
-                'MAX_OPT_URL': getattr(settings, 'MAX_OPT_URL', None),
-            }
+        'SITE_LOGO': getattr(settings, 'SITE_LOGO', None),
+        'SITE_LOGO_WIDTH': getattr(settings, 'SITE_LOGO_WIDTH', 200),
+        'WHATSAPP_URL': getattr(settings, 'WHATSAPP_URL', None),
+        'TELEGRAM_URL': getattr(settings, 'TELEGRAM_URL', None),
+        'MAX_URL': getattr(settings, 'MAX_URL', None),
+        'MAX_OPT_URL': getattr(settings, 'MAX_OPT_URL', None),
+        'COMPANY_OWNER': getattr(settings, 'COMPANY_OWNER', ''),
+        'COMPANY_INN': getattr(settings, 'COMPANY_INN', ''),
+        'COMPANY_OGRN': getattr(settings, 'COMPANY_OGRN', ''),
+    }
 

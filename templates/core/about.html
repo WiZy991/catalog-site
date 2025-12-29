@@ -29,6 +29,13 @@
         {% if page and page.content %}
         <div class="page-content">
             {{ page.content|safe }}
+            
+            <h2>Реквизиты</h2>
+            <div class="company-info">
+                <p><strong>{{ COMPANY_OWNER }}</strong></p>
+                <p>ИНН: {{ COMPANY_INN }}</p>
+                <p>ОГРН: {{ COMPANY_OGRN }}</p>
+            </div>
         </div>
         {% else %}
         
@@ -58,6 +65,13 @@
                     <li>Оформляем заказ и отправляем в доставку</li>
                     <li>Вы получаете качественные запчасти</li>
                 </ol>
+                
+                <h2>Реквизиты</h2>
+                <div class="company-info">
+                    <p><strong>{{ COMPANY_OWNER }}</strong></p>
+                    <p>ИНН: {{ COMPANY_INN }}</p>
+                    <p>ОГРН: {{ COMPANY_OGRN }}</p>
+                </div>
             </div>
             
             <div class="about-stats">
