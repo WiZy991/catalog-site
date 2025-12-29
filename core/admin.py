@@ -38,7 +38,7 @@ class PageAdmin(admin.ModelAdmin):
     )
     
     formfield_overrides = {
-        models.TextField: {'widget': Textarea(attrs={'rows': 20, 'cols': 100, 'style': 'width: 100%; max-width: 800px;'})},
+        models.TextField: {'widget': Textarea(attrs={'rows': 30, 'cols': 100, 'style': 'width: 100%; max-width: 100%; font-family: monospace;'})},
     }
     
     def get_readonly_fields(self, request, obj=None):
