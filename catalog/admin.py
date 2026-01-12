@@ -1,4 +1,6 @@
 from django.contrib import admin
+from django.contrib import messages
+from django import forms
 from django.utils.html import format_html
 from django.http import HttpResponse
 from mptt.admin import DraggableMPTTAdmin
@@ -6,7 +8,7 @@ from import_export import resources, fields
 from import_export.admin import ImportExportModelAdmin
 from import_export.widgets import ForeignKeyWidget
 import csv
-from .models import Category, Product, ProductImage, Brand, ImportLog, OneCExchangeLog
+from .models import Category, Product, ProductImage, Brand, ImportLog, OneCExchangeLog, FarpostAPISettings
 
 
 class ProductImageInline(admin.TabularInline):
@@ -259,7 +261,7 @@ class ProductAdmin(ImportExportModelAdmin, FarpostExportMixin, admin.ModelAdmin)
     prepopulated_fields = {'slug': ('name',)}
     autocomplete_fields = ['category']
     inlines = [ProductImageInline]
-    actions = ['export_farpost', 'make_active', 'make_inactive']
+    actions = ['export_farpost', 'sync_to_farpost_api', 'make_active', 'make_inactive']
     list_per_page = 50
     save_on_top = True
     
@@ -307,6 +309,70 @@ class ProductAdmin(ImportExportModelAdmin, FarpostExportMixin, admin.ModelAdmin)
     def make_inactive(self, request, queryset):
         queryset.update(is_active=False)
     make_inactive.short_description = 'Сделать неактивными'
+    
+    def sync_to_farpost_api(self, request, queryset):
+        """Синхронизировать выбранные товары с API Farpost."""
+        from .models import FarpostAPISettings
+        from .services import sync_to_farpost_api, generate_farpost_api_file
+        
+        # Получаем активные настройки API
+        api_settings = FarpostAPISettings.objects.filter(is_active=True).first()
+        
+        if not api_settings:
+            self.message_user(
+                request,
+                'Ошибка: Не настроены учетные данные API Farpost. Перейдите в раздел "Настройки API Farpost" и создайте настройки.',
+                level=messages.ERROR
+            )
+            return
+        
+        # Проверяем количество товаров и предупреждаем о размере файла
+        products_count = queryset.count()
+        MAX_FILE_SIZE_MB = 5  # Лимит API Farpost - 5 МБ
+        
+        # Приблизительная оценка: ~1 КБ на товар (может варьироваться)
+        estimated_size_kb = products_count * 1
+        estimated_size_mb = estimated_size_kb / 1024
+        
+        if estimated_size_mb > MAX_FILE_SIZE_MB:
+            # Предупреждение о большом размере
+            self.message_user(
+                request,
+                f'⚠️ Предупреждение: Выбрано {products_count} товаров. Примерный размер файла: {estimated_size_mb:.2f} МБ. '
+                f'API Farpost принимает файлы до {MAX_FILE_SIZE_MB} МБ. '
+                f'Рекомендуется синхронизировать партиями по ~{int(MAX_FILE_SIZE_MB * 1000)} товаров.',
+                level=messages.WARNING
+            )
+            # Можно добавить автоматическое разбиение на части, но пока просто предупреждаем
+        
+        # Синхронизируем товары
+        success, message, response_data = sync_to_farpost_api(
+            products=queryset,
+            api_settings=api_settings,
+            file_format='xls',  # XLS обычно компактнее для больших объемов
+            request=request
+        )
+        
+        if success:
+            self.message_user(
+                request,
+                f'✅ {message}. Товаров синхронизировано: {products_count}',
+                level=messages.SUCCESS
+            )
+        else:
+            self.message_user(
+                request,
+                f'❌ {message}',
+                level=messages.ERROR
+            )
+            # Если ошибка из-за размера файла, даем подсказку
+            if 'размер' in message.lower() or 'size' in message.lower() or 'больш' in message.lower():
+                self.message_user(
+                    request,
+                    '💡 Совет: Разбейте синхронизацию на части. Выберите товары партиями (например, по 3000-4000 товаров за раз).',
+                    level=messages.INFO
+                )
+    sync_to_farpost_api.short_description = 'Синхронизировать с API Farpost'
 
 
 @admin.register(ProductImage)
@@ -347,6 +413,62 @@ class ImportLogAdmin(admin.ModelAdmin):
     list_filter = ['status', 'created_at']
     readonly_fields = ['filename', 'status', 'total_rows', 'imported_rows', 'error_rows', 'errors', 'user', 'created_at']
     date_hierarchy = 'created_at'
+
+
+@admin.register(FarpostAPISettings)
+class FarpostAPISettingsAdmin(admin.ModelAdmin):
+    """Админка для настроек API Farpost."""
+    
+    class FarpostAPISettingsForm(forms.ModelForm):
+        """Форма для настройки API Farpost с кастомным полем пароля."""
+        password_input = forms.CharField(
+            label='Пароль',
+            required=False,
+            widget=forms.PasswordInput(attrs={
+                'class': 'vTextField',
+            }),
+            help_text='Введите пароль для API Farpost. Оставьте пустым, если не хотите менять существующий пароль.'
+        )
+        
+        class Meta:
+            model = FarpostAPISettings
+            fields = ['login', 'packet_id', 'is_active']
+            exclude = ['password']
+        
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+    
+    form = FarpostAPISettingsForm
+    list_display = ['login', 'packet_id', 'is_active', 'last_sync', 'last_sync_status']
+    list_filter = ['is_active', 'last_sync_status', 'last_sync']
+    search_fields = ['login', 'packet_id']
+    readonly_fields = ['last_sync', 'last_sync_status', 'last_sync_error', 'created_at', 'updated_at']
+    
+    fieldsets = (
+        ('Учетные данные', {
+            'fields': ('login', 'password_input', 'packet_id')
+        }),
+        ('Статус', {
+            'fields': ('is_active', 'last_sync', 'last_sync_status', 'last_sync_error')
+        }),
+        ('Информация', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def save_model(self, request, obj, form, change):
+        """Сохраняем модель с обработкой пароля."""
+        # Получаем пароль из формы
+        password_input = form.cleaned_data.get('password_input', '')
+        if password_input:
+            # Если указан новый пароль, сохраняем его в зашифрованном виде
+            obj.set_encrypted_password(password_input)
+        elif not change:
+            # Если это новый объект и пароль не указан, требуем пароль
+            from django.core.exceptions import ValidationError
+            raise ValidationError('Пароль обязателен для новых настроек')
+        super().save_model(request, obj, form, change)
 
 
 @admin.register(OneCExchangeLog)

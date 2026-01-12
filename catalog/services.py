@@ -682,3 +682,291 @@ def generate_farpost_images(product, request=None):
     
     return image_urls
 
+
+def generate_farpost_api_file(products, file_format='xls', request=None):
+    """
+    Генерирует файл для отправки в API Farpost.
+    
+    products: QuerySet или список товаров
+    file_format: 'xls', 'csv' или 'xml'
+    request: объект запроса Django для генерации абсолютных URL изображений
+    
+    Возвращает: (file_content, filename, content_type)
+    """
+    import io
+    import csv
+    from datetime import datetime
+    
+    if file_format == 'csv':
+        # CSV формат
+        output = io.StringIO()
+        writer = csv.writer(output, delimiter=';')
+        
+        # Заголовки (адаптируйте под формат Farpost)
+        writer.writerow([
+            'Название', 'Цена', 'Описание', 'Артикул', 'Бренд',
+            'Состояние', 'Наличие', 'Характеристики', 'Применимость',
+            'Кросс-номера', 'Фото1', 'Фото2', 'Фото3', 'Фото4', 'Фото5',
+            'Ссылка на сайт', 'Категория'
+        ])
+        
+        for product in products:
+            title = generate_farpost_title(product)
+            site_url = request.build_absolute_uri(product.get_absolute_url()) if request else ''
+            description = generate_farpost_description(product, site_url)
+            photo_urls = generate_farpost_images(product, request)
+            
+            # Дополняем до 5 фото
+            while len(photo_urls) < 5:
+                photo_urls.append('')
+            
+            characteristics = ''
+            if product.characteristics:
+                char_list = product.get_characteristics_list()
+                characteristics = '\n'.join([f'{k}: {v}' for k, v in char_list])
+            
+            writer.writerow([
+                title,
+                str(product.price),
+                description,
+                product.article or '',
+                product.brand or '',
+                product.get_condition_display(),
+                product.get_availability_display(),
+                characteristics,
+                product.applicability or '',
+                product.cross_numbers or '',
+                photo_urls[0],
+                photo_urls[1],
+                photo_urls[2],
+                photo_urls[3],
+                photo_urls[4],
+                site_url,
+                product.category.name if product.category else '',
+            ])
+        
+        content = output.getvalue().encode('utf-8-sig')
+        filename = f'farpost_export_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv'
+        content_type = 'text/csv; charset=utf-8-sig'
+        return content, filename, content_type
+    
+    elif file_format == 'xls':
+        # XLS формат (используем openpyxl, так как он уже в проекте)
+        from openpyxl import Workbook
+        
+        wb = Workbook()
+        ws = wb.active
+        ws.title = 'Товары'
+        
+        # Заголовки
+        headers = [
+            'Название', 'Цена', 'Описание', 'Артикул', 'Бренд',
+            'Состояние', 'Наличие', 'Характеристики', 'Применимость',
+            'Кросс-номера', 'Фото1', 'Фото2', 'Фото3', 'Фото4', 'Фото5',
+            'Ссылка на сайт', 'Категория'
+        ]
+        ws.append(headers)
+        
+        # Данные
+        for product in products:
+            title = generate_farpost_title(product)
+            site_url = request.build_absolute_uri(product.get_absolute_url()) if request else ''
+            description = generate_farpost_description(product, site_url)
+            photo_urls = generate_farpost_images(product, request)
+            
+            # Дополняем до 5 фото
+            while len(photo_urls) < 5:
+                photo_urls.append('')
+            
+            characteristics = ''
+            if product.characteristics:
+                char_list = product.get_characteristics_list()
+                characteristics = '\n'.join([f'{k}: {v}' for k, v in char_list])
+            
+            ws.append([
+                title,
+                float(product.price),
+                description,
+                product.article or '',
+                product.brand or '',
+                product.get_condition_display(),
+                product.get_availability_display(),
+                characteristics,
+                product.applicability or '',
+                product.cross_numbers or '',
+                photo_urls[0],
+                photo_urls[1],
+                photo_urls[2],
+                photo_urls[3],
+                photo_urls[4],
+                site_url,
+                product.category.name if product.category else '',
+            ])
+        
+        # Сохраняем в BytesIO
+        output = io.BytesIO()
+        wb.save(output)
+        content = output.getvalue()
+        filename = f'farpost_export_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xls'
+        content_type = 'application/vnd.ms-excel'
+        return content, filename, content_type
+    
+    elif file_format == 'xml':
+        # XML формат
+        from xml.etree.ElementTree import Element, SubElement, tostring
+        from xml.dom import minidom
+        
+        root = Element('products')
+        
+        for product in products:
+            product_elem = SubElement(root, 'product')
+            
+            title = generate_farpost_title(product)
+            site_url = request.build_absolute_uri(product.get_absolute_url()) if request else ''
+            description = generate_farpost_description(product, site_url)
+            photo_urls = generate_farpost_images(product, request)
+            
+            SubElement(product_elem, 'title').text = title
+            SubElement(product_elem, 'price').text = str(product.price)
+            SubElement(product_elem, 'description').text = description
+            SubElement(product_elem, 'article').text = product.article or ''
+            SubElement(product_elem, 'brand').text = product.brand or ''
+            SubElement(product_elem, 'condition').text = product.get_condition_display()
+            SubElement(product_elem, 'availability').text = product.get_availability_display()
+            
+            if product.characteristics:
+                char_elem = SubElement(product_elem, 'characteristics')
+                char_list = product.get_characteristics_list()
+                for key, value in char_list:
+                    char_item = SubElement(char_elem, 'item')
+                    SubElement(char_item, 'key').text = key
+                    SubElement(char_item, 'value').text = value
+            
+            if product.applicability:
+                SubElement(product_elem, 'applicability').text = product.applicability
+            
+            if product.cross_numbers:
+                SubElement(product_elem, 'cross_numbers').text = product.cross_numbers
+            
+            photos_elem = SubElement(product_elem, 'photos')
+            for url in photo_urls[:5]:
+                if url:
+                    SubElement(photos_elem, 'photo').text = url
+            
+            SubElement(product_elem, 'site_url').text = site_url
+            if product.category:
+                SubElement(product_elem, 'category').text = product.category.name
+        
+        # Форматируем XML
+        rough_string = tostring(root, encoding='utf-8')
+        reparsed = minidom.parseString(rough_string)
+        pretty_xml = reparsed.toprettyxml(indent="  ", encoding='utf-8')
+        
+        filename = f'farpost_export_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xml'
+        content_type = 'application/xml; charset=utf-8'
+        return pretty_xml, filename, content_type
+    
+    else:
+        raise ValueError(f'Неподдерживаемый формат файла: {file_format}')
+
+
+def sync_to_farpost_api(products, api_settings, file_format='xls', request=None):
+    """
+    Синхронизирует товары с API Farpost.
+    
+    products: QuerySet или список товаров
+    api_settings: объект FarpostAPISettings
+    file_format: 'xls', 'csv' или 'xml'
+    request: объект запроса Django для генерации абсолютных URL изображений
+    
+    Возвращает: (success: bool, message: str, response_data: dict)
+    """
+    import requests
+    import hashlib
+    from django.conf import settings
+    from django.utils import timezone
+    
+    try:
+        # Генерируем файл
+        file_content, filename, content_type = generate_farpost_api_file(
+            products, file_format=file_format, request=request
+        )
+        
+        # Получаем пароль
+        password = api_settings.get_decrypted_password()
+        
+        # Создаем хеш sha512 от логина и пароля
+        auth_string = f'{api_settings.login}:{password}'
+        auth_hash = hashlib.sha512(auth_string.encode('utf-8')).hexdigest()
+        
+        # Подготавливаем данные для отправки
+        files = {
+            'data': (filename, file_content, content_type)
+        }
+        
+        data = {
+            'packetId': api_settings.packet_id,
+            'auth': auth_hash
+        }
+        
+        # Отправляем запрос
+        api_url = 'https://www.farpost.ru/good/packet/api/sync'
+        
+        # Увеличиваем таймаут для больших файлов (примерно 1 секунда на 100 товаров, минимум 60)
+        products_count = len(products) if hasattr(products, '__len__') else products.count() if hasattr(products, 'count') else 1000
+        timeout = max(60, int(products_count / 100) + 30)  # Минимум 60 секунд, +30 сек на каждые 100 товаров
+        
+        response = requests.post(
+            api_url,
+            data=data,
+            files=files,
+            timeout=timeout
+        )
+        
+        # Обновляем настройки
+        api_settings.last_sync = timezone.now()
+        
+        if response.status_code == 200:
+            api_settings.last_sync_status = 'success'
+            api_settings.last_sync_error = ''
+            api_settings.save()
+            
+            return True, 'Товары успешно синхронизированы с Farpost', {
+                'status_code': response.status_code,
+                'response_text': response.text[:500]  # Первые 500 символов
+            }
+        else:
+            error_msg = f'Ошибка API Farpost: {response.status_code}'
+            try:
+                error_text = response.text[:500]
+                error_msg += f' - {error_text}'
+            except:
+                pass
+            
+            api_settings.last_sync_status = 'error'
+            api_settings.last_sync_error = error_msg
+            api_settings.save()
+            
+            return False, error_msg, {
+                'status_code': response.status_code,
+                'response_text': response.text[:1000] if hasattr(response, 'text') else ''
+            }
+    
+    except requests.exceptions.RequestException as e:
+        error_msg = f'Ошибка при отправке запроса к API Farpost: {str(e)}'
+        api_settings.last_sync = timezone.now()
+        api_settings.last_sync_status = 'error'
+        api_settings.last_sync_error = error_msg
+        api_settings.save()
+        
+        return False, error_msg, {'error': str(e)}
+    
+    except Exception as e:
+        error_msg = f'Неожиданная ошибка: {str(e)}'
+        api_settings.last_sync = timezone.now()
+        api_settings.last_sync_status = 'error'
+        api_settings.last_sync_error = error_msg
+        api_settings.save()
+        
+        return False, error_msg, {'error': str(e)}
+

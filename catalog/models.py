@@ -379,3 +379,41 @@ class OneCExchangeLog(models.Model):
     def __str__(self):
         return f'{self.request_path} - {self.status} - {self.created_at}'
 
+
+class FarpostAPISettings(models.Model):
+    """Настройки API Farpost для синхронизации товаров."""
+    login = models.CharField('Логин', max_length=255, help_text='Логин для входа на Farpost')
+    password = models.CharField('Пароль', max_length=255, help_text='Пароль (хранится в зашифрованном виде)')
+    packet_id = models.CharField('ID пакет-объявления', max_length=50, help_text='ID пакет-объявления на Farpost')
+    is_active = models.BooleanField('Активен', default=True, help_text='Использовать эти настройки для синхронизации')
+    last_sync = models.DateTimeField('Последняя синхронизация', null=True, blank=True)
+    last_sync_status = models.CharField('Статус последней синхронизации', max_length=50, blank=True)
+    last_sync_error = models.TextField('Ошибка последней синхронизации', blank=True)
+    created_at = models.DateTimeField('Создано', auto_now_add=True)
+    updated_at = models.DateTimeField('Обновлено', auto_now=True)
+    
+    class Meta:
+        verbose_name = 'Настройки API Farpost'
+        verbose_name_plural = 'Настройки API Farpost'
+        ordering = ['-is_active', '-created_at']
+    
+    def __str__(self):
+        status = 'активен' if self.is_active else 'неактивен'
+        return f'API Farpost ({self.login}) - {status}'
+    
+    def get_decrypted_password(self):
+        """Получить расшифрованный пароль."""
+        from django.core.signing import Signer
+        from django.conf import settings
+        try:
+            signer = Signer(key=settings.SECRET_KEY)
+            return signer.unsign(self.password)
+        except Exception:
+            return self.password
+    
+    def set_encrypted_password(self, password):
+        """Сохранить пароль в зашифрованном виде."""
+        from django.core.signing import Signer
+        from django.conf import settings
+        signer = Signer(key=settings.SECRET_KEY)
+        self.password = signer.sign(password)

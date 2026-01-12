@@ -10,3 +10,4 @@ transliterate==1.10.2
 django-crispy-forms==2.1
 crispy-bootstrap5==2023.10
 django-jazzmin==3.0.0
+requests>=2.31.0

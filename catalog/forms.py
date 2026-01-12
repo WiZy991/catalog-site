@@ -122,3 +122,6 @@ class CategoryMappingForm(forms.Form):
         }),
         help_text='Введите ключевые слова через запятую'
     )
+
+
+# Форма для FarpostAPISettings будет определена в admin.py
