@@ -446,7 +446,10 @@ class FarpostAPISettingsAdmin(admin.ModelAdmin):
     
     fieldsets = (
         ('Учетные данные', {
-            'fields': ('login', 'password_input', 'packet_id')
+            'fields': ('login', 'password_input', 'packet_id'),
+            'description': 'Пакет-объявление на Farpost может содержать множество товаров (тысячи) из разных категорий. '
+                          'Один packet_id используется для всех товаров, которые вы хотите синхронизировать. '
+                          'Если нужно разделить товары по разным пакетам, создайте несколько настроек с разными packet_id.'
         }),
         ('Статус', {
             'fields': ('is_active', 'last_sync', 'last_sync_status', 'last_sync_error')

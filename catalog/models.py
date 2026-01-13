@@ -384,7 +384,13 @@ class FarpostAPISettings(models.Model):
     """Настройки API Farpost для синхронизации товаров."""
     login = models.CharField('Логин', max_length=255, help_text='Логин для входа на Farpost')
     password = models.CharField('Пароль', max_length=255, help_text='Пароль (хранится в зашифрованном виде)')
-    packet_id = models.CharField('ID пакет-объявления', max_length=50, help_text='ID пакет-объявления на Farpost')
+    packet_id = models.CharField(
+        'ID пакет-объявления', 
+        max_length=50, 
+        help_text='ID пакет-объявления на Farpost. Один пакет может содержать тысячи товаров из разных категорий. '
+                  'Можно создать несколько настроек с разными packet_id для разделения товаров по пакетам. '
+                  'ID можно найти в URL пакета: https://www.farpost.ru/personal/goods/packet/{id}/recurrent-update'
+    )
     is_active = models.BooleanField('Активен', default=True, help_text='Использовать эти настройки для синхронизации')
     last_sync = models.DateTimeField('Последняя синхронизация', null=True, blank=True)
     last_sync_status = models.CharField('Статус последней синхронизации', max_length=50, blank=True)
