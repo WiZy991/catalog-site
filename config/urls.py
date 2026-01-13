@@ -22,10 +22,10 @@ sitemaps = {
 
 urlpatterns = [
     # Кастомные админ-страницы (до admin/)
-    path('admin/catalog/bulk-images/', bulk_image_upload, name='admin:bulk_image_upload'),
-    path('admin/catalog/bulk-import/', bulk_product_import, name='admin:bulk_product_import'),
-    path('admin/catalog/quick-add/', quick_add_product, name='admin:quick_add_product'),
-    path('admin/catalog/import-template/', download_import_template, name='admin:download_import_template'),
+    path('admin/catalog/bulk-images/', bulk_image_upload, name='admin_bulk_image_upload'),
+    path('admin/catalog/bulk-import/', bulk_product_import, name='admin_bulk_product_import'),
+    path('admin/catalog/quick-add/', quick_add_product, name='admin_quick_add_product'),
+    path('admin/catalog/import-template/', download_import_template, name='admin_download_import_template'),
     
     # API для 1С
     path('api/1c/', include('catalog.api_urls')),

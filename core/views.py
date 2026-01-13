@@ -67,6 +67,20 @@ class PaymentDeliveryView(TemplateView):
         return context
 
 
+class PublicOfferView(TemplateView):
+    """Страница Публичная оферта."""
+    template_name = 'core/public_offer.html'
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        try:
+            page = Page.objects.get(slug='public-offer', is_active=True)
+            context['page'] = page
+        except Page.DoesNotExist:
+            context['page'] = None
+        return context
+
+
 def robots_txt(request):
     """Генерация robots.txt."""
     content = """User-agent: *

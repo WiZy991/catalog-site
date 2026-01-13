@@ -1,0 +1,53 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Публичная оферта - {{ SITE_NAME }}{% endblock %}
+{% block meta_description %}Публичная оферта {{ SITE_NAME }}. Условия предоставления информации о товарах и услугах.{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="breadcrumbs" aria-label="Хлебные крошки">
+    <div class="container">
+        <ol class="breadcrumbs__list" itemscope itemtype="https://schema.org/BreadcrumbList">
+            <li class="breadcrumbs__item" itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
+                <a href="{% url 'core:home' %}" itemprop="item"><span itemprop="name">Главная</span></a>
+                <meta itemprop="position" content="1">
+            </li>
+            <li class="breadcrumbs__item breadcrumbs__item--active" itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
+                <span itemprop="name">Публичная оферта</span>
+                <meta itemprop="position" content="2">
+            </li>
+        </ol>
+    </div>
+</nav>
+{% endblock %}
+
+{% block content %}
+<section class="page-section">
+    <div class="container">
+        <h1 class="page-title">{% if page %}{{ page.title }}{% else %}Публичная оферта{% endif %}</h1>
+        
+        {% if page and page.content %}
+        <div class="page-content">
+            {{ page.content|safe }}
+        </div>
+        {% else %}
+        
+        <div class="page-content">
+            <div class="offer-content">
+                <p>Обращаем ваше внимание на то, что данный интернет-сайт, а также вся информация о товарах и ценах, предоставленная на нём, носит исключительно информационный характер и ни при каких условиях не является публичной офертой, определяемой положениями Статьи 437 Гражданского кодекса Российской Федерации.</p>
+                
+                <p>Для получения подробной информации о наличии и стоимости указанных товаров и (или) услуг, пожалуйста, обращайтесь к менеджеру сайта с помощью специальной формы связи или по телефонам <a href="tel:+79143229777">8 (914) 322 97 77</a>,<br>
+                <a href="tel:+79244248777">8 (924) 424 87 77</a>.</p>
+                
+                <h2>Гражданский кодекс РФ. Глава 28. Статья 437.</h2>
+                
+                <p><strong>1.</strong> Реклама и иные предложения, адресованные неопределенному кругу лиц, рассматриваются как приглашение делать оферты, если иное прямо не указано в предложении.</p>
+                
+                <p><strong>2.</strong> Содержащее все существенные условия договора предложение, из которого усматривается воля лица, делающего предложение, заключить договор на указанных в предложении условиях с любым, кто отзовется, признается офертой (публичная оферта).</p>
+            </div>
+        </div>
+        
+        {% endif %}
+    </div>
+</section>
+{% endblock %}

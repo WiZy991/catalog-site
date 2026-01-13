@@ -10,6 +10,7 @@ class Page(models.Model):
         ('payment-delivery', 'Оплата и доставка'),
         ('contacts', 'Контакты'),
         ('wholesale', 'Оптовые продажи'),
+        ('public-offer', 'Публичная оферта'),
     ]
     
     slug = models.CharField('Тип страницы', max_length=50, choices=SLUG_CHOICES, unique=True)
@@ -34,6 +35,7 @@ class Page(models.Model):
             'payment-delivery': 'core:payment_delivery',
             'contacts': 'core:contacts',
             'wholesale': 'core:wholesale',
+            'public-offer': 'core:public_offer',
         }
         url_name = slug_map.get(self.slug, 'core:home')
         return reverse(url_name)
