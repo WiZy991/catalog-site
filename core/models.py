@@ -10,7 +10,7 @@ class Page(models.Model):
         ('payment-delivery', 'Оплата и доставка'),
         ('contacts', 'Контакты'),
         ('wholesale', 'Оптовые продажи'),
-        ('public-offer', 'Публичная оферта'),
+        ('public-offer', 'Не является публичной офертой'),
     ]
     
     slug = models.CharField('Тип страницы', max_length=50, choices=SLUG_CHOICES, unique=True)
