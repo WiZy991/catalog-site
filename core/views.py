@@ -68,7 +68,7 @@ class PaymentDeliveryView(TemplateView):
 
 
 class PublicOfferView(TemplateView):
-    """Страница Публичная оферта."""
+    """Страница "Не является публичной офертой"."""
     template_name = 'core/public_offer.html'
     
     def get_context_data(self, **kwargs):

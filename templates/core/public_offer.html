@@ -1,8 +1,8 @@
 {% extends 'base.html' %}
 {% load static %}
 
-{% block title %}Публичная оферта - {{ SITE_NAME }}{% endblock %}
-{% block meta_description %}Публичная оферта {{ SITE_NAME }}. Условия предоставления информации о товарах и услугах.{% endblock %}
+{% block title %}Не является публичной офертой - {{ SITE_NAME }}{% endblock %}
+{% block meta_description %}Не является публичной офертой {{ SITE_NAME }}. Условия предоставления информации о товарах и услугах.{% endblock %}
 
 {% block breadcrumbs %}
 <nav class="breadcrumbs" aria-label="Хлебные крошки">
@@ -13,7 +13,7 @@
                 <meta itemprop="position" content="1">
             </li>
             <li class="breadcrumbs__item breadcrumbs__item--active" itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
-                <span itemprop="name">Публичная оферта</span>
+                <span itemprop="name">Не является публичной офертой</span>
                 <meta itemprop="position" content="2">
             </li>
         </ol>
@@ -24,7 +24,7 @@
 {% block content %}
 <section class="page-section">
     <div class="container">
-        <h1 class="page-title">{% if page %}{{ page.title }}{% else %}Публичная оферта{% endif %}</h1>
+        <h1 class="page-title">{% if page %}{{ page.title }}{% else %}Не является публичной офертой{% endif %}</h1>
         
         {% if page and page.content %}
         <div class="page-content">
