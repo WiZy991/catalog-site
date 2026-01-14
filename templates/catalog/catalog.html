@@ -43,16 +43,6 @@
                     </div>
                     <i class="bi bi-chevron-right catalog-category__arrow"></i>
                 </a>
-                {% if category.active_children %}
-                <div class="catalog-category__subcategories">
-                    {% for sub in category.active_children %}
-                    <a href="{{ sub.get_absolute_url }}" class="catalog-category__sub">
-                        <span class="catalog-category__sub-name">{{ sub.name }}</span>
-                        <span class="catalog-category__sub-count">({{ sub.product_count }})</span>
-                    </a>
-                    {% endfor %}
-                </div>
-                {% endif %}
             </div>
             {% empty %}
             <div class="empty-state">
