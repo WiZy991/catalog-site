@@ -10,12 +10,16 @@
     justify-content: center;
     width: 44px;
     height: 44px;
+    min-width: 44px;
+    min-height: 44px;
     background: var(--color-primary);
     color: var(--color-white);
     border-radius: var(--radius-md);
     font-size: 1.5rem;
     transition: all var(--transition-fast);
     margin-left: var(--space-md);
+    padding: 0;
+    flex-shrink: 0;
 }
 
 .header__cart:hover {
