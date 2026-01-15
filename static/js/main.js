@@ -501,14 +501,7 @@ function initMegaMenu() {
 /**
  * Promotions carousel functionality
  */
-let promotionsCarouselInitialized = false;
-
 function initPromotionsCarousel() {
-    // Защита от повторной инициализации
-    if (promotionsCarouselInitialized) {
-        return;
-    }
-    
     const carousel = document.querySelector('.promotions-carousel');
     if (!carousel) return;
     
@@ -519,36 +512,9 @@ function initPromotionsCarousel() {
     
     if (slides.length <= 1) return;
     
-    // Помечаем как инициализированную
-    promotionsCarouselInitialized = true;
-    
-    // Определяем текущий активный слайд из HTML (который уже помечен как is-active)
     let currentSlide = 0;
-    slides.forEach(function(slide, index) {
-        if (slide.classList.contains('is-active')) {
-            currentSlide = index;
-        }
-    });
-    
-    // Убеждаемся, что только один слайд активен (синхронизируем состояние)
-    slides.forEach(function(slide, index) {
-        if (index === currentSlide) {
-            slide.classList.add('is-active');
-        } else {
-            slide.classList.remove('is-active');
-        }
-    });
-    indicators.forEach(function(indicator, index) {
-        if (index === currentSlide) {
-            indicator.classList.add('is-active');
-        } else {
-            indicator.classList.remove('is-active');
-        }
-    });
-    
     let autoplayInterval = null;
-    const AUTOPLAY_DELAY = 5000; // Строго 5 секунд (5000 миллисекунд)
-    let isAutoplayActive = false;
+    const AUTOPLAY_DELAY = 5000; // 5 секунд
     
     // Функция для переключения слайда
     function showSlide(index) {
@@ -583,38 +549,6 @@ function initPromotionsCarousel() {
         showSlide(prev);
     }
     
-    // Автопрокрутка - строго контролируем интервал
-    function startAutoplay() {
-        // Всегда останавливаем предыдущий интервал перед созданием нового
-        stopAutoplay();
-        
-        // Создаем новый интервал строго на 5 секунд
-        autoplayInterval = setInterval(function() {
-            nextSlide();
-        }, AUTOPLAY_DELAY);
-        
-        isAutoplayActive = true;
-    }
-    
-    function stopAutoplay() {
-        if (autoplayInterval !== null) {
-            clearInterval(autoplayInterval);
-            autoplayInterval = null;
-        }
-        isAutoplayActive = false;
-    }
-    
-    function resetAutoplay() {
-        // Полностью останавливаем и перезапускаем с нуля
-        stopAutoplay();
-        // Небольшая задержка перед перезапуском для корректного сброса
-        setTimeout(function() {
-            if (!isAutoplayActive) {
-                startAutoplay();
-            }
-        }, 100);
-    }
-    
     // Обработчики для кнопок
     if (nextBtn) {
         nextBtn.addEventListener('click', function() {
@@ -638,21 +572,29 @@ function initPromotionsCarousel() {
         });
     });
     
-    // Останавливаем автопрокрутку при наведении
-    carousel.addEventListener('mouseenter', function() {
-        stopAutoplay();
-    });
+    // Автопрокрутка
+    function startAutoplay() {
+        autoplayInterval = setInterval(nextSlide, AUTOPLAY_DELAY);
+    }
     
-    carousel.addEventListener('mouseleave', function() {
-        if (!isAutoplayActive) {
-            startAutoplay();
+    function stopAutoplay() {
+        if (autoplayInterval) {
+            clearInterval(autoplayInterval);
+            autoplayInterval = null;
         }
-    });
+    }
     
-    // Запускаем автопрокрутку с небольшой задержкой после загрузки
-    setTimeout(function() {
+    function resetAutoplay() {
+        stopAutoplay();
         startAutoplay();
-    }, 500);
+    }
+    
+    // Останавливаем автопрокрутку при наведении
+    carousel.addEventListener('mouseenter', stopAutoplay);
+    carousel.addEventListener('mouseleave', startAutoplay);
+    
+    // Запускаем автопрокрутку
+    startAutoplay();
     
     // Обработка свайпов на мобильных устройствах
     let touchStartX = 0;
@@ -683,3 +625,4 @@ function initPromotionsCarousel() {
         }
     }
 }
+
