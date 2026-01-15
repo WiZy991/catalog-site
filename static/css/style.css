@@ -3143,7 +3143,6 @@ h1, h2, h3, h4, h5, h6 {
     position: relative;
     width: 100%;
     min-height: 400px;
-    padding-bottom: 120px; /* Место для контента снизу */
 }
 
 .promotions-carousel__slide {
@@ -3158,7 +3157,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .promotions-carousel__slide.is-active {
-    position: absolute;
+    position: relative;
     opacity: 1;
     visibility: visible;
     z-index: 2;
@@ -3173,21 +3172,15 @@ h1, h2, h3, h4, h5, h6 {
 .promotions-carousel__image-wrapper {
     position: relative;
     width: 100%;
-    min-height: 400px;
-    display: flex;
-    align-items: flex-start;
-    justify-content: center;
-    overflow: hidden;
+    display: block;
     background: var(--color-gray-200);
 }
 
 .promotions-carousel__image {
     width: 100%;
     height: auto;
-    min-height: 400px;
-    max-height: 700px;
-    object-fit: contain;
     display: block;
+    object-fit: contain;
     transition: transform var(--transition-slow);
 }
 
@@ -3200,12 +3193,9 @@ h1, h2, h3, h4, h5, h6 {
     bottom: 0;
     left: 0;
     right: 0;
-    padding: var(--space-xl) var(--space-xl) var(--space-2xl) var(--space-xl);
-    background: linear-gradient(to top, rgba(0, 0, 0, 0.95) 0%, rgba(0, 0, 0, 0.8) 50%, rgba(0, 0, 0, 0.5) 80%, transparent 100%);
+    padding: var(--space-xl);
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.9) 0%, rgba(0, 0, 0, 0.7) 40%, rgba(0, 0, 0, 0.4) 70%, transparent 100%);
     color: var(--color-white);
-    min-height: fit-content;
-    max-height: none;
-    overflow: visible;
 }
 
 .promotions-carousel__title {
