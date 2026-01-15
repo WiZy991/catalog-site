@@ -3136,13 +3136,11 @@ h1, h2, h3, h4, h5, h6 {
     overflow: hidden;
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-lg);
-    min-height: 400px;
 }
 
 .promotions-carousel__track {
     position: relative;
     width: 100%;
-    min-height: 400px;
 }
 
 .promotions-carousel__slide {
@@ -3161,6 +3159,7 @@ h1, h2, h3, h4, h5, h6 {
     opacity: 1;
     visibility: visible;
     z-index: 2;
+    height: auto;
 }
 
 .promotions-carousel__link {
@@ -3173,14 +3172,15 @@ h1, h2, h3, h4, h5, h6 {
     position: relative;
     width: 100%;
     display: block;
-    background: var(--color-gray-200);
+    background: transparent;
+    line-height: 0;
 }
 
 .promotions-carousel__image {
     width: 100%;
     height: auto;
     display: block;
-    object-fit: contain;
+    object-fit: cover;
     transition: transform var(--transition-slow);
 }
 
