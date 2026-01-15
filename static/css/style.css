@@ -3152,6 +3152,8 @@ h1, h2, h3, h4, h5, h6 {
     visibility: hidden;
     transition: opacity var(--transition-normal), visibility var(--transition-normal);
     z-index: 1;
+    margin: 0;
+    padding: 0;
 }
 
 .promotions-carousel__slide.is-active {
@@ -3159,13 +3161,14 @@ h1, h2, h3, h4, h5, h6 {
     opacity: 1;
     visibility: visible;
     z-index: 2;
-    height: auto;
 }
 
 .promotions-carousel__link {
     display: block;
     text-decoration: none;
     color: inherit;
+    margin: 0;
+    padding: 0;
 }
 
 .promotions-carousel__image-wrapper {
@@ -3174,6 +3177,8 @@ h1, h2, h3, h4, h5, h6 {
     display: block;
     background: transparent;
     line-height: 0;
+    margin: 0;
+    padding: 0;
 }
 
 .promotions-carousel__image {
