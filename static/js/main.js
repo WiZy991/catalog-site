@@ -522,7 +522,30 @@ function initPromotionsCarousel() {
     // Помечаем как инициализированную
     promotionsCarouselInitialized = true;
     
+    // Определяем текущий активный слайд из HTML (который уже помечен как is-active)
     let currentSlide = 0;
+    slides.forEach(function(slide, index) {
+        if (slide.classList.contains('is-active')) {
+            currentSlide = index;
+        }
+    });
+    
+    // Убеждаемся, что только один слайд активен (синхронизируем состояние)
+    slides.forEach(function(slide, index) {
+        if (index === currentSlide) {
+            slide.classList.add('is-active');
+        } else {
+            slide.classList.remove('is-active');
+        }
+    });
+    indicators.forEach(function(indicator, index) {
+        if (index === currentSlide) {
+            indicator.classList.add('is-active');
+        } else {
+            indicator.classList.remove('is-active');
+        }
+    });
+    
     let autoplayInterval = null;
     const AUTOPLAY_DELAY = 5000; // Строго 5 секунд (5000 миллисекунд)
     let isAutoplayActive = false;

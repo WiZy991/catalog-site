@@ -131,7 +131,7 @@ IMPORT_EXPORT_USE_TRANSACTIONS = True
 PRODUCTS_PER_PAGE = 24
 
 # Static files versioning (обновляйте при изменении CSS/JS)
-STATIC_VERSION = '1.4'
+STATIC_VERSION = '1.5'
 
 # API для 1С
 ONE_C_API_KEY = os.environ.get('ONE_C_API_KEY', 'change-this-secret-key-in-production')

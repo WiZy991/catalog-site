@@ -25,7 +25,7 @@ class HomeView(TemplateView):
         try:
             context['promotions'] = Promotion.objects.filter(
                 is_active=True
-            ).order_by('order', '-created_at')
+            ).order_by('order', '-id', '-created_at')
         except (OperationalError, Exception) as e:
             # Таблица еще не создана, миграции не применены, или другая ошибка
             context['promotions'] = []
