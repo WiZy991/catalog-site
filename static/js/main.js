@@ -501,7 +501,14 @@ function initMegaMenu() {
 /**
  * Promotions carousel functionality
  */
+let promotionsCarouselInitialized = false;
+
 function initPromotionsCarousel() {
+    // Защита от повторной инициализации
+    if (promotionsCarouselInitialized) {
+        return;
+    }
+    
     const carousel = document.querySelector('.promotions-carousel');
     if (!carousel) return;
     
@@ -512,9 +519,13 @@ function initPromotionsCarousel() {
     
     if (slides.length <= 1) return;
     
+    // Помечаем как инициализированную
+    promotionsCarouselInitialized = true;
+    
     let currentSlide = 0;
     let autoplayInterval = null;
-    const AUTOPLAY_DELAY = 5000; // 5 секунд
+    const AUTOPLAY_DELAY = 5000; // Строго 5 секунд (5000 миллисекунд)
+    let isAutoplayActive = false;
     
     // Функция для переключения слайда
     function showSlide(index) {
@@ -549,6 +560,38 @@ function initPromotionsCarousel() {
         showSlide(prev);
     }
     
+    // Автопрокрутка - строго контролируем интервал
+    function startAutoplay() {
+        // Всегда останавливаем предыдущий интервал перед созданием нового
+        stopAutoplay();
+        
+        // Создаем новый интервал строго на 5 секунд
+        autoplayInterval = setInterval(function() {
+            nextSlide();
+        }, AUTOPLAY_DELAY);
+        
+        isAutoplayActive = true;
+    }
+    
+    function stopAutoplay() {
+        if (autoplayInterval !== null) {
+            clearInterval(autoplayInterval);
+            autoplayInterval = null;
+        }
+        isAutoplayActive = false;
+    }
+    
+    function resetAutoplay() {
+        // Полностью останавливаем и перезапускаем с нуля
+        stopAutoplay();
+        // Небольшая задержка перед перезапуском для корректного сброса
+        setTimeout(function() {
+            if (!isAutoplayActive) {
+                startAutoplay();
+            }
+        }, 100);
+    }
+    
     // Обработчики для кнопок
     if (nextBtn) {
         nextBtn.addEventListener('click', function() {
@@ -572,29 +615,21 @@ function initPromotionsCarousel() {
         });
     });
     
-    // Автопрокрутка
-    function startAutoplay() {
-        autoplayInterval = setInterval(nextSlide, AUTOPLAY_DELAY);
-    }
-    
-    function stopAutoplay() {
-        if (autoplayInterval) {
-            clearInterval(autoplayInterval);
-            autoplayInterval = null;
-        }
-    }
-    
-    function resetAutoplay() {
-        stopAutoplay();
-        startAutoplay();
-    }
-    
     // Останавливаем автопрокрутку при наведении
-    carousel.addEventListener('mouseenter', stopAutoplay);
-    carousel.addEventListener('mouseleave', startAutoplay);
+    carousel.addEventListener('mouseenter', function() {
+        stopAutoplay();
+    });
     
-    // Запускаем автопрокрутку
-    startAutoplay();
+    carousel.addEventListener('mouseleave', function() {
+        if (!isAutoplayActive) {
+            startAutoplay();
+        }
+    });
+    
+    // Запускаем автопрокрутку с небольшой задержкой после загрузки
+    setTimeout(function() {
+        startAutoplay();
+    }, 500);
     
     // Обработка свайпов на мобильных устройствах
     let touchStartX = 0;
