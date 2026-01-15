@@ -8,21 +8,23 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 44px;
-    height: 44px;
-    min-width: 44px;
-    max-width: 44px;
-    min-height: 44px;
-    max-height: 44px;
+    width: 44px !important;
+    height: 44px !important;
+    min-width: 44px !important;
+    max-width: 44px !important;
+    min-height: 44px !important;
+    max-height: 44px !important;
+    aspect-ratio: 1 / 1 !important;
     background: var(--color-primary);
     color: var(--color-white);
     border-radius: var(--radius-md);
     font-size: 1.5rem;
     transition: all var(--transition-fast);
     margin-left: var(--space-md);
-    padding: 0;
+    padding: 0 !important;
     flex-shrink: 0;
     box-sizing: border-box;
+    overflow: hidden;
 }
 
 .header__cart:hover {

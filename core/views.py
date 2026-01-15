@@ -1,6 +1,7 @@
 from django.shortcuts import render, get_object_or_404
 from django.views.generic import TemplateView
 from django.http import HttpResponse
+from django.db import OperationalError
 from catalog.models import Category, Product, Promotion
 from .models import Page
 
@@ -19,9 +20,14 @@ class HomeView(TemplateView):
             parent=None, 
             is_active=True
         ).order_by('order', 'name')[:6]
-        context['promotions'] = Promotion.objects.filter(
-            is_active=True
-        ).order_by('order', '-created_at')
+        # Защита от ошибки, если миграции не применены
+        try:
+            context['promotions'] = Promotion.objects.filter(
+                is_active=True
+            ).order_by('order', '-created_at')
+        except OperationalError:
+            # Таблица еще не создана, миграции не применены
+            context['promotions'] = []
         return context
 
 

@@ -29,9 +29,4 @@ class Migration(migrations.Migration):
                 'ordering': ['order', '-created_at'],
             },
         ),
-        migrations.AlterField(
-            model_name='farpostapisettings',
-            name='packet_id',
-            field=models.CharField(help_text='ID пакет-объявления на Farpost. Один пакет может содержать тысячи товаров из разных категорий. Можно создать несколько настроек с разными packet_id для разделения товаров по пакетам. ID можно найти в URL пакета: https://www.farpost.ru/personal/goods/packet/{id}/recurrent-update', max_length=50, verbose_name='ID пакет-объявления'),
-        ),
     ]
