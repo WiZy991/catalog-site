@@ -4,7 +4,9 @@
 cd ~/onesimus/onesimus
 
 echo "=== 1. Загрузка изменений из репозитория ==="
-git pull
+# Настройка стратегии слияния (merge) для git pull
+git config pull.rebase false
+git pull origin main
 
 echo ""
 echo "=== 2. Обновление STATIC_VERSION ==="
@@ -39,22 +41,18 @@ for p in promos:
 PYEOF
 
 echo ""
-echo "=== 6. Перезапуск приложения ==="
-# Найдите правильный способ перезапуска
-if [ -f "../tmp/restart.txt" ]; then
-    touch ../tmp/restart.txt
-    echo "Файл restart.txt обновлен"
-elif [ -f "tmp/restart.txt" ]; then
-    touch tmp/restart.txt
-    echo "Файл restart.txt обновлен"
-else
-    echo "Создание директории tmp и файла restart.txt"
-    mkdir -p tmp
-    touch tmp/restart.txt
-fi
+echo "=== 6. Сборка статических файлов ==="
+python manage.py collectstatic --noinput
 
 echo ""
-echo "=== 7. Финальная проверка настроек ==="
+echo "=== 7. Перезапуск приложения ==="
+# Создаем директорию tmp если её нет
+mkdir -p tmp
+touch tmp/restart.txt
+echo "Файл restart.txt создан/обновлен"
+
+echo ""
+echo "=== 8. Финальная проверка настроек ==="
 python manage.py shell << 'PYEOF'
 from django.conf import settings
 print(f"STATIC_VERSION: {getattr(settings, 'STATIC_VERSION', 'NOT SET')}")
