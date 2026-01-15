@@ -108,6 +108,9 @@ STATIC_URL = '/static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
+# Версия статики для обхода кеша браузера (увеличивайте при обновлении CSS/JS)
+STATIC_VERSION = '1.2'
+
 # Media files
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'

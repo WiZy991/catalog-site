@@ -35,5 +35,6 @@ def categories_processor(request):
         'COMPANY_OWNER': getattr(settings, 'COMPANY_OWNER', ''),
         'COMPANY_INN': getattr(settings, 'COMPANY_INN', ''),
         'COMPANY_OGRN': getattr(settings, 'COMPANY_OGRN', ''),
+        'STATIC_VERSION': getattr(settings, 'STATIC_VERSION', '1.0'),
     }
 
