@@ -2,6 +2,7 @@ from django.shortcuts import render, get_object_or_404
 from django.views.generic import TemplateView
 from django.http import HttpResponse
 from django.db import OperationalError
+from django.conf import settings
 from catalog.models import Category, Product, Promotion
 from .models import Page
 
@@ -25,9 +26,14 @@ class HomeView(TemplateView):
             context['promotions'] = Promotion.objects.filter(
                 is_active=True
             ).order_by('order', '-created_at')
-        except OperationalError:
-            # Таблица еще не создана, миграции не применены
+        except (OperationalError, Exception) as e:
+            # Таблица еще не создана, миграции не применены, или другая ошибка
             context['promotions'] = []
+            # В режиме отладки можно залогировать ошибку
+            if settings.DEBUG:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(f"Error loading promotions: {e}")
         return context
 
 
