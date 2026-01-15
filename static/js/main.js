@@ -572,29 +572,45 @@ function initPromotionsCarousel() {
         });
     });
     
-    // Автопрокрутка
+    // Автопрокрутка - строго контролируем интервал
     function startAutoplay() {
-        autoplayInterval = setInterval(nextSlide, AUTOPLAY_DELAY);
+        // Всегда останавливаем предыдущий интервал перед созданием нового
+        stopAutoplay();
+        // Создаем новый интервал строго на 5 секунд
+        autoplayInterval = setInterval(function() {
+            nextSlide();
+        }, AUTOPLAY_DELAY);
     }
     
     function stopAutoplay() {
-        if (autoplayInterval) {
+        if (autoplayInterval !== null) {
             clearInterval(autoplayInterval);
             autoplayInterval = null;
         }
     }
     
     function resetAutoplay() {
+        // Полностью останавливаем и перезапускаем с нуля
         stopAutoplay();
-        startAutoplay();
+        // Небольшая задержка перед перезапуском для корректного сброса
+        setTimeout(function() {
+            startAutoplay();
+        }, 100);
     }
     
     // Останавливаем автопрокрутку при наведении
-    carousel.addEventListener('mouseenter', stopAutoplay);
-    carousel.addEventListener('mouseleave', startAutoplay);
+    carousel.addEventListener('mouseenter', function() {
+        stopAutoplay();
+    });
     
-    // Запускаем автопрокрутку
-    startAutoplay();
+    carousel.addEventListener('mouseleave', function() {
+        startAutoplay();
+    });
+    
+    // Запускаем автопрокрутку с небольшой задержкой после загрузки
+    setTimeout(function() {
+        startAutoplay();
+    }, 500);
     
     // Обработка свайпов на мобильных устройствах
     let touchStartX = 0;

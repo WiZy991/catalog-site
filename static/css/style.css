@@ -3185,7 +3185,9 @@ h1, h2, h3, h4, h5, h6 {
     width: 100%;
     height: auto;
     display: block;
-    object-fit: cover;
+    object-fit: contain;
+    max-width: 100%;
+    max-height: 100%;
     transition: transform var(--transition-slow);
 }
 
