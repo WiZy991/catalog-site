@@ -1,7 +1,7 @@
 from django.shortcuts import render, get_object_or_404
 from django.views.generic import TemplateView
 from django.http import HttpResponse
-from catalog.models import Category, Product
+from catalog.models import Category, Product, Promotion
 from .models import Page
 
 
@@ -15,13 +15,13 @@ class HomeView(TemplateView):
             is_active=True, 
             is_featured=True
         ).select_related('category').prefetch_related('images')[:8]
-        context['new_products'] = Product.objects.filter(
-            is_active=True
-        ).select_related('category').prefetch_related('images').order_by('-created_at')[:8]
         context['categories'] = Category.objects.filter(
             parent=None, 
             is_active=True
         ).order_by('order', 'name')[:6]
+        context['promotions'] = Promotion.objects.filter(
+            is_active=True
+        ).order_by('order', '-created_at')
         return context
 
 

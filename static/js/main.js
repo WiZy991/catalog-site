@@ -22,8 +22,8 @@ document.addEventListener('DOMContentLoaded', function() {
     // Mega menu (two-column categories menu)
     initMegaMenu();
     
-    // Mega menu (two-column categories menu)
-    initMegaMenu();
+    // Promotions carousel
+    initPromotionsCarousel();
 });
 
 /**
@@ -498,3 +498,130 @@ function initMegaMenu() {
     });
 }
 
+/**
+ * Promotions carousel functionality
+ */
+function initPromotionsCarousel() {
+    const carousel = document.querySelector('.promotions-carousel');
+    if (!carousel) return;
+    
+    const slides = carousel.querySelectorAll('.promotions-carousel__slide');
+    const indicators = carousel.querySelectorAll('.promotions-carousel__indicator');
+    const prevBtn = carousel.querySelector('.promotions-carousel__btn--prev');
+    const nextBtn = carousel.querySelector('.promotions-carousel__btn--next');
+    
+    if (slides.length <= 1) return;
+    
+    let currentSlide = 0;
+    let autoplayInterval = null;
+    const AUTOPLAY_DELAY = 5000; // 5 секунд
+    
+    // Функция для переключения слайда
+    function showSlide(index) {
+        // Убираем активный класс у всех слайдов и индикаторов
+        slides.forEach(function(slide) {
+            slide.classList.remove('is-active');
+        });
+        indicators.forEach(function(indicator) {
+            indicator.classList.remove('is-active');
+        });
+        
+        // Добавляем активный класс текущему слайду и индикатору
+        if (slides[index]) {
+            slides[index].classList.add('is-active');
+        }
+        if (indicators[index]) {
+            indicators[index].classList.add('is-active');
+        }
+        
+        currentSlide = index;
+    }
+    
+    // Функция для следующего слайда
+    function nextSlide() {
+        const next = (currentSlide + 1) % slides.length;
+        showSlide(next);
+    }
+    
+    // Функция для предыдущего слайда
+    function prevSlide() {
+        const prev = (currentSlide - 1 + slides.length) % slides.length;
+        showSlide(prev);
+    }
+    
+    // Обработчики для кнопок
+    if (nextBtn) {
+        nextBtn.addEventListener('click', function() {
+            nextSlide();
+            resetAutoplay();
+        });
+    }
+    
+    if (prevBtn) {
+        prevBtn.addEventListener('click', function() {
+            prevSlide();
+            resetAutoplay();
+        });
+    }
+    
+    // Обработчики для индикаторов
+    indicators.forEach(function(indicator, index) {
+        indicator.addEventListener('click', function() {
+            showSlide(index);
+            resetAutoplay();
+        });
+    });
+    
+    // Автопрокрутка
+    function startAutoplay() {
+        autoplayInterval = setInterval(nextSlide, AUTOPLAY_DELAY);
+    }
+    
+    function stopAutoplay() {
+        if (autoplayInterval) {
+            clearInterval(autoplayInterval);
+            autoplayInterval = null;
+        }
+    }
+    
+    function resetAutoplay() {
+        stopAutoplay();
+        startAutoplay();
+    }
+    
+    // Останавливаем автопрокрутку при наведении
+    carousel.addEventListener('mouseenter', stopAutoplay);
+    carousel.addEventListener('mouseleave', startAutoplay);
+    
+    // Запускаем автопрокрутку
+    startAutoplay();
+    
+    // Обработка свайпов на мобильных устройствах
+    let touchStartX = 0;
+    let touchEndX = 0;
+    
+    carousel.addEventListener('touchstart', function(e) {
+        touchStartX = e.changedTouches[0].screenX;
+    }, { passive: true });
+    
+    carousel.addEventListener('touchend', function(e) {
+        touchEndX = e.changedTouches[0].screenX;
+        handleSwipe();
+    }, { passive: true });
+    
+    function handleSwipe() {
+        const swipeThreshold = 50;
+        const diff = touchStartX - touchEndX;
+        
+        if (Math.abs(diff) > swipeThreshold) {
+            if (diff > 0) {
+                // Свайп влево - следующий слайд
+                nextSlide();
+            } else {
+                // Свайп вправо - предыдущий слайд
+                prevSlide();
+            }
+            resetAutoplay();
+        }
+    }
+}

@@ -8,7 +8,7 @@ from import_export import resources, fields
 from import_export.admin import ImportExportModelAdmin
 from import_export.widgets import ForeignKeyWidget
 import csv
-from .models import Category, Product, ProductImage, Brand, ImportLog, OneCExchangeLog, FarpostAPISettings
+from .models import Category, Product, ProductImage, Brand, ImportLog, OneCExchangeLog, FarpostAPISettings, Promotion
 
 
 class ProductImageInline(admin.TabularInline):
@@ -512,6 +512,30 @@ class OneCExchangeLogAdmin(admin.ModelAdmin):
             'fields': ('created_at',)
         }),
     )
+
+
+@admin.register(Promotion)
+class PromotionAdmin(admin.ModelAdmin):
+    """Админка для акций и спец предложений."""
+    list_display = ['image_preview', 'title', 'is_active', 'order', 'created_at']
+    list_editable = ['is_active', 'order']
+    list_filter = ['is_active', 'created_at']
+    search_fields = ['title', 'description']
+    fieldsets = (
+        (None, {
+            'fields': ('title', 'image', 'link', 'description')
+        }),
+        ('Настройки', {
+            'fields': ('is_active', 'order')
+        }),
+    )
+    readonly_fields = ['created_at', 'updated_at']
+
+    def image_preview(self, obj):
+        if obj.image:
+            return format_html('<img src="{}" style="max-height: 50px;"/>', obj.image.url)
+        return '-'
+    image_preview.short_description = 'Превью'
 
 
 # Настройка заголовка админки

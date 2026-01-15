@@ -11,7 +11,9 @@
     width: 44px;
     height: 44px;
     min-width: 44px;
+    max-width: 44px;
     min-height: 44px;
+    max-height: 44px;
     background: var(--color-primary);
     color: var(--color-white);
     border-radius: var(--radius-md);
@@ -20,6 +22,7 @@
     margin-left: var(--space-md);
     padding: 0;
     flex-shrink: 0;
+    box-sizing: border-box;
 }
 
 .header__cart:hover {

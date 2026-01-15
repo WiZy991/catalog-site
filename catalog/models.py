@@ -423,3 +423,23 @@ class FarpostAPISettings(models.Model):
         from django.conf import settings
         signer = Signer(key=settings.SECRET_KEY)
         self.password = signer.sign(password)
+
+
+class Promotion(models.Model):
+    """Акции и специальные предложения для главной страницы."""
+    title = models.CharField('Заголовок', max_length=200, blank=True, help_text='Необязательно. Если не указан, будет использовано изображение.')
+    image = models.ImageField('Изображение', upload_to='promotions/')
+    link = models.URLField('Ссылка', blank=True, help_text='Куда ведёт акция (необязательно)')
+    description = models.TextField('Описание', blank=True)
+    is_active = models.BooleanField('Активна', default=True)
+    order = models.PositiveIntegerField('Порядок сортировки', default=0)
+    created_at = models.DateTimeField('Создана', auto_now_add=True)
+    updated_at = models.DateTimeField('Обновлена', auto_now=True)
+
+    class Meta:
+        verbose_name = 'Акция / Спец предложение'
+        verbose_name_plural = 'Акции / Спец предложения'
+        ordering = ['order', '-created_at']
+
+    def __str__(self):
+        return self.title or f'Акция #{self.pk}'
