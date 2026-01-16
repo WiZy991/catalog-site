@@ -16,6 +16,23 @@ def transliterate_slug(text):
     return slugify(text, allow_unicode=False)
 
 
+def category_image_path(instance, filename):
+    """Генерация пути для изображений категории."""
+    # Используем slug категории вместо оригинального имени файла
+    # Это предотвращает проблемы с кириллицей и двойным URL-кодированием
+    ext = filename.split('.')[-1] if '.' in filename else 'jpg'
+    # Используем slug, если он есть, иначе pk или временное имя
+    if instance.slug:
+        filename = f'{instance.slug}.{ext}'
+    elif instance.pk:
+        filename = f'category_{instance.pk}.{ext}'
+    else:
+        # Для новых категорий используем временное имя на основе name
+        slug = transliterate_slug(instance.name)
+        filename = f'{slug}.{ext}'
+    return os.path.join('categories', filename)
+
+
 class Category(MPTTModel):
     """Категория товаров с поддержкой неограниченной вложенности."""
     name = models.CharField('Название', max_length=200)
@@ -28,7 +45,7 @@ class Category(MPTTModel):
         related_name='children',
         verbose_name='Родительская категория'
     )
-    image = models.ImageField('Изображение', upload_to='categories/', blank=True, null=True)
+    image = models.ImageField('Изображение', upload_to=category_image_path, blank=True, null=True)
     description = models.TextField('Описание', blank=True)
     meta_title = models.CharField('Meta Title', max_length=200, blank=True)
     meta_description = models.TextField('Meta Description', blank=True)
