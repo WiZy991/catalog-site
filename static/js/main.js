@@ -236,7 +236,7 @@ function addToCart(productId) {
                 const currentCount = parseInt(cartCountEl.textContent || '0');
                 const newCount = data.cart_count || (currentCount + 1);
                 cartCountEl.textContent = newCount;
-                cartCountEl.style.display = 'block';
+                cartCountEl.style.display = 'flex';
                 localStorage.setItem('cartCount', newCount.toString());
             }
             showNotification(data.message || 'Товар добавлен в корзину', 'success');
@@ -261,7 +261,7 @@ function updateCartCount() {
             const count = data.count || 0;
             if (count > 0) {
                 cartCountEl.textContent = count;
-                cartCountEl.style.display = 'block';
+                cartCountEl.style.display = 'flex';
             } else {
                 cartCountEl.style.display = 'none';
             }

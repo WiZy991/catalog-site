@@ -689,23 +689,6 @@ h1, h2, h3, h4, h5, h6 {
     transform: translateY(-2px);
 }
 
-.header__cart-count {
-    position: absolute;
-    top: -8px;
-    right: -8px;
-    min-width: 20px;
-    height: 20px;
-    display: none;
-    align-items: center;
-    justify-content: center;
-    background: var(--color-danger);
-    color: var(--color-white);
-    border-radius: 10px;
-    font-size: 0.75rem;
-    font-weight: 600;
-    padding: 0 6px;
-}
-
 .search-form {
     display: flex;
     border: 2px solid var(--color-gray-200);
@@ -3174,11 +3157,13 @@ h1, h2, h3, h4, h5, h6 {
 .promotions-carousel__image-wrapper {
     position: relative;
     width: 100%;
+    max-height: 500px;
     display: block;
     background: transparent;
     line-height: 0;
     margin: 0;
     padding: 0;
+    overflow: hidden;
 }
 
 .promotions-carousel__image {
@@ -3187,7 +3172,7 @@ h1, h2, h3, h4, h5, h6 {
     display: block;
     object-fit: contain;
     max-width: 100%;
-    max-height: 100%;
+    max-height: 500px;
     transition: transform var(--transition-slow);
 }
 
