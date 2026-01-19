@@ -234,7 +234,8 @@ function addToCart(productId) {
             const cartCountEl = document.getElementById('cartCount');
             if (cartCountEl) {
                 const currentCount = parseInt(cartCountEl.textContent || '0');
-                const newCount = data.cart_count || (currentCount + 1);
+                const serverCount = Number(data.cart_count);
+                const newCount = Number.isFinite(serverCount) ? serverCount : currentCount + 1;
                 cartCountEl.textContent = newCount;
                 cartCountEl.style.display = 'flex';
                 localStorage.setItem('cartCount', newCount.toString());

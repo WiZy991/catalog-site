@@ -83,7 +83,7 @@
         
         {% if product.availability == 'in_stock' %}
         <div class="product-card__actions">
-            <button class="product-card__add-cart" data-product-id="{{ product.id }}" title="Добавить в корзину" onclick="addToCart({{ product.id }}); return false;">
+            <button class="product-card__add-cart" type="button" data-product-id="{{ product.id }}" title="Добавить в корзину">
                 <i class="bi bi-cart-plus"></i>
             </button>
         </div>
