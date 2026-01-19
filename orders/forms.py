@@ -39,4 +39,15 @@ class OrderForm(forms.Form):
             'placeholder': 'Дополнительная информация о заказе',
         })
     )
+    personal_data_consent = forms.BooleanField(
+        label='',
+        required=True,
+        widget=forms.CheckboxInput(attrs={
+            'class': 'form-check-input',
+            'id': 'id_personal_data_consent',
+        }),
+        error_messages={
+            'required': 'Необходимо дать согласие на обработку персональных данных',
+        }
+    )
 

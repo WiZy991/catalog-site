@@ -8,6 +8,7 @@ from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib import messages
 from django.http import HttpResponse
 import openpyxl
+import xlrd
 
 from .forms import BulkImageUploadForm, BulkProductImportForm, QuickProductForm
 from .services import (
@@ -120,86 +121,178 @@ def bulk_product_import(request):
                 elif filename.endswith(('.xls', '.xlsx')):
                     # Excel файл
                     file.seek(0)  # Сбрасываем позицию файла
-                    wb = openpyxl.load_workbook(file, read_only=True, data_only=True)
-                    ws = wb.active
                     
-                    # Ищем строку с заголовками (может быть не в первой строке)
-                    # Ищем строку, которая содержит ключевые слова заголовков
-                    header_row_index = 1
-                    headers = []
+                    # Определяем формат файла: старый .xls (бинарный) или новый .xlsx (zip)
+                    is_old_xls = filename.endswith('.xls') and not filename.endswith('.xlsx')
                     
-                    # Проверяем первые 15 строк на наличие заголовков (увеличено для надежности)
-                    for row_num in range(1, min(16, ws.max_row + 1)):
-                        row = list(ws.iter_rows(min_row=row_num, max_row=row_num))[0]
-                        row_values = []
-                        for cell in row:
-                            if cell.value is not None:
-                                # Объединяем многострочные заголовки в одну строку
-                                cell_value = str(cell.value).strip()
-                                row_values.append(cell_value)
-                            else:
-                                row_values.append('')
-                        
-                        # Объединяем все значения строки для проверки
-                        row_text = ' '.join(row_values).lower()
-                        
-                        # Проверяем, есть ли в этой строке ключевые слова заголовков
-                        header_keywords = ['артикул', 'номенклатура', 'наименование', 'цена', 'остаток', 'склад', 'розничная', 'фарпост']
-                        keyword_count = sum(1 for keyword in header_keywords if keyword in row_text)
-                        
-                        # Если найдено минимум 2 ключевых слова, считаем это строкой заголовков
-                        if keyword_count >= 2:
-                            header_row_index = row_num
-                            # Сохраняем оригинальные заголовки (не в нижнем регистре, чтобы сохранить формат)
-                            headers = row_values
-                            break
-                    
-                    # Если заголовки не найдены, берем первую строку
-                    if not headers:
-                        row = list(ws.iter_rows(min_row=1, max_row=1))[0]
-                        headers = [str(cell.value or '').strip() for cell in row]
-                    
-                    # Читаем данные начиная со строки после заголовков
-                    for row_num, row in enumerate(ws.iter_rows(min_row=header_row_index + 1, values_only=False), start=header_row_index + 1):
-                        row_data = {}
-                        for i, cell in enumerate(row):
-                            if i < len(headers) and headers[i]:
-                                header_key = headers[i].lower().strip()
-                                value = cell.value
-                                
-                                # Обрабатываем значение в зависимости от типа
-                                if value is None:
-                                    value = ''
-                                elif isinstance(value, (int, float)):
-                                    # Для чисел сохраняем как строку, чтобы сохранить форматирование
-                                    # Но также сохраняем числовое значение для правильной обработки
-                                    if isinstance(value, float) and value.is_integer():
-                                        value_str = str(int(value))
+                    if is_old_xls:
+                        # Старый формат .xls - используем xlrd
+                        try:
+                            file_content = file.read()
+                            wb = xlrd.open_workbook(file_contents=file_content)
+                            ws = wb.sheet_by_index(0)
+                            
+                            # Ищем строку с заголовками
+                            header_row_index = 0
+                            headers = []
+                            
+                            # Проверяем первые 15 строк на наличие заголовков
+                            for row_num in range(min(15, ws.nrows)):
+                                row_values = []
+                                for col_num in range(ws.ncols):
+                                    cell_value = ws.cell_value(row_num, col_num)
+                                    if cell_value:
+                                        row_values.append(str(cell_value).strip())
                                     else:
-                                        value_str = str(value)
-                                    # Заменяем точку на запятую для соответствия формату клиента
-                                    value_str = value_str.replace('.', ',')
-                                    row_data[header_key] = value_str
-                                    # Также сохраняем оригинальное значение для числовых полей
-                                    if 'цена' in header_key or 'price' in header_key:
-                                        row_data[header_key + '_num'] = value
-                                    elif 'остаток' in header_key or 'quantity' in header_key or 'склад' in header_key:
-                                        row_data[header_key + '_num'] = int(value) if isinstance(value, float) and value.is_integer() else int(value)
-                                    continue
-                                else:
-                                    value = str(value).strip()
+                                        row_values.append('')
                                 
-                                row_data[header_key] = value
-                        
-                        # Пропускаем полностью пустые строки
-                        has_data = any(
-                            str(v).strip() for v in row_data.values() 
-                            if v is not None and str(v).strip() and not str(v).endswith('_num')
-                        )
-                        if has_data:
-                            data_rows.append(row_data)
-                    
-                    wb.close()
+                                # Объединяем все значения строки для проверки
+                                row_text = ' '.join(row_values).lower()
+                                
+                                # Проверяем, есть ли в этой строке ключевые слова заголовков
+                                header_keywords = ['артикул', 'номенклатура', 'наименование', 'цена', 'остаток', 'склад', 'розничная', 'фарпост']
+                                keyword_count = sum(1 for keyword in header_keywords if keyword in row_text)
+                                
+                                # Если найдено минимум 2 ключевых слова, считаем это строкой заголовков
+                                if keyword_count >= 2:
+                                    header_row_index = row_num
+                                    headers = row_values
+                                    break
+                            
+                            # Если заголовки не найдены, берем первую строку
+                            if not headers:
+                                headers = [str(ws.cell_value(0, col_num) or '').strip() for col_num in range(ws.ncols)]
+                            
+                            # Читаем данные начиная со строки после заголовков
+                            for row_num in range(header_row_index + 1, ws.nrows):
+                                row_data = {}
+                                for col_num in range(min(len(headers), ws.ncols)):
+                                    if headers[col_num]:
+                                        header_key = headers[col_num].lower().strip()
+                                        cell = ws.cell(row_num, col_num)
+                                        value = cell.value
+                                        
+                                        # Обрабатываем значение в зависимости от типа
+                                        if value is None or value == '':
+                                            value = ''
+                                        elif cell.ctype == xlrd.XL_CELL_NUMBER:
+                                            # Числовое значение
+                                            if isinstance(value, float) and value.is_integer():
+                                                value_str = str(int(value))
+                                            else:
+                                                value_str = str(value)
+                                            value_str = value_str.replace('.', ',')
+                                            row_data[header_key] = value_str
+                                            # Сохраняем числовое значение
+                                            if 'цена' in header_key or 'price' in header_key:
+                                                row_data[header_key + '_num'] = value
+                                            elif 'остаток' in header_key or 'quantity' in header_key or 'склад' in header_key:
+                                                row_data[header_key + '_num'] = int(value) if isinstance(value, float) and value.is_integer() else int(value)
+                                            continue
+                                        else:
+                                            value = str(value).strip()
+                                        
+                                        row_data[header_key] = value
+                                
+                                # Пропускаем полностью пустые строки
+                                has_data = any(
+                                    str(v).strip() for v in row_data.values() 
+                                    if v is not None and str(v).strip() and not str(v).endswith('_num')
+                                )
+                                if has_data:
+                                    data_rows.append(row_data)
+                                    
+                        except xlrd.biffh.XLRDError as e:
+                            raise Exception(f'Ошибка чтения Excel файла (старый формат .xls): {str(e)}. Убедитесь, что файл не поврежден.')
+                        except Exception as e:
+                            raise Exception(f'Ошибка при обработке Excel файла: {str(e)}')
+                    else:
+                        # Новый формат .xlsx - используем openpyxl
+                        try:
+                            wb = openpyxl.load_workbook(file, read_only=True, data_only=True)
+                            ws = wb.active
+                            
+                            # Ищем строку с заголовками (может быть не в первой строке)
+                            # Ищем строку, которая содержит ключевые слова заголовков
+                            header_row_index = 1
+                            headers = []
+                            
+                            # Проверяем первые 15 строк на наличие заголовков (увеличено для надежности)
+                            for row_num in range(1, min(16, ws.max_row + 1)):
+                                row = list(ws.iter_rows(min_row=row_num, max_row=row_num))[0]
+                                row_values = []
+                                for cell in row:
+                                    if cell.value is not None:
+                                        # Объединяем многострочные заголовки в одну строку
+                                        cell_value = str(cell.value).strip()
+                                        row_values.append(cell_value)
+                                    else:
+                                        row_values.append('')
+                                
+                                # Объединяем все значения строки для проверки
+                                row_text = ' '.join(row_values).lower()
+                                
+                                # Проверяем, есть ли в этой строке ключевые слова заголовков
+                                header_keywords = ['артикул', 'номенклатура', 'наименование', 'цена', 'остаток', 'склад', 'розничная', 'фарпост']
+                                keyword_count = sum(1 for keyword in header_keywords if keyword in row_text)
+                                
+                                # Если найдено минимум 2 ключевых слова, считаем это строкой заголовков
+                                if keyword_count >= 2:
+                                    header_row_index = row_num
+                                    # Сохраняем оригинальные заголовки (не в нижнем регистре, чтобы сохранить формат)
+                                    headers = row_values
+                                    break
+                            
+                            # Если заголовки не найдены, берем первую строку
+                            if not headers:
+                                row = list(ws.iter_rows(min_row=1, max_row=1))[0]
+                                headers = [str(cell.value or '').strip() for cell in row]
+                            
+                            # Читаем данные начиная со строки после заголовков
+                            for row_num, row in enumerate(ws.iter_rows(min_row=header_row_index + 1, values_only=False), start=header_row_index + 1):
+                                row_data = {}
+                                for i, cell in enumerate(row):
+                                    if i < len(headers) and headers[i]:
+                                        header_key = headers[i].lower().strip()
+                                        value = cell.value
+                                        
+                                        # Обрабатываем значение в зависимости от типа
+                                        if value is None:
+                                            value = ''
+                                        elif isinstance(value, (int, float)):
+                                            # Для чисел сохраняем как строку, чтобы сохранить форматирование
+                                            # Но также сохраняем числовое значение для правильной обработки
+                                            if isinstance(value, float) and value.is_integer():
+                                                value_str = str(int(value))
+                                            else:
+                                                value_str = str(value)
+                                            # Заменяем точку на запятую для соответствия формату клиента
+                                            value_str = value_str.replace('.', ',')
+                                            row_data[header_key] = value_str
+                                            # Также сохраняем оригинальное значение для числовых полей
+                                            if 'цена' in header_key or 'price' in header_key:
+                                                row_data[header_key + '_num'] = value
+                                            elif 'остаток' in header_key or 'quantity' in header_key or 'склад' in header_key:
+                                                row_data[header_key + '_num'] = int(value) if isinstance(value, float) and value.is_integer() else int(value)
+                                            continue
+                                        else:
+                                            value = str(value).strip()
+                                        
+                                        row_data[header_key] = value
+                                
+                                # Пропускаем полностью пустые строки
+                                has_data = any(
+                                    str(v).strip() for v in row_data.values() 
+                                    if v is not None and str(v).strip() and not str(v).endswith('_num')
+                                )
+                                if has_data:
+                                    data_rows.append(row_data)
+                            
+                            wb.close()
+                        except openpyxl.utils.exceptions.InvalidFileException as e:
+                            raise Exception(f'Файл не является корректным Excel файлом (.xlsx). Возможно, файл поврежден или имеет неправильный формат. Ошибка: {str(e)}')
+                        except Exception as e:
+                            raise Exception(f'Ошибка при чтении Excel файла: {str(e)}')
                 
                 # Маппинг колонок для формата прайс-листа клиента
                 # Формат: Артикул | Номенклатура, Характеристика. Наименование для печати | Розничная Фарпост RUB Не включает Цена | Склад Уссурийск Остаток

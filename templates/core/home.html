@@ -119,51 +119,20 @@
 </section>
 {% endif %}
 
-<!-- Promotions Carousel -->
-{% if promotions %}
-<section class="section promotions-section">
+<!-- New Products -->
+{% if new_products %}
+<section class="section products-section">
     <div class="container">
-        <div class="promotions-carousel">
-            <div class="promotions-carousel__wrapper">
-                <button class="promotions-carousel__btn promotions-carousel__btn--prev" aria-label="Предыдущая акция">
-                    <i class="bi bi-chevron-left"></i>
-                </button>
-                <div class="promotions-carousel__track">
-                    {% for promotion in promotions %}
-                    <div class="promotions-carousel__slide {% if forloop.first %}is-active{% endif %}">
-                        {% if promotion.link %}
-                        <a href="{{ promotion.link }}" class="promotions-carousel__link">
-                        {% endif %}
-                            <div class="promotions-carousel__image-wrapper">
-                                <img src="{{ promotion.image.url }}" alt="{{ promotion.title|default:'Акция' }}" class="promotions-carousel__image" loading="eager">
-                                {% if promotion.title or promotion.description %}
-                                <div class="promotions-carousel__content">
-                                    {% if promotion.title %}
-                                    <h3 class="promotions-carousel__title">{{ promotion.title }}</h3>
-                                    {% endif %}
-                                    {% if promotion.description %}
-                                    <p class="promotions-carousel__description">{{ promotion.description }}</p>
-                                    {% endif %}
-                                </div>
-                                {% endif %}
-                            </div>
-                        {% if promotion.link %}
-                        </a>
-                        {% endif %}
-                    </div>
-                    {% endfor %}
-                </div>
-                <button class="promotions-carousel__btn promotions-carousel__btn--next" aria-label="Следующая акция">
-                    <i class="bi bi-chevron-right"></i>
-                </button>
-            </div>
-            {% if promotions|length > 1 %}
-            <div class="promotions-carousel__indicators">
-                {% for promotion in promotions %}
-                <button class="promotions-carousel__indicator {% if forloop.first %}is-active{% endif %}" data-slide="{{ forloop.counter0 }}" aria-label="Акция {{ forloop.counter }}"></button>
-                {% endfor %}
-            </div>
-            {% endif %}
+        <h2 class="section__title">Новые поступления</h2>
+        <div class="products-grid">
+            {% for product in new_products %}
+            {% include 'catalog/includes/product_card.html' %}
+            {% endfor %}
+        </div>
+        <div class="section__action">
+            <a href="{% url 'catalog:index' %}" class="btn btn--outline">
+                Смотреть все товары <i class="bi bi-arrow-right"></i>
+            </a>
         </div>
     </div>
 </section>

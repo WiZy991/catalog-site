@@ -154,7 +154,7 @@
                     
                     <a href="{% url 'orders:cart_view' %}" class="header__cart" title="Корзина">
                         <i class="bi bi-cart"></i>
-                        <span class="header__cart-count" id="cartCount">0</span>
+                        <span class="header__cart-count" id="cartCount" style="display: none;">0</span>
                     </a>
                     
                     <button class="header__burger" id="burgerBtn" aria-label="Меню">
@@ -237,6 +237,8 @@
                         <li><a href="{% url 'core:payment_delivery' %}">Оплата и доставка</a></li>
                         <li><a href="{% url 'core:contacts' %}">Контакты</a></li>
                         <li><a href="{% url 'catalog:index' %}">Каталог товаров</a></li>
+                        <li><a href="{% url 'core:privacy_policy' %}">Политика в отношении обработки персональных данных</a></li>
+                        <li><a href="{% url 'core:consent' %}">Согласие на обработку персональных данных</a></li>
                     </ul>
                 </div>
                 
@@ -280,6 +282,18 @@
             </div>
         </div>
     </footer>
+
+    <!-- Cookie Consent Banner -->
+    <div id="cookieConsent" class="cookie-consent" style="display: none;">
+        <div class="cookie-consent__content">
+            <p class="cookie-consent__text">
+                Мы обрабатываем файлы «cookie» для обеспечения технической функциональности сайта согласно <a href="{% url 'core:privacy_policy' %}#section8" target="_blank">разделу 8</a> нашей <a href="{% url 'core:privacy_policy' %}" target="_blank">Политики в отношении обработки персональных данных</a> (прочитайте до нажатия кнопки). Вы можете отключить их в браузере или согласиться на их использование, нажав кнопку «Принять».
+            </p>
+            <button id="cookieAcceptBtn" class="btn btn--primary cookie-consent__btn">
+                Принять
+            </button>
+        </div>
+    </div>
 
     <!-- Scripts -->
     <script>

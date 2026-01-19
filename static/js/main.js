@@ -24,6 +24,9 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Promotions carousel
     initPromotionsCarousel();
+    
+    // Cookie consent banner
+    initCookieConsent();
 });
 
 /**
@@ -641,4 +644,3 @@ function initPromotionsCarousel() {
         }
     }
 }
-

@@ -93,6 +93,16 @@ class PublicOfferView(TemplateView):
         return context
 
 
+class PrivacyPolicyView(TemplateView):
+    """Страница Политики в отношении обработки персональных данных."""
+    template_name = 'core/privacy_policy.html'
+
+
+class ConsentView(TemplateView):
+    """Страница Согласия на обработку персональных данных."""
+    template_name = 'core/consent.html'
+
+
 def robots_txt(request):
     """Генерация robots.txt."""
     content = """User-agent: *

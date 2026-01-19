@@ -680,7 +680,7 @@ h1, h2, h3, h4, h5, h6 {
     padding: 0 !important;
     flex-shrink: 0;
     box-sizing: border-box;
-    overflow: hidden;
+    overflow: visible !important;
 }
 
 .header__cart:hover {
@@ -3317,4 +3317,3 @@ h1, h2, h3, h4, h5, h6 {
         font-size: 1rem;
     }
 }
-

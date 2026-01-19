@@ -1,0 +1,40 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Политика в отношении обработки персональных данных - {{ SITE_NAME }}{% endblock %}
+{% block meta_description %}Политика Индивидуального предпринимателя Щербович Елены Николаевны в отношении обработки персональных данных.{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="breadcrumbs" aria-label="Хлебные крошки">
+    <div class="container">
+        <ol class="breadcrumbs__list" itemscope itemtype="https://schema.org/BreadcrumbList">
+            <li class="breadcrumbs__item" itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
+                <a href="{% url 'core:home' %}" itemprop="item"><span itemprop="name">Главная</span></a>
+                <meta itemprop="position" content="1">
+            </li>
+            <li class="breadcrumbs__item breadcrumbs__item--active" itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
+                <span itemprop="name">Политика в отношении обработки персональных данных</span>
+                <meta itemprop="position" content="2">
+            </li>
+        </ol>
+    </div>
+</nav>
+{% endblock %}
+
+{% block content %}
+<section class="page-section">
+    <div class="container">
+        <h1 class="page-title">Политика в отношении обработки персональных данных</h1>
+        
+        <div class="page-content">
+            <p><strong>Индивидуальный предприниматель Щербович Елена Николаевна</strong></p>
+            <p>Зарегистрирован в соответствии с законодательством Российской Федерации 21 августа 2019 г за основным государственным регистрационным номером индивидуального предпринимателя 319253600080189, идентификационный номер налогоплательщика 250703414475</p>
+            <p>Адрес: 692524, Приморский край, г. Уссурийск, ул. Котовского 17В</p>
+            
+            <p>Полный текст политики в отношении обработки персональных данных доступен по запросу. Для получения полного текста политики, пожалуйста, свяжитесь с нами по адресу: <a href="mailto:onesimus25@mail.ru">onesimus25@mail.ru</a> или по телефону.</p>
+            
+            <p><a href="{% url 'core:consent' %}">Согласие на обработку персональных данных</a></p>
+        </div>
+    </div>
+</section>
+{% endblock %}

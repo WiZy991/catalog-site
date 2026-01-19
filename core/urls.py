@@ -9,6 +9,8 @@ urlpatterns = [
     path('contacts/', views.ContactsView.as_view(), name='contacts'),
     path('payment-delivery/', views.PaymentDeliveryView.as_view(), name='payment_delivery'),
     path('public-offer/', views.PublicOfferView.as_view(), name='public_offer'),
+    path('privacy-policy/', views.PrivacyPolicyView.as_view(), name='privacy_policy'),
+    path('consent/', views.ConsentView.as_view(), name='consent'),
     path('robots.txt', views.robots_txt, name='robots'),
 ]
 
