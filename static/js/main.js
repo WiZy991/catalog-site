@@ -644,3 +644,43 @@ function initPromotionsCarousel() {
         }
     }
 }
+
+/**
+ * Cookie consent banner functionality
+ */
+function initCookieConsent() {
+    const cookieConsent = document.getElementById('cookieConsent');
+    const cookieAcceptBtn = document.getElementById('cookieAcceptBtn');
+    
+    if (!cookieConsent || !cookieAcceptBtn) return;
+    
+    // Проверяем, было ли уже согласие
+    const consentGiven = localStorage.getItem('cookieConsent');
+    
+    if (!consentGiven) {
+        // Показываем баннер с небольшой задержкой после загрузки страницы
+        setTimeout(function() {
+            cookieConsent.style.display = 'block';
+            // Принудительно применяем стили для анимации через класс
+            requestAnimationFrame(function() {
+                cookieConsent.classList.add('show');
+            });
+        }, 1000);
+    } else {
+        // Если согласие уже дано, скрываем баннер
+        cookieConsent.style.display = 'none';
+    }
+    
+    // Обработчик кнопки "Принять"
+    cookieAcceptBtn.addEventListener('click', function() {
+        // Сохраняем согласие в localStorage
+        localStorage.setItem('cookieConsent', 'accepted');
+        localStorage.setItem('cookieConsentDate', new Date().toISOString());
+        
+        // Скрываем баннер с анимацией
+        cookieConsent.classList.remove('show');
+        setTimeout(function() {
+            cookieConsent.style.display = 'none';
+        }, 300);
+    });
+}

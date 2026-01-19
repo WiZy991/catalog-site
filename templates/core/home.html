@@ -105,6 +105,60 @@
     </div>
 </section>
 
+<!-- Promotions -->
+{% if promotions %}
+<section class="promotions-section">
+    <div class="container">
+        <div class="promotions-carousel" id="promotionsCarousel">
+            <div class="promotions-carousel__wrapper">
+                <div class="promotions-carousel__track">
+                    {% for promotion in promotions %}
+                    <div class="promotions-carousel__slide {% if forloop.first %}is-active{% endif %}">
+                        {% if promotion.link %}
+                        <a href="{{ promotion.link }}" class="promotions-carousel__link">
+                        {% else %}
+                        <div class="promotions-carousel__link">
+                        {% endif %}
+                            <div class="promotions-carousel__image-wrapper">
+                                <img src="{{ promotion.image.url }}" alt="{{ promotion.title|default:'Акция' }}" class="promotions-carousel__image">
+                            </div>
+                            {% if promotion.title or promotion.description %}
+                            <div class="promotions-carousel__content">
+                                {% if promotion.title %}
+                                <h3 class="promotions-carousel__title">{{ promotion.title }}</h3>
+                                {% endif %}
+                                {% if promotion.description %}
+                                <p class="promotions-carousel__description">{{ promotion.description }}</p>
+                                {% endif %}
+                            </div>
+                            {% endif %}
+                        {% if promotion.link %}
+                        </a>
+                        {% else %}
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% if promotions|length > 1 %}
+            <button class="promotions-carousel__btn promotions-carousel__btn--prev" aria-label="Предыдущая акция">
+                <i class="bi bi-chevron-left"></i>
+            </button>
+            <button class="promotions-carousel__btn promotions-carousel__btn--next" aria-label="Следующая акция">
+                <i class="bi bi-chevron-right"></i>
+            </button>
+            <div class="promotions-carousel__indicators">
+                {% for promotion in promotions %}
+                <button class="promotions-carousel__indicator {% if forloop.first %}is-active{% endif %}" aria-label="Акция {{ forloop.counter }}"></button>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</section>
+{% endif %}
+
 <!-- Featured Products -->
 {% if featured_products %}
 <section class="section products-section products-section--featured">
