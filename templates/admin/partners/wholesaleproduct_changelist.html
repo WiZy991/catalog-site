@@ -1,0 +1,86 @@
+{% extends "admin/change_list.html" %}
+{% load admin_urls %}
+
+{% block object-tools-items %}
+{{ block.super }}
+<li>
+    <a href="{% url 'admin_bulk_wholesale_import' %}" class="addlink" id="bulk-import-btn">
+        Массовый импорт товаров
+    </a>
+</li>
+{% endblock %}
+
+{% block extrahead %}
+{{ block.super }}
+<script>
+(function() {
+    var importUrl = '{% url "admin_bulk_wholesale_import" %}';
+    
+    function addBulkImportButton() {
+        // Ищем блок object-tools
+        var objectTools = document.querySelector('.object-tools');
+        if (!objectTools) {
+            console.log('Object tools not found, retrying...');
+            return false;
+        }
+        
+        // Проверяем, есть ли уже кнопка
+        var existingBtn = objectTools.querySelector('a[href*="bulk-import"]');
+        if (existingBtn) {
+            console.log('Button already exists');
+            return true;
+        }
+        
+        // Ищем список кнопок
+        var ul = objectTools.querySelector('ul');
+        if (!ul) {
+            // Если списка нет, создаем его
+            ul = document.createElement('ul');
+            objectTools.appendChild(ul);
+        }
+        
+        // Создаем кнопку
+        var li = document.createElement('li');
+        var a = document.createElement('a');
+        a.href = importUrl;
+        a.className = 'addlink';
+        a.textContent = 'Массовый импорт товаров';
+        li.appendChild(a);
+        ul.appendChild(li);
+        
+        console.log('Bulk import button added');
+        return true;
+    }
+    
+    // Пробуем добавить кнопку сразу
+    if (addBulkImportButton()) {
+        return;
+    }
+    
+    // Если не получилось, пробуем после загрузки DOM
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', function() {
+            setTimeout(addBulkImportButton, 100);
+            setTimeout(addBulkImportButton, 500);
+            setTimeout(addBulkImportButton, 1000);
+        });
+    } else {
+        setTimeout(addBulkImportButton, 100);
+        setTimeout(addBulkImportButton, 500);
+        setTimeout(addBulkImportButton, 1000);
+    }
+    
+    // Также пробуем через MutationObserver на случай динамической загрузки
+    var observer = new MutationObserver(function(mutations) {
+        if (!document.querySelector('.object-tools a[href*="bulk-import"]')) {
+            addBulkImportButton();
+        }
+    });
+    
+    observer.observe(document.body, {
+        childList: true,
+        subtree: true
+    });
+})();
+</script>
+{% endblock %}

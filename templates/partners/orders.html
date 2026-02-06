@@ -1,0 +1,716 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Мои заказы | {{ SITE_NAME }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .partner-header {
+        background: var(--color-brand-black);
+        color: var(--color-brand-white);
+        padding: 1.5rem 0;
+        margin-bottom: 2rem;
+    }
+    
+    .partner-header__inner {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 1rem;
+    }
+    
+    .partner-header__info {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+    }
+    
+    .partner-header__avatar {
+        width: 50px;
+        height: 50px;
+        background: rgba(255,255,255,0.1);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    .partner-header__avatar i {
+        font-size: 1.5rem;
+    }
+    
+    .partner-header__name {
+        font-weight: 600;
+        font-size: 1.1rem;
+    }
+    
+    .partner-header__badge {
+        background: rgba(220, 38, 38, 0.2);
+        color: var(--color-brand-red);
+        padding: 0.25rem 0.75rem;
+        border-radius: 20px;
+        font-size: 0.85rem;
+    }
+    
+    .partner-header__actions {
+        display: flex;
+        gap: 0.75rem;
+    }
+    
+    .partner-header__btn {
+        padding: 0.5rem 1rem;
+        border-radius: var(--radius-md);
+        text-decoration: none;
+        font-size: 0.9rem;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        transition: all var(--transition-fast);
+    }
+    
+    .partner-header__btn--profile {
+        background: rgba(255,255,255,0.1);
+        color: var(--color-brand-white);
+    }
+    
+    .partner-header__btn--logout {
+        background: transparent;
+        color: rgba(255,255,255,0.7);
+        border: 1px solid rgba(255,255,255,0.3);
+    }
+    
+    .partner-header__btn:hover {
+        background: rgba(255,255,255,0.2);
+        color: var(--color-brand-white);
+    }
+    
+    .orders-page {
+        padding-bottom: 4rem;
+    }
+    
+    .orders-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 2rem;
+        flex-wrap: wrap;
+        gap: 1rem;
+    }
+    
+    .orders-title {
+        font-family: var(--font-heading);
+        font-size: 1.75rem;
+        font-weight: 700;
+        color: var(--color-gray-900);
+        margin: 0;
+    }
+    
+    .orders-filters {
+        display: flex;
+        gap: 1.5rem;
+        margin-bottom: 2rem;
+        padding: 1.5rem;
+        background: var(--color-white);
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow-sm);
+        border: 2px solid var(--color-gray-200);
+        flex-wrap: wrap;
+    }
+    
+    .filter-group {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        min-width: 200px;
+    }
+    
+    .filter-label {
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: var(--color-gray-700);
+    }
+    
+    .filter-input {
+        padding: 0.5rem 1rem;
+        border: 2px solid var(--color-gray-300);
+        border-radius: var(--radius-md);
+        font-size: 0.95rem;
+    }
+    
+    .filter-input:focus {
+        outline: none;
+        border-color: var(--color-brand-red);
+    }
+    
+    .orders-list {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
+    
+    .order-item {
+        background: var(--color-white);
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow-sm);
+        border: 2px solid var(--color-gray-200);
+        overflow: hidden;
+        transition: all var(--transition-fast);
+    }
+    
+    .order-item:hover {
+        box-shadow: var(--shadow-md);
+    }
+    
+    .order-item--expanded .order-header {
+        border-bottom: 2px solid var(--color-gray-200);
+    }
+    
+    .order-header-wrapper {
+        display: flex;
+        align-items: center;
+        gap: 1.5rem;
+    }
+    
+    .order-header {
+        padding: 1.25rem;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        flex: 1;
+    }
+    
+    .order-comment-preview {
+        padding: 1.25rem;
+        background: var(--color-gray-50);
+        border-left: 3px solid var(--color-brand-red);
+        flex: 0 0 300px;
+        font-size: 0.9rem;
+        color: var(--color-gray-700);
+        max-width: 300px;
+        word-wrap: break-word;
+    }
+    
+    .order-comment-preview strong {
+        color: var(--color-gray-900);
+        display: block;
+        margin-bottom: 0.25rem;
+    }
+    
+    @media (max-width: 992px) {
+        .order-header-wrapper {
+            flex-direction: column;
+            align-items: stretch;
+        }
+        
+        .order-comment-preview {
+            flex: 1;
+            max-width: 100%;
+            border-left: none;
+            border-top: 3px solid var(--color-brand-red);
+        }
+    }
+    
+    .order-header:hover {
+        background: var(--color-gray-50);
+    }
+    
+    .order-info {
+        display: flex;
+        align-items: center;
+        gap: 1.5rem;
+        flex-wrap: wrap;
+    }
+    
+    .order-number {
+        font-weight: 700;
+        font-size: 1.1rem;
+        color: var(--color-gray-900);
+    }
+    
+    .order-date {
+        color: var(--color-gray-600);
+        font-size: 0.95rem;
+    }
+    
+    .order-status {
+        padding: 0.5rem 1rem;
+        border-radius: var(--radius-md);
+        font-size: 0.85rem;
+        font-weight: 600;
+    }
+    
+    .order-status--draft {
+        background: #6c757d;
+        color: white;
+    }
+    
+    .order-status--pending {
+        background: #ffc107;
+        color: #000;
+    }
+    
+    .order-status--processing {
+        background: #17a2b8;
+        color: white;
+    }
+    
+    .order-status--completed {
+        background: #28a745;
+        color: white;
+    }
+    
+    .order-status--cancelled {
+        background: #dc3545;
+        color: white;
+    }
+    
+    .order-total {
+        font-weight: 700;
+        font-size: 1.1rem;
+        color: var(--color-brand-red);
+    }
+    
+    .order-actions {
+        display: flex;
+        gap: 0.5rem;
+    }
+    
+    .order-toggle {
+        background: transparent;
+        border: none;
+        font-size: 1.5rem;
+        color: var(--color-gray-600);
+        cursor: pointer;
+        transition: transform var(--transition-fast);
+    }
+    
+    .order-item--expanded .order-toggle {
+        transform: rotate(180deg);
+    }
+    
+    .order-content {
+        max-height: 0;
+        overflow: hidden;
+        transition: max-height 0.3s ease;
+    }
+    
+    .order-item--expanded .order-content {
+        max-height: 2000px;
+    }
+    
+    .order-items {
+        padding: 1.25rem;
+        border-top: 1px solid var(--color-gray-200);
+    }
+    
+    .order-items-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 1.5rem;
+    }
+    
+    .order-items-table th {
+        padding: 0.75rem;
+        text-align: left;
+        font-weight: 600;
+        color: var(--color-gray-900);
+        border-bottom: 2px solid var(--color-gray-200);
+    }
+    
+    .order-items-table td {
+        padding: 0.75rem;
+        border-bottom: 1px solid var(--color-gray-200);
+    }
+    
+    .order-items-table tr:last-child td {
+        border-bottom: none;
+    }
+    
+    .order-item-checkbox {
+        width: 20px;
+        height: 20px;
+        cursor: pointer;
+    }
+    
+    .order-item-remove {
+        color: var(--color-brand-red);
+        background: transparent;
+        border: none;
+        cursor: pointer;
+        font-size: 1.2rem;
+        padding: 0.25rem 0.5rem;
+        transition: all var(--transition-fast);
+    }
+    
+    .order-item-remove:hover {
+        color: #c82333;
+        transform: scale(1.1);
+    }
+    
+    .order-footer {
+        padding: 1.25rem;
+        border-top: 2px solid var(--color-gray-200);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+    
+    .order-footer-total {
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: var(--color-gray-900);
+    }
+    
+    .order-footer-total span {
+        color: var(--color-brand-red);
+        margin-left: 0.5rem;
+    }
+    
+    .order-comment-input {
+        width: 100%;
+        padding: 0.75rem;
+        border: 2px solid var(--color-gray-300);
+        border-radius: var(--radius-md);
+        font-size: 0.9rem;
+        font-family: inherit;
+        resize: vertical;
+        margin-bottom: 0.75rem;
+        min-height: 60px;
+    }
+    
+    .order-comment-input:focus {
+        outline: none;
+        border-color: var(--color-brand-red);
+    }
+    
+    .order-comment {
+        padding: 1rem;
+        background: var(--color-gray-50);
+        border-top: 1px solid var(--color-gray-200);
+        font-size: 0.9rem;
+        color: var(--color-gray-700);
+    }
+    
+    .order-comment strong {
+        color: var(--color-gray-900);
+    }
+    
+    .empty-orders {
+        text-align: center;
+        padding: 4rem 2rem;
+        background: var(--color-white);
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow-sm);
+        border: 2px solid var(--color-gray-200);
+    }
+    
+    .empty-orders__icon {
+        font-size: 4rem;
+        color: var(--color-gray-300);
+        margin-bottom: 1rem;
+    }
+    
+    .empty-orders__title {
+        font-size: 1.5rem;
+        color: var(--color-gray-800);
+        margin-bottom: 0.5rem;
+    }
+    
+    .empty-orders__text {
+        color: var(--color-gray-600);
+    }
+    
+    @media (max-width: 768px) {
+        .order-header {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+        
+        .order-info {
+            width: 100%;
+            justify-content: space-between;
+        }
+        
+        .order-footer {
+            flex-direction: column;
+            align-items: stretch;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block breadcrumbs %}{% endblock %}
+
+{% block content %}
+<!-- Partner Header -->
+<div class="partner-header">
+    <div class="container">
+        <div class="partner-header__inner">
+            <div class="partner-header__info">
+                <div class="partner-header__avatar">
+                    <i class="bi bi-briefcase"></i>
+                </div>
+                <div>
+                    <div class="partner-header__name">{{ partner.full_name }}</div>
+                    <span class="partner-header__badge">
+                        <i class="bi bi-patch-check"></i> Партнёр
+                    </span>
+                </div>
+            </div>
+            <div class="partner-header__actions">
+                <a href="{% url 'partners:catalog' %}" class="partner-header__btn partner-header__btn--profile">
+                    <i class="bi bi-grid"></i> Каталог
+                </a>
+                <a href="{% url 'partners:profile' %}" class="partner-header__btn partner-header__btn--profile">
+                    <i class="bi bi-person"></i> Профиль
+                </a>
+                <a href="{% url 'partners:logout' %}" class="partner-header__btn partner-header__btn--logout">
+                    <i class="bi bi-box-arrow-right"></i> Выход
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="orders-page">
+    <div class="container">
+        <div class="orders-header">
+            <h1 class="orders-title">Мои заказы</h1>
+            <a href="{% url 'partners:orders_export' %}{% if request.GET %}?{{ request.GET.urlencode }}{% endif %}" 
+               class="btn btn--secondary">
+                <i class="bi bi-file-earmark-excel"></i> Экспорт в XLS
+            </a>
+        </div>
+        
+        <!-- Фильтры -->
+        <form method="get" class="orders-filters">
+            <div class="filter-group">
+                <label class="filter-label">Дата от</label>
+                <input type="date" 
+                       name="date_from" 
+                       value="{{ date_from }}" 
+                       class="filter-input">
+            </div>
+            <div class="filter-group">
+                <label class="filter-label">Дата до</label>
+                <input type="date" 
+                       name="date_to" 
+                       value="{{ date_to }}" 
+                       class="filter-input">
+            </div>
+            <div class="filter-group" style="flex: 1; min-width: 250px;">
+                <label class="filter-label">Поиск (название, OEM, артикул)</label>
+                <input type="text" 
+                       name="q" 
+                       value="{{ search_query }}" 
+                       placeholder="Введите запрос..."
+                       class="filter-input">
+            </div>
+            <div class="filter-group" style="align-items: flex-end;">
+                <button type="submit" class="btn btn--primary">
+                    <i class="bi bi-search"></i> Найти
+                </button>
+                {% if date_from or date_to or search_query %}
+                <a href="{% url 'partners:orders' %}" class="btn btn--secondary" style="margin-top: 0.5rem;">
+                    Сбросить
+                </a>
+                {% endif %}
+            </div>
+        </form>
+        
+        <!-- Список заказов -->
+        {% if orders %}
+        <div class="orders-list">
+            {% for order in orders %}
+            <div class="order-item" id="order-{{ order.id }}">
+                <div class="order-header-wrapper">
+                    <div class="order-header" onclick="toggleOrder({{ order.id }})">
+                        <div class="order-info">
+                            <div class="order-number">Заказ #{{ order.id }}</div>
+                            <div class="order-date">{{ order.created_at|date:"d.m.Y H:i" }}</div>
+                            <span class="order-status order-status--{{ order.status }}">
+                                {{ order.get_status_display }}
+                            </span>
+                            <div class="order-total">
+                                {{ order.get_total_price|floatformat:0 }} ₽
+                            </div>
+                        </div>
+                        <button type="button" class="order-toggle">
+                            <i class="bi bi-chevron-down"></i>
+                        </button>
+                    </div>
+                    {% if order.comment %}
+                    <div class="order-comment-preview">
+                        <strong>Комментарий:</strong> {{ order.comment|truncatewords:10 }}
+                    </div>
+                    {% endif %}
+                </div>
+                
+                <div class="order-content">
+                    <div class="order-items">
+                        <table class="order-items-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 40px;"></th>
+                                    <th>Товар</th>
+                                    <th>Артикул</th>
+                                    <th>Бренд</th>
+                                    <th>Количество</th>
+                                    <th>Цена</th>
+                                    <th>Сумма</th>
+                                    <th style="width: 60px;"></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in order.items.all %}
+                                <tr>
+                                    <td>
+                                        <input type="checkbox" 
+                                               class="order-item-checkbox" 
+                                               data-item-id="{{ item.id }}">
+                                    </td>
+                                    <td>{{ item.product.name }}</td>
+                                    <td>{{ item.product.article|default:"—" }}</td>
+                                    <td>{{ item.product.brand|default:"—" }}</td>
+                                    <td>{{ item.quantity }}</td>
+                                    <td>{{ item.price|floatformat:0 }} ₽</td>
+                                    <td>{{ item.get_total|floatformat:0 }} ₽</td>
+                                    <td>
+                                        {% if order.status == 'draft' or order.status == 'pending' %}
+                                        <button type="button" 
+                                                class="order-item-remove" 
+                                                onclick="removeOrderItem({{ order.id }}, {{ item.id }})"
+                                                title="Удалить">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                        
+                        <div class="order-footer">
+                            <div class="order-footer-total">
+                                Итого: <span>{{ order.get_total_price|floatformat:0 }} ₽</span>
+                            </div>
+                            {% if order.status == 'draft' or order.status == 'pending' %}
+                            <div class="order-actions">
+                                {% if order.status == 'draft' %}
+                                <form method="post" action="{% url 'partners:order_confirm' order.id %}" style="display: inline;" id="confirm-form-{{ order.id }}">
+                                    {% csrf_token %}
+                                    <textarea name="comment" 
+                                              placeholder="Комментарий к заказу (необязательно)" 
+                                              class="order-comment-input"
+                                              rows="2"></textarea>
+                                    <button type="submit" 
+                                            class="btn btn--primary">
+                                        <i class="bi bi-check-circle"></i> Заказать
+                                    </button>
+                                </form>
+                                {% endif %}
+                                <button type="button" 
+                                        class="btn btn--secondary" 
+                                        onclick="removeSelectedItems({{ order.id }})">
+                                    <i class="bi bi-trash"></i> Удалить выбранные
+                                </button>
+                            </div>
+                            {% endif %}
+                        </div>
+                        
+                        {% if order.comment %}
+                        <div class="order-comment">
+                            <strong>Комментарий:</strong> {{ order.comment }}
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        
+        <!-- Пагинация -->
+        {% if page_obj.has_other_pages %}
+        <nav class="pagination" style="margin-top: 2rem;">
+            {% if page_obj.has_previous %}
+                <a href="?page={{ page_obj.previous_page_number }}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}{% if search_query %}&q={{ search_query }}{% endif %}" 
+                   class="pagination__link">&laquo; Назад</a>
+            {% endif %}
+            
+            {% for num in page_obj.paginator.page_range %}
+                {% if page_obj.number == num %}
+                    <span class="pagination__link pagination__link--active">{{ num }}</span>
+                {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                    <a href="?page={{ num }}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}{% if search_query %}&q={{ search_query }}{% endif %}" 
+                       class="pagination__link">{{ num }}</a>
+                {% endif %}
+            {% endfor %}
+            
+            {% if page_obj.has_next %}
+                <a href="?page={{ page_obj.next_page_number }}{% if date_from %}&date_from={{ date_from }}{% endif %}{% if date_to %}&date_to={{ date_to }}{% endif %}{% if search_query %}&q={{ search_query }}{% endif %}" 
+                   class="pagination__link">Вперёд &raquo;</a>
+            {% endif %}
+        </nav>
+        {% endif %}
+        
+        {% else %}
+        <div class="empty-orders">
+            <div class="empty-orders__icon">
+                <i class="bi bi-inbox"></i>
+            </div>
+            <h2 class="empty-orders__title">Заказов пока нет</h2>
+            <p class="empty-orders__text">
+                {% if search_query or date_from or date_to %}
+                    По заданным фильтрам заказы не найдены.
+                {% else %}
+                    Вы ещё не создали ни одного заказа. Перейдите в каталог, чтобы начать формировать заказ.
+                {% endif %}
+            </p>
+            <a href="{% url 'partners:catalog' %}" class="btn btn--primary" style="margin-top: 1.5rem;">
+                <i class="bi bi-grid"></i> Перейти в каталог
+            </a>
+        </div>
+        {% endif %}
+    </div>
+</section>
+
+<script>
+function toggleOrder(orderId) {
+    const orderItem = document.getElementById('order-' + orderId);
+    orderItem.classList.toggle('order-item--expanded');
+}
+
+function removeOrderItem(orderId, itemId) {
+    if (!confirm('Удалить этот товар из заказа?')) {
+        return;
+    }
+    
+    window.location.href = '{% url "partners:order_item_remove" 0 0 %}'.replace('0/0', orderId + '/' + itemId);
+}
+
+function removeSelectedItems(orderId) {
+    const checkboxes = document.querySelectorAll('#order-' + orderId + ' .order-item-checkbox:checked');
+    if (checkboxes.length === 0) {
+        alert('Выберите товары для удаления');
+        return;
+    }
+    
+    if (!confirm('Удалить выбранные товары из заказа?')) {
+        return;
+    }
+    
+    // Удаляем выбранные товары
+    checkboxes.forEach(function(checkbox) {
+        const itemId = checkbox.dataset.itemId;
+        removeOrderItem(orderId, itemId);
+    });
+}
+
+// Функция confirmOrder больше не нужна, используется форма
+</script>
+{% endblock %}

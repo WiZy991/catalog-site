@@ -121,7 +121,23 @@ def cart_view(request):
 def cart_count(request):
     """Получить количество товаров в корзине (AJAX)."""
     cart = get_cart(request)
-    total_quantity = sum(item['quantity'] for item in cart.values())
+    total_quantity = 0
+    items_to_remove = []
+    
+    for product_id, item_data in cart.items():
+        try:
+            product = Product.objects.get(id=int(product_id), is_active=True)
+            total_quantity += item_data['quantity']
+        except Product.DoesNotExist:
+            # Товар удален - запоминаем для удаления
+            items_to_remove.append(product_id)
+    
+    # Очищаем корзину от несуществующих товаров
+    if items_to_remove:
+        for product_id in items_to_remove:
+            del cart[product_id]
+        set_cart(request, cart)
+    
     return JsonResponse({'count': total_quantity})
 
 
@@ -167,6 +183,21 @@ def order_create(request):
                         price=price,
                     )
                     total += quantity * price
+                    
+                    # Уменьшаем остатки товаров
+                    if product.quantity >= quantity:
+                        product.quantity -= quantity
+                        # Обновляем статус наличия, если остаток стал 0
+                        if product.quantity == 0:
+                            product.availability = 'out_of_stock'
+                        elif product.availability == 'out_of_stock' and product.quantity > 0:
+                            product.availability = 'in_stock'
+                        product.save(update_fields=['quantity', 'availability'])
+                    else:
+                        # Если остатка недостаточно, уменьшаем до 0
+                        product.quantity = 0
+                        product.availability = 'out_of_stock'
+                        product.save(update_fields=['quantity', 'availability'])
                 except Product.DoesNotExist:
                     continue
             

@@ -47,6 +47,15 @@ class Category(MPTTModel):
     )
     image = models.ImageField('Изображение', upload_to=category_image_path, blank=True, null=True)
     description = models.TextField('Описание', blank=True)
+    
+    # Ключевые слова для автоматического распределения товаров
+    keywords = models.TextField(
+        'Ключевые слова', 
+        blank=True,
+        help_text='Слова для автоопределения категории (через запятую). '
+                  'Пример: стартер, генератор, датчик, реле'
+    )
+    
     meta_title = models.CharField('Meta Title', max_length=200, blank=True)
     meta_description = models.TextField('Meta Description', blank=True)
     seo_text = models.TextField('SEO текст', blank=True)
@@ -56,19 +65,26 @@ class Category(MPTTModel):
     updated_at = models.DateTimeField('Обновлена', auto_now=True)
 
     class MPTTMeta:
-        order_insertion_by = ['order', 'name']
+        order_insertion_by = ['name']
 
     class Meta:
         verbose_name = 'Категория'
         verbose_name_plural = 'Категории'
-        ordering = ['order', 'name']
+        ordering = ['name']
 
     def __str__(self):
         return self.name
 
     def save(self, *args, **kwargs):
         if not self.slug:
-            self.slug = transliterate_slug(self.name)
+            base_slug = transliterate_slug(self.name)
+            slug = base_slug
+            counter = 1
+            # Проверяем уникальность slug
+            while Category.objects.filter(slug=slug).exclude(pk=self.pk).exists():
+                slug = f'{base_slug}-{counter}'
+                counter += 1
+            self.slug = slug
         super().save(*args, **kwargs)
 
     def get_absolute_url(self):
@@ -81,6 +97,12 @@ class Category(MPTTModel):
 
     def get_meta_description(self):
         return self.meta_description or f'Каталог {self.name.lower()}. Большой выбор, доступные цены.'
+
+    def get_keywords_list(self):
+        """Возвращает список ключевых слов для автоопределения категории."""
+        if not self.keywords:
+            return []
+        return [k.strip().lower() for k in self.keywords.split(',') if k.strip()]
 
     @property
     def product_count(self):
@@ -102,6 +124,21 @@ class Product(models.Model):
         ('order', 'Под заказ'),
         ('out_of_stock', 'Нет в наличии'),
     ]
+    
+    CATALOG_TYPE_CHOICES = [
+        ('retail', 'Основной каталог'),
+        ('wholesale', 'Партнёрский каталог'),
+    ]
+
+    # Тип каталога
+    catalog_type = models.CharField(
+        'Каталог', 
+        max_length=20, 
+        choices=CATALOG_TYPE_CHOICES, 
+        default='retail',
+        db_index=True,
+        help_text='retail = основной сайт, wholesale = только для партнёров'
+    )
 
     # Основные поля
     name = models.CharField('Название', max_length=500)
@@ -121,7 +158,15 @@ class Product(models.Model):
     )
     
     # Цена и наличие
-    price = models.DecimalField('Цена', max_digits=12, decimal_places=2, default=0)
+    price = models.DecimalField('Цена (розница)', max_digits=12, decimal_places=2, default=0)
+    wholesale_price = models.DecimalField(
+        'Оптовая цена', 
+        max_digits=12, 
+        decimal_places=2, 
+        null=True, 
+        blank=True,
+        help_text='Цена для партнёров. Если не указана, будет равна розничной цене.'
+    )
     old_price = models.DecimalField('Старая цена', max_digits=12, decimal_places=2, null=True, blank=True)
     condition = models.CharField('Состояние', max_length=20, choices=CONDITION_CHOICES, default='new')
     availability = models.CharField('Наличие', max_length=20, choices=AVAILABILITY_CHOICES, default='in_stock')
@@ -233,15 +278,34 @@ class Product(models.Model):
         return [n.strip() for n in self.cross_numbers.split(',') if n.strip()]
 
     def get_applicability_list(self):
-        """Преобразует применимость в список."""
+        """Преобразует применимость в список, исключая вольтаж."""
         if not self.applicability:
             return []
         # Поддерживаем разные разделители: запятая, точка с запятой, перенос строки
         import re
         # Разбиваем по запятой, точке с запятой или переносу строки
         items = re.split(r'[,;\n]', self.applicability)
-        result = [a.strip() for a in items if a.strip()]
+        result = []
+        # Паттерн для вольтажа: 14V-12V, 12V-11V, 14V, 12V и т.д.
+        voltage_pattern = re.compile(r'^\s*\d+V(?:-\d+V)?\s*$', re.IGNORECASE)
+        for item in items:
+            item_stripped = item.strip()
+            if item_stripped:
+                # Пропускаем элементы, которые являются вольтажем
+                if not voltage_pattern.match(item_stripped):
+                    result.append(item_stripped)
         return result
+    
+    def get_voltage_from_applicability(self):
+        """Извлекает вольтаж из применимости для перемещения в характеристики."""
+        if not self.applicability:
+            return None
+        import re
+        # Паттерн для вольтажа: 14V-12V, 12V-11V, 14V, 12V и т.д.
+        voltage_match = re.search(r'\b(\d+V(?:-\d+V)?)\b', self.applicability, re.IGNORECASE)
+        if voltage_match:
+            return voltage_match.group(1).upper()
+        return None
 
     @property
     def has_discount(self):
@@ -460,3 +524,16 @@ class Promotion(models.Model):
 
     def __str__(self):
         return self.title or f'Акция #{self.pk}'
+
+
+class WholesaleProduct(Product):
+    """Proxy-модель для импорта/экспорта оптовых цен.
+    
+    Используется для отдельного импорта товаров в партнёрский раздел
+    с оптовыми ценами, без влияния на основной каталог.
+    """
+    class Meta:
+        proxy = True
+        app_label = 'partners'
+        verbose_name = 'Оптовый товар'
+        verbose_name_plural = 'Оптовые товары (импорт для партнёров)'

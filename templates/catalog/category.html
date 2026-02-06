@@ -93,12 +93,20 @@
                     {% if brands %}
                     <div class="filter-group">
                         <label class="filter-label">Бренд</label>
-                        <select name="brand" class="filter-select">
-                            <option value="">Все бренды</option>
-                            {% for value, label in brands %}
-                            <option value="{{ value }}" {% if request.GET.brand == value %}selected{% endif %}>{{ label }}</option>
-                            {% endfor %}
-                        </select>
+                        <div class="custom-select-wrapper">
+                            <select name="brand" class="filter-select" id="brandSelect">
+                                <option value="">Все бренды</option>
+                                {% for value, label in brands %}
+                                <option value="{{ value }}" {% if request.GET.brand == value %}selected{% endif %}>{{ label }}</option>
+                                {% endfor %}
+                            </select>
+                            <div class="custom-select-dropdown" id="brandDropdown">
+                                <div class="custom-select-option" data-value="">Все бренды</div>
+                                {% for value, label in brands %}
+                                <div class="custom-select-option" data-value="{{ value }}">{{ label }}</div>
+                                {% endfor %}
+                            </div>
+                        </div>
                     </div>
                     {% endif %}
                     
@@ -174,6 +182,57 @@
 </section>
 {% endblock %}
 
+{% block extra_css %}
+<style>
+/* Кастомный select с ограниченной высотой */
+.custom-select-wrapper {
+    position: relative;
+}
+
+.custom-select-wrapper .filter-select {
+    cursor: pointer;
+    -webkit-appearance: menulist;
+    -moz-appearance: menulist;
+    appearance: menulist;
+}
+
+.custom-select-dropdown {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: white;
+    border: 1px solid var(--color-gray-300);
+    border-top: none;
+    border-radius: 0 0 var(--radius-md) var(--radius-md);
+    max-height: 200px;
+    overflow-y: auto;
+    z-index: 1000;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+.custom-select-dropdown.is-open {
+    display: block;
+}
+
+.custom-select-option {
+    padding: 8px 12px;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.custom-select-option:hover {
+    background: var(--color-gray-100);
+}
+
+.custom-select-option.is-selected {
+    background: var(--color-primary);
+    color: white;
+}
+</style>
+{% endblock %}
+
 {% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
@@ -194,6 +253,57 @@ document.addEventListener('DOMContentLoaded', function() {
         closeFilters.addEventListener('click', function() {
             filterSidebar.classList.remove('is-open');
             document.body.style.overflow = '';
+        });
+    }
+    
+    // Кастомный select для брендов
+    const brandSelect = document.getElementById('brandSelect');
+    const brandDropdown = document.getElementById('brandDropdown');
+    
+    if (brandSelect && brandDropdown) {
+        // Скрываем нативный select визуально, но оставляем для формы
+        brandSelect.style.appearance = 'none';
+        brandSelect.style.webkitAppearance = 'none';
+        
+        // Клик по select открывает кастомный dropdown
+        brandSelect.addEventListener('mousedown', function(e) {
+            e.preventDefault();
+            brandDropdown.classList.toggle('is-open');
+        });
+        
+        // Клик по опции
+        brandDropdown.querySelectorAll('.custom-select-option').forEach(function(option) {
+            option.addEventListener('click', function() {
+                const value = this.dataset.value;
+                const text = this.textContent;
+                
+                // Устанавливаем значение в нативный select
+                brandSelect.value = value;
+                
+                // Обновляем текст (создаём выбранную опцию если нужно)
+                const selectedOption = brandSelect.querySelector('option[value="' + value + '"]');
+                if (selectedOption) {
+                    selectedOption.selected = true;
+                }
+                
+                // Закрываем dropdown
+                brandDropdown.classList.remove('is-open');
+                
+                // Отправляем форму
+                filterForm.submit();
+            });
+            
+            // Подсвечиваем выбранную опцию
+            if (option.dataset.value === brandSelect.value) {
+                option.classList.add('is-selected');
+            }
+        });
+        
+        // Закрытие при клике вне
+        document.addEventListener('click', function(e) {
+            if (!brandSelect.contains(e.target) && !brandDropdown.contains(e.target)) {
+                brandDropdown.classList.remove('is-open');
+            }
         });
     }
 });

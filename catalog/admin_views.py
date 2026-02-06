@@ -15,7 +15,7 @@ from .services import (
     process_bulk_images, 
     process_bulk_import, 
     parse_product_name,
-    get_or_create_category,
+    get_category_for_product,
 )
 from .models import Product, ProductImage
 
@@ -294,29 +294,86 @@ def bulk_product_import(request):
                         except Exception as e:
                             raise Exception(f'Ошибка при чтении Excel файла: {str(e)}')
                 
-                # Маппинг колонок для формата прайс-листа клиента
-                # Формат: Артикул | Номенклатура, Характеристика. Наименование для печати | Розничная Фарпост RUB Не включает Цена | Склад Уссурийск Остаток
+                # Маппинг колонок для формата прайс-листа клиента и 1С
                 def normalize_key(key):
                     key_lower = key.lower().strip()
                     
-                    # Название товара - из колонки "Номенклатура, Характеристика. Наименование для печати"
-                    if 'номенклатура' in key_lower or 'наименование' in key_lower or 'характеристика' in key_lower or 'печать' in key_lower:
+                    # Название товара
+                    if key_lower in ['наименование для печати', 'рабочее наименование']:
+                        return 'name'
+                    if 'наименование' in key_lower and 'печат' in key_lower:
+                        return 'name'
+                    if 'номенклатура' in key_lower and 'характеристика' in key_lower:
                         return 'name'
                     
-                    # Артикул
-                    if 'артикул' in key_lower or key_lower == 'article':
+                    # Категория (номенклатура без характеристики)
+                    if key_lower == 'номенклатура':
+                        return 'category_name'
+                    
+                    # Артикул1 - основной артикул бренда (кросс-номер)
+                    if key_lower == 'артикул1' or key_lower == 'артикул 1':
                         return 'article'
                     
-                    # Цена - из колонки "Розничная Фарпост RUB Не включает Цена"
+                    # Артикул2 - OEM номер
+                    if key_lower == 'артикул2' or key_lower == 'артикул 2':
+                        return 'oem_number'
+                    
+                    # Обычный артикул (если нет разделения на 1 и 2)
+                    if key_lower == 'артикул' or key_lower == 'article':
+                        return 'article'
+                    
+                    # Марка/Бренд
+                    if key_lower in ['марка', 'бренд', 'brand', 'производитель']:
+                        return 'brand'
+                    
+                    # Двигатель → применимость
+                    if key_lower in ['двигатель', 'engine', 'мотор']:
+                        return 'engine'
+                    
+                    # Кузов → применимость
+                    if key_lower in ['кузов', 'body', 'кузова']:
+                        return 'body'
+                    
+                    # Модель → применимость
+                    if key_lower in ['модель', 'model', 'модели']:
+                        return 'model'
+                    
+                    # Размер → характеристики (может быть вольтаж, материал и т.д.)
+                    if key_lower in ['размер', 'size', 'габариты']:
+                        return 'size'
+                    
+                    # Позиционирование
+                    if key_lower in ['l-r', 'лево-право', 'сторона']:
+                        return 'side'
+                    if key_lower in ['f-r', 'перед-зад', 'позиция']:
+                        return 'position'
+                    if key_lower in ['u-d', 'верх-низ', 'направление']:
+                        return 'direction'
+                    
+                    # Другие поля
+                    if key_lower in ['год', 'year', 'годы']:
+                        return 'year'
+                    if key_lower in ['цвет', 'color']:
+                        return 'color'
+                    if key_lower in ['примечание', 'note', 'комментарий']:
+                        return 'note'
+                    if key_lower in ['новый', 'состояние', 'condition']:
+                        return 'condition'
+                    
+                    # Цена
                     if 'цена' in key_lower or 'розничная' in key_lower or 'farpost' in key_lower or 'руб' in key_lower or key_lower == 'price':
                         return 'price'
                     
-                    # Остаток - из колонки "Склад Уссурийск Остаток"
-                    if 'остаток' in key_lower or 'склад' in key_lower or 'уссурийск' in key_lower or key_lower == 'quantity':
+                    # Оптовая цена
+                    if 'опт' in key_lower and 'цена' in key_lower:
+                        return 'wholesale_price'
+                    
+                    # Остаток
+                    if 'остаток' in key_lower or 'склад' in key_lower or key_lower == 'quantity':
                         return 'quantity'
                     
-                    # Стандартные поля (на случай других форматов)
-                    if key_lower in ['name', 'brand', 'category', 'description', 'applicability', 'cross_numbers', 'condition', 'availability']:
+                    # Стандартные поля
+                    if key_lower in ['name', 'brand', 'category', 'description', 'applicability', 'cross_numbers', 'availability']:
                         return key_lower
                     
                     return key_lower
@@ -401,18 +458,17 @@ def quick_add_product(request):
             # Парсим название
             parsed = parse_product_name(name)
             
-            # Создаём категорию если нужно
-            category = None
-            if parsed['category']:
-                category = get_or_create_category(parsed['category'])
+            # Определяем категорию автоматически
+            category = get_category_for_product(name)
             
-            # Создаём товар
+            # Создаём товар в ОСНОВНОМ каталоге
             product = Product.objects.create(
                 name=name,
                 article=parsed['article'] or '',
                 brand=parsed['brand'] or '',
                 category=category,
                 price=price,
+                catalog_type='retail',  # ОСНОВНОЙ КАТАЛОГ!
                 is_active=True,
             )
             

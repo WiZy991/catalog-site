@@ -238,6 +238,8 @@ function addToCart(productId) {
                 const newCount = Number.isFinite(serverCount) ? serverCount : currentCount + 1;
                 cartCountEl.textContent = newCount;
                 cartCountEl.style.display = 'flex';
+                cartCountEl.style.backgroundColor = '#dc2626';
+                cartCountEl.style.color = '#ffffff';
                 localStorage.setItem('cartCount', newCount.toString());
             }
             showNotification(data.message || 'Товар добавлен в корзину', 'success');
@@ -263,6 +265,8 @@ function updateCartCount() {
             if (count > 0) {
                 cartCountEl.textContent = count;
                 cartCountEl.style.display = 'flex';
+                cartCountEl.style.backgroundColor = '#dc2626';
+                cartCountEl.style.color = '#ffffff';
             } else {
                 cartCountEl.style.display = 'none';
             }

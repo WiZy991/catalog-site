@@ -86,15 +86,39 @@ def parse_json_data(json_string):
 
 
 def normalize_product_data(product_data):
-    """Нормализация данных товара из разных форматов."""
-    # Поддержка разных названий полей (русские/английские)
+    """Нормализация данных товара из разных форматов (включая 1С)."""
+    # Поддержка разных названий полей (русские/английские/1С)
     field_mapping = {
         'external_id': ['external_id', 'id', 'ид', 'id_1c', 'guid', 'uuid'],
-        'article': ['article', 'артикул', 'artikul', 'part_number', 'номер'],
-        'brand': ['brand', 'бренд', 'производитель', 'manufacturer'],
-        'name': ['name', 'название', 'title', 'наименование', 'наименование_для_печати'],
+        # Артикул1 - основной артикул бренда (CP01, FK16HR11)
+        'article': ['article', 'артикул', 'артикул1', 'artikul', 'artikul1', 'part_number', 'номер'],
+        # Артикул2 - OEM номер (11065-D9702, 90919-01243)
+        'oem_number': ['oem_number', 'oem', 'артикул2', 'artikul2', 'oe_number', 'original_number'],
+        # Марка - бренд
+        'brand': ['brand', 'бренд', 'марка', 'производитель', 'manufacturer'],
+        'name': ['name', 'название', 'title', 'наименование', 'наименование_для_печати', 'рабочее_наименование'],
+        'category_name': ['category', 'категория', 'номенклатура', 'группа'],
         'price': ['price', 'цена', 'стоимость', 'розничная_цена'],
+        'wholesale_price': ['wholesale_price', 'оптовая_цена', 'цена_опт', 'opt_price'],
         'quantity': ['quantity', 'количество', 'остаток', 'stock', 'qty'],
+        # Двигатель - применимость по двигателям
+        'engine': ['engine', 'двигатель', 'engines', 'мотор'],
+        # Кузов - применимость по кузовам
+        'body': ['body', 'кузов', 'body_type', 'кузова'],
+        # Модель - применимость по моделям
+        'model': ['model', 'модель', 'models', 'модели'],
+        # Размер - может быть вольтаж (12V-11V), материал (IRIDIUM), размеры и т.д.
+        'size': ['size', 'размер', 'dimensions', 'габариты'],
+        # Другие поля характеристик
+        'voltage': ['voltage', 'вольтаж', 'напряжение', 'v'],
+        'year': ['year', 'год', 'годы', 'years'],
+        'condition': ['condition', 'состояние', 'новый'],
+        'color': ['color', 'цвет'],
+        'side': ['side', 'l_r', 'лево_право', 'сторона'],
+        'position': ['position', 'f_r', 'перед_зад', 'позиция'],
+        'direction': ['direction', 'u_d', 'верх_низ', 'направление'],
+        'note': ['note', 'примечание', 'comment', 'комментарий'],
+        # Стандартные поля
         'properties': ['properties', 'свойства', 'характеристики', 'attributes'],
         'farpost_url': ['farpost_url', 'farpost', 'ссылка_фарпост', 'url'],
         'images': ['images', 'изображения', 'фото', 'photos', 'pictures'],
@@ -106,7 +130,9 @@ def normalize_product_data(product_data):
         for source_field in source_fields:
             # Проверяем разные варианты написания (с подчеркиванием, без, с заглавными)
             for key in product_data.keys():
-                if key.lower().replace('_', '').replace('-', '') == source_field.lower().replace('_', '').replace('-', ''):
+                key_normalized = key.lower().replace('_', '').replace('-', '').replace(' ', '')
+                source_normalized = source_field.lower().replace('_', '').replace('-', '').replace(' ', '')
+                if key_normalized == source_normalized:
                     value = product_data[key]
                     if value is not None and value != '':
                         normalized[target_field] = value
@@ -268,16 +294,93 @@ def one_c_import(request):
                         product.name = str(normalized['name'])[:500]
                     if 'price' in normalized:
                         try:
-                            price = float(normalized['price'])
+                            price = float(str(normalized['price']).replace(',', '.').replace(' ', ''))
                             product.price = max(0, price)
+                        except (ValueError, TypeError):
+                            pass
+                    if 'wholesale_price' in normalized:
+                        try:
+                            wprice = float(str(normalized['wholesale_price']).replace(',', '.').replace(' ', ''))
+                            product.wholesale_price = max(0, wprice)
                         except (ValueError, TypeError):
                             pass
                     if 'quantity' in normalized:
                         try:
-                            quantity = int(normalized['quantity'])
+                            quantity = int(float(str(normalized['quantity']).replace(',', '.').replace(' ', '')))
                             product.quantity = max(0, quantity)
                         except (ValueError, TypeError):
                             pass
+                    
+                    # OEM номер (Артикул2) → cross_numbers
+                    if 'oem_number' in normalized:
+                        oem = str(normalized['oem_number']).strip()
+                        if oem:
+                            # Добавляем к существующим кросс-номерам, если они есть
+                            existing_cross = product.cross_numbers or ''
+                            if oem not in existing_cross:
+                                if existing_cross:
+                                    product.cross_numbers = f"{existing_cross}, {oem}"
+                                else:
+                                    product.cross_numbers = oem
+                    
+                    # Формируем применимость из полей: двигатель, кузов, модель
+                    applicability_parts = []
+                    if 'engine' in normalized and normalized['engine']:
+                        applicability_parts.append(str(normalized['engine']).strip())
+                    if 'body' in normalized and normalized['body']:
+                        applicability_parts.append(str(normalized['body']).strip())
+                    if 'model' in normalized and normalized['model']:
+                        applicability_parts.append(str(normalized['model']).strip())
+                    if applicability_parts:
+                        product.applicability = ', '.join(applicability_parts)
+                    
+                    # Размер → характеристики (может быть вольтаж, материал, габариты)
+                    characteristics_parts = []
+                    if 'size' in normalized and normalized['size']:
+                        size_val = str(normalized['size']).strip()
+                        # Определяем тип значения
+                        if 'V' in size_val.upper() and any(c.isdigit() for c in size_val):
+                            # Это вольтаж (12V, 12V-11V, 24V)
+                            characteristics_parts.append(f"Напряжение: {size_val}")
+                        elif size_val.upper() in ['IRIDIUM', 'PLATINUM', 'COPPER', 'ИРИДИЙ', 'ПЛАТИНА']:
+                            # Это материал
+                            characteristics_parts.append(f"Материал: {size_val}")
+                        else:
+                            # Прочий размер
+                            characteristics_parts.append(f"Размер: {size_val}")
+                    
+                    if 'voltage' in normalized and normalized['voltage']:
+                        characteristics_parts.append(f"Напряжение: {normalized['voltage']}")
+                    if 'year' in normalized and normalized['year']:
+                        characteristics_parts.append(f"Год: {normalized['year']}")
+                    if 'color' in normalized and normalized['color']:
+                        characteristics_parts.append(f"Цвет: {normalized['color']}")
+                    if 'side' in normalized and normalized['side']:
+                        characteristics_parts.append(f"Сторона: {normalized['side']}")
+                    if 'position' in normalized and normalized['position']:
+                        characteristics_parts.append(f"Позиция: {normalized['position']}")
+                    if 'direction' in normalized and normalized['direction']:
+                        characteristics_parts.append(f"Направление: {normalized['direction']}")
+                    if 'note' in normalized and normalized['note']:
+                        characteristics_parts.append(f"Примечание: {normalized['note']}")
+                    
+                    if characteristics_parts:
+                        # Объединяем с существующими характеристиками
+                        existing_chars = product.characteristics or ''
+                        new_chars = '\n'.join(characteristics_parts)
+                        if existing_chars:
+                            product.characteristics = f"{existing_chars}\n{new_chars}"
+                        else:
+                            product.characteristics = new_chars
+                    
+                    # Состояние товара
+                    if 'condition' in normalized:
+                        cond_val = str(normalized['condition']).strip().lower()
+                        if cond_val in ['да', 'новый', 'new', 'yes', '1', 'true']:
+                            product.condition = 'new'
+                        elif cond_val in ['нет', 'б/у', 'used', 'no', '0', 'false', 'бу']:
+                            product.condition = 'used'
+                    
                     if 'properties' in normalized:
                         if isinstance(normalized['properties'], dict):
                             product.properties = normalized['properties']

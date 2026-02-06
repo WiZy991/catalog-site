@@ -148,22 +148,44 @@
 {% block extra_js %}
 <script src="https://api-maps.yandex.ru/2.1/?lang=ru_RU" type="text/javascript"></script>
 <script>
-ymaps.ready(function () {
-    var map = new ymaps.Map("map", {
-        center: [43.82518, 131.95084], // Координаты: 43.82518 с.ш. 131.95084 в.д.
-        zoom: 16
-    });
+(function() {
+    var mapInitialized = false;
     
-    var placemark = new ymaps.Placemark([43.82518, 131.95084], {
-        balloonContent: '{{ SITE_ADDRESS }}<br>{{ COMPANY_NAME|default:SITE_NAME }}',
-        hintContent: '{{ COMPANY_NAME|default:SITE_NAME }}'
-    }, {
-        preset: 'islands#redDotIcon'
+    ymaps.ready(function () {
+        if (mapInitialized) return;
+        mapInitialized = true;
+        
+        var mapContainer = document.getElementById('map');
+        if (!mapContainer) return;
+        
+        // SVG иконка маркера (base64)
+        var markerSvg = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMiIgaGVpZ2h0PSI0MCIgdmlld0JveD0iMCAwIDMyIDQwIj48cGF0aCBkPSJNMTYgMEM3LjIgMCAwIDcuMiAwIDE2YzAgMTIgMTYgMjQgMTYgMjRzMTYtMTIgMTYtMjRDMzIgNy4yIDI0LjggMCAxNiAweiIgZmlsbD0iI2U1MzkzNSIvPjxjaXJjbGUgY3g9IjE2IiBjeT0iMTQiIHI9IjYiIGZpbGw9IndoaXRlIi8+PC9zdmc+';
+        
+        var map = new ymaps.Map("map", {
+            center: [43.82518, 131.95084],
+            zoom: 16,
+            controls: ['zoomControl']
+        });
+        
+        // Создаём метку БЕЗ балуна
+        var placemark = new ymaps.Placemark([43.82518, 131.95084], {
+            hintContent: '{{ COMPANY_NAME|default:SITE_NAME }} - {{ SITE_ADDRESS }}'
+        }, {
+            iconLayout: 'default#image',
+            iconImageHref: markerSvg,
+            iconImageSize: [32, 40],
+            iconImageOffset: [-16, -40],
+            hasBalloon: false
+        });
+        
+        map.geoObjects.add(placemark);
+        
+        // При клике открываем Яндекс.Карты с маршрутом
+        placemark.events.add('click', function () {
+            window.open('https://yandex.ru/maps/?pt=131.95084,43.82518&z=16&l=map', '_blank');
+        });
     });
-    
-    map.geoObjects.add(placemark);
-    placemark.balloon.open();
-});
+})();
 </script>
 {% endblock %}
 

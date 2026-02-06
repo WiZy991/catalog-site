@@ -1,0 +1,711 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Для партнёров - Оптовые продажи | {{ SITE_NAME }}{% endblock %}
+
+{% block meta_description %}Оптовые продажи автозапчастей. Специальные условия для партнёров и оптовых покупателей.{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Breadcrumbs with buttons */
+    .breadcrumbs--partners {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 1rem;
+    }
+    
+    .breadcrumbs__nav {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    
+    .breadcrumbs__actions {
+        display: flex;
+        gap: 0.75rem;
+    }
+    
+    .breadcrumbs__btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 1rem;
+        font-size: 0.875rem;
+        font-weight: 600;
+        text-decoration: none;
+        border-radius: var(--radius-md);
+        transition: all var(--transition-fast);
+    }
+    
+    .breadcrumbs__btn--primary {
+        background: var(--color-brand-red);
+        color: var(--color-brand-white);
+    }
+    
+    .breadcrumbs__btn--primary:hover {
+        background: var(--color-primary-dark);
+        color: var(--color-brand-white);
+    }
+    
+    .breadcrumbs__btn--secondary {
+        background: var(--color-brand-black);
+        color: var(--color-brand-white);
+    }
+    
+    .breadcrumbs__btn--secondary:hover {
+        background: var(--color-gray-800);
+        color: var(--color-brand-white);
+    }
+    
+    /* Partner Info Section */
+    .partner-info {
+        padding: 60px 0;
+        background: var(--color-white);
+    }
+    
+    .partner-info__grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 4rem;
+        align-items: center;
+    }
+    
+    .partner-info__content h2 {
+        font-family: var(--font-heading);
+        font-size: 2.5rem;
+        font-weight: 700;
+        color: var(--color-gray-900);
+        margin-bottom: 1.5rem;
+    }
+    
+    .partner-info__content p {
+        font-size: 1.1rem;
+        color: var(--color-gray-600);
+        line-height: 1.8;
+        margin-bottom: 1rem;
+    }
+    
+    .partner-info__image {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+    
+    .partner-info__icon-box {
+        width: 300px;
+        height: 300px;
+        background: var(--color-brand-black);
+        border-radius: var(--radius-xl);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        color: var(--color-brand-white);
+        text-align: center;
+        padding: 2rem;
+    }
+    
+    .partner-info__icon-box i {
+        font-size: 5rem;
+        margin-bottom: 1rem;
+        color: var(--color-brand-red);
+    }
+    
+    .partner-info__icon-box span {
+        font-size: 1.25rem;
+        font-weight: 600;
+    }
+    
+    /* Section Title */
+    .section-title {
+        font-family: var(--font-heading);
+        font-size: 2rem;
+        font-weight: 700;
+        text-align: center;
+        margin-bottom: 3rem;
+        color: var(--color-gray-900);
+        position: relative;
+    }
+    
+    .section-title::after {
+        content: '';
+        display: block;
+        width: 60px;
+        height: 4px;
+        background: var(--color-brand-red);
+        margin: 1rem auto 0;
+        border-radius: 2px;
+    }
+    
+    /* Advantages Section */
+    .advantages-section {
+        padding: 80px 0;
+        background: var(--color-gray-50);
+    }
+    
+    .advantages__grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 2rem;
+    }
+    
+    .advantage-card {
+        background: var(--color-white);
+        padding: 2rem;
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow-md);
+        transition: transform var(--transition-normal), box-shadow var(--transition-normal);
+    }
+    
+    .advantage-card:hover {
+        transform: translateY(-5px);
+        box-shadow: var(--shadow-lg);
+    }
+    
+    .advantage-card__icon {
+        width: 60px;
+        height: 60px;
+        background: var(--color-brand-red);
+        border-radius: var(--radius-md);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 1.5rem;
+    }
+    
+    .advantage-card__icon i {
+        font-size: 1.75rem;
+        color: var(--color-brand-white);
+    }
+    
+    .advantage-card__title {
+        font-size: 1.25rem;
+        font-weight: 600;
+        margin-bottom: 0.75rem;
+        color: var(--color-gray-900);
+    }
+    
+    .advantage-card__text {
+        color: var(--color-gray-600);
+        line-height: 1.6;
+    }
+    
+    /* How it works */
+    .how-it-works {
+        padding: 80px 0;
+        background: var(--color-white);
+    }
+    
+    .steps {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 2rem;
+        counter-reset: step;
+    }
+    
+    .step {
+        text-align: center;
+        padding: 2rem;
+        position: relative;
+    }
+    
+    .step::before {
+        counter-increment: step;
+        content: counter(step);
+        position: absolute;
+        top: 0;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 50px;
+        height: 50px;
+        background: var(--color-brand-black);
+        color: var(--color-brand-white);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+        font-weight: 700;
+    }
+    
+    .step__content {
+        margin-top: 70px;
+    }
+    
+    .step__title {
+        font-size: 1.25rem;
+        font-weight: 600;
+        margin-bottom: 0.75rem;
+        color: var(--color-gray-900);
+    }
+    
+    .step__text {
+        color: var(--color-gray-600);
+        line-height: 1.6;
+    }
+    
+    /* Preview Catalog - Product Cards like main site */
+    .preview-catalog {
+        padding: 80px 0;
+        background: var(--color-gray-100);
+    }
+    
+    .preview-catalog__header {
+        text-align: center;
+        margin-bottom: 3rem;
+    }
+    
+    .preview-catalog__subtitle {
+        color: var(--color-gray-600);
+        font-size: 1.1rem;
+        max-width: 600px;
+        margin: 0 auto;
+    }
+    
+    .preview-catalog__actions {
+        text-align: center;
+        margin-top: 2rem;
+    }
+    
+    .preview-catalog__actions .btn-partner {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 1rem 2rem;
+        font-size: 1rem;
+        font-weight: 600;
+        text-decoration: none;
+        border-radius: var(--radius-md);
+        transition: all var(--transition-normal);
+        margin: 0 0.5rem;
+    }
+    
+    .btn-partner--primary {
+        background: var(--color-brand-red);
+        color: var(--color-brand-white);
+    }
+    
+    .btn-partner--primary:hover {
+        background: var(--color-primary-dark);
+        color: var(--color-brand-white);
+        transform: translateY(-2px);
+        box-shadow: 0 10px 30px rgba(220, 38, 38, 0.4);
+    }
+    
+    .btn-partner--secondary {
+        background: var(--color-brand-black);
+        color: var(--color-brand-white);
+    }
+    
+    .btn-partner--secondary:hover {
+        background: var(--color-gray-800);
+        color: var(--color-brand-white);
+    }
+    
+    /* CTA Section */
+    .cta-section {
+        padding: 80px 0;
+        background: #1a1a2e;
+        text-align: center;
+    }
+    
+    .cta-section__title {
+        font-family: var(--font-heading);
+        font-size: 2.5rem;
+        font-weight: 700;
+        margin-bottom: 1.5rem;
+        color: #ffffff !important;
+    }
+    
+    .cta-section__text {
+        font-size: 1.1rem;
+        margin-bottom: 2rem;
+        max-width: 600px;
+        margin-left: auto;
+        margin-right: auto;
+        color: rgba(255, 255, 255, 0.9) !important;
+    }
+    
+    .cta-section .btn-partner {
+        border-radius: 50px;
+    }
+    
+    /* Force product cards to have visible borders */
+    .preview-catalog .product-card {
+        background: var(--color-white);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+        border: 1px solid var(--color-gray-200);
+    }
+    
+    .preview-catalog .product-card:hover {
+        box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+    }
+    
+    /* Partner logged in banner */
+    .partner-banner {
+        background: var(--color-success);
+        color: var(--color-brand-white);
+        padding: 1.5rem;
+        border-radius: var(--radius-lg);
+        margin-top: 2rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 1rem;
+    }
+    
+    .partner-banner__text {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+    
+    .partner-banner__text i {
+        font-size: 1.5rem;
+    }
+    
+    @media (max-width: 992px) {
+        .partner-info__grid {
+            grid-template-columns: 1fr;
+            text-align: center;
+        }
+        
+        .partner-info__icon-box {
+            margin: 0 auto;
+        }
+    }
+    
+    @media (max-width: 768px) {
+        .breadcrumbs--partners {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+        
+        .breadcrumbs__actions {
+            width: 100%;
+            justify-content: flex-start;
+        }
+        
+        .partner-info__content h2 {
+            font-size: 1.75rem;
+        }
+        
+        .section-title {
+            font-size: 1.75rem;
+        }
+        
+        .preview-catalog__actions {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+        
+        .preview-catalog__actions .btn-partner {
+            width: 100%;
+            justify-content: center;
+            margin: 0;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <div class="container">
+        <div class="breadcrumbs--partners">
+            <div class="breadcrumbs__nav">
+                <a href="{% url 'core:home' %}">Главная</a>
+                <span class="separator">/</span>
+                <span>Для партнёров</span>
+            </div>
+            <div class="breadcrumbs__actions">
+                {% if is_partner %}
+                    <a href="{% url 'partners:catalog' %}" class="breadcrumbs__btn breadcrumbs__btn--primary">
+                        <i class="bi bi-grid-3x3-gap"></i> Каталог
+                    </a>
+                    <a href="{% url 'partners:profile' %}" class="breadcrumbs__btn breadcrumbs__btn--secondary">
+                        <i class="bi bi-person"></i> Профиль
+                    </a>
+                {% else %}
+                    <a href="{% url 'partners:register' %}" class="breadcrumbs__btn breadcrumbs__btn--primary">
+                        <i class="bi bi-person-plus"></i> Стать партнёром
+                    </a>
+                    <a href="{% url 'partners:login' %}" class="breadcrumbs__btn breadcrumbs__btn--secondary">
+                        <i class="bi bi-box-arrow-in-right"></i> Вход
+                    </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- Hero Section - like main site -->
+<section class="hero">
+    <div class="container">
+        <div class="hero__content">
+            <div class="hero__title-wrapper">
+                <img src="{% static 'images/logo.png' %}" alt="{{ COMPANY_NAME|default:SITE_NAME }}" class="hero__logo">
+            </div>
+        </div>
+    </div>
+    <div class="hero__bg"></div>
+</section>
+
+{% if is_partner %}
+<div class="container">
+    <div class="partner-banner">
+        <div class="partner-banner__text">
+            <i class="bi bi-check-circle"></i>
+            <div>
+                <strong>Добро пожаловать, {{ request.user.partner_profile.full_name }}!</strong><br>
+                <small>У вас есть доступ к оптовым ценам и наличию товаров</small>
+            </div>
+        </div>
+        <a href="{% url 'partners:catalog' %}" class="btn btn--primary btn--lg">
+            Открыть каталог <i class="bi bi-arrow-right"></i>
+        </a>
+    </div>
+</div>
+{% endif %}
+
+<!-- Partner Info Section -->
+<section class="partner-info">
+    <div class="container">
+        <div class="partner-info__grid">
+            <div class="partner-info__content">
+                <h2>Оптовые продажи для партнёров</h2>
+                <p>
+                    Приглашаем к сотрудничеству оптовых покупателей, магазины и автосервисы. 
+                    Мы предлагаем специальные условия для постоянных партнёров.
+                </p>
+                <p>
+                    Получите доступ к оптовым ценам, актуальной информации о наличии 
+                    и персональному менеджеру для решения всех вопросов.
+                </p>
+            </div>
+            <div class="partner-info__image">
+                <div class="partner-info__icon-box">
+                    <i class="bi bi-briefcase"></i>
+                    <span>Партнёрский раздел</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Advantages Section -->
+<section class="advantages-section">
+    <div class="container">
+        <h2 class="section-title">Преимущества работы с нами</h2>
+        <div class="advantages__grid">
+            <div class="advantage-card">
+                <div class="advantage-card__icon">
+                    <span style="font-size: 1.75rem; font-weight: 700; color: #fff;">₽</span>
+                </div>
+                <h3 class="advantage-card__title">Оптовые цены</h3>
+                <p class="advantage-card__text">
+                    Специальные цены для партнёров на весь ассортимент. 
+                    Индивидуальные условия при постоянном сотрудничестве.
+                </p>
+            </div>
+            
+            <div class="advantage-card">
+                <div class="advantage-card__icon">
+                    <i class="bi bi-box-seam"></i>
+                </div>
+                <h3 class="advantage-card__title">Широкий ассортимент</h3>
+                <p class="advantage-card__text">
+                    Тысячи позиций автозапчастей в наличии. 
+                    Регулярное пополнение склада.
+                </p>
+            </div>
+            
+            <div class="advantage-card">
+                <div class="advantage-card__icon">
+                    <i class="bi bi-clock-history"></i>
+                </div>
+                <h3 class="advantage-card__title">Актуальное наличие</h3>
+                <p class="advantage-card__text">
+                    Информация о наличии обновляется в реальном времени. 
+                    Вы всегда знаете, что есть на складе.
+                </p>
+            </div>
+            
+            <div class="advantage-card">
+                <div class="advantage-card__icon">
+                    <i class="bi bi-truck"></i>
+                </div>
+                <h3 class="advantage-card__title">Быстрая отгрузка</h3>
+                <p class="advantage-card__text">
+                    Оперативная комплектация и отправка заказов. 
+                    Работаем с транспортными компаниями по всей России.
+                </p>
+            </div>
+            
+            <div class="advantage-card">
+                <div class="advantage-card__icon">
+                    <i class="bi bi-headset"></i>
+                </div>
+                <h3 class="advantage-card__title">Персональный менеджер</h3>
+                <p class="advantage-card__text">
+                    За каждым партнёром закреплён персональный менеджер. 
+                    Быстрое решение любых вопросов.
+                </p>
+            </div>
+            
+            <div class="advantage-card">
+                <div class="advantage-card__icon">
+                    <i class="bi bi-file-earmark-text"></i>
+                </div>
+                <h3 class="advantage-card__title">Документы и гарантии</h3>
+                <p class="advantage-card__text">
+                    Полный пакет документов на каждую поставку. 
+                    Гарантия на весь товар.
+                </p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- How it works -->
+<section class="how-it-works">
+    <div class="container">
+        <h2 class="section-title">Как стать партнёром</h2>
+        <div class="steps">
+            <div class="step">
+                <div class="step__content">
+                    <h3 class="step__title">Оставьте заявку</h3>
+                    <p class="step__text">
+                        Заполните форму регистрации партнёра. 
+                        Укажите контактные данные и информацию о компании.
+                    </p>
+                </div>
+            </div>
+            
+            <div class="step">
+                <div class="step__content">
+                    <h3 class="step__title">Дождитесь подтверждения</h3>
+                    <p class="step__text">
+                        Наш менеджер свяжется с вами для уточнения деталей 
+                        и подтверждения партнёрского статуса.
+                    </p>
+                </div>
+            </div>
+            
+            <div class="step">
+                <div class="step__content">
+                    <h3 class="step__title">Получите доступ</h3>
+                    <p class="step__text">
+                        После подтверждения вы получите логин и пароль 
+                        для доступа к оптовым ценам и каталогу.
+                    </p>
+                </div>
+            </div>
+            
+            <div class="step">
+                <div class="step__content">
+                    <h3 class="step__title">Начните работу</h3>
+                    <p class="step__text">
+                        Оформляйте заказы по оптовым ценам. 
+                        Видите актуальное наличие в режиме реального времени.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Preview Catalog with Product Cards like main site -->
+<section class="preview-catalog">
+    <div class="container">
+        <div class="preview-catalog__header">
+            <h2 class="section-title">Каталог товаров</h2>
+            <p class="preview-catalog__subtitle">
+                {% if is_partner %}
+                    Вам доступен полный каталог с оптовыми ценами
+                {% else %}
+                    Ознакомьтесь с ассортиментом. Цены и наличие доступны после регистрации.
+                {% endif %}
+            </p>
+        </div>
+        
+        <div class="products-grid">
+            {% for product in preview_products %}
+            <article class="product-card">
+                <a href="{% if is_partner %}{% url 'partners:product' product.slug %}{% else %}{% url 'partners:public_product' product.slug %}{% endif %}" class="product-card__link">
+                    <div class="product-card__image">
+                        {% with main_image=product.get_main_image %}
+                            {% if main_image %}
+                                <img src="{{ main_image.image.url }}" alt="{{ product.name }}">
+                            {% else %}
+                                <div class="product-card__placeholder">
+                                    <i class="bi bi-image"></i>
+                                </div>
+                            {% endif %}
+                        {% endwith %}
+                    </div>
+                    <div class="product-card__content">
+                        <h3 class="product-card__title">{{ product.name }}</h3>
+                        <div class="product-card__meta">
+                            {% if product.article %}Артикул: {{ product.article }}{% endif %}
+                            {% if product.brand %} | {{ product.brand }}{% endif %}
+                        </div>
+                        <div class="product-card__footer">
+                            <div class="product-card__price">
+                                {% if is_partner %}
+                                    <span class="product-card__current-price">
+                                        {{ product.wholesale_price|default:product.price }} ₽
+                                    </span>
+                                {% else %}
+                                    <span class="product-card__current-price" style="font-size: 0.9rem; color: var(--color-gray-600);">
+                                        Цена по запросу
+                                    </span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </a>
+            </article>
+            {% empty %}
+            <p class="text-center" style="grid-column: 1 / -1;">Товары скоро появятся</p>
+            {% endfor %}
+        </div>
+        
+        <div class="preview-catalog__actions">
+            {% if is_partner %}
+                <a href="{% url 'partners:catalog' %}" class="btn-partner btn-partner--primary">
+                    <i class="bi bi-grid-3x3-gap"></i> Открыть полный каталог
+                </a>
+            {% else %}
+                <a href="{% url 'partners:public_catalog' %}" class="btn-partner btn-partner--secondary">
+                    <i class="bi bi-eye"></i> Смотреть каталог
+                </a>
+                <a href="{% url 'partners:register' %}" class="btn-partner btn-partner--primary">
+                    <i class="bi bi-unlock"></i> Получить оптовый доступ
+                </a>
+            {% endif %}
+        </div>
+    </div>
+</section>
+
+{% if not is_partner %}
+<!-- CTA Section -->
+<section class="cta-section">
+    <div class="container">
+        <h2 class="cta-section__title">Готовы начать сотрудничество?</h2>
+        <p class="cta-section__text">
+            Оставьте заявку прямо сейчас и получите доступ к оптовым ценам уже сегодня!
+        </p>
+        <a href="{% url 'partners:register' %}" class="btn-partner btn-partner--primary" style="font-size: 1.1rem; padding: 1.25rem 2.5rem; border-radius: 50px;">
+            <i class="bi bi-person-plus"></i> Стать партнёром
+        </a>
+    </div>
+</section>
+{% endif %}
+
+{% endblock %}

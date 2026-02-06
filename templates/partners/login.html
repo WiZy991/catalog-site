@@ -1,0 +1,259 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Вход для партнёров | {{ SITE_NAME }}{% endblock %}
+
+{% block meta_description %}Вход в личный кабинет партнёра. Доступ к оптовым ценам и каталогу.{% endblock %}
+
+{% block extra_css %}
+<style>
+    .login-page {
+        min-height: 70vh;
+        padding: 60px 0;
+        background: var(--color-gray-100);
+        display: flex;
+        align-items: center;
+    }
+    
+    .login-container {
+        max-width: 450px;
+        margin: 0 auto;
+        width: 100%;
+    }
+    
+    .login-card {
+        background: var(--color-white);
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow-lg);
+        overflow: hidden;
+    }
+    
+    .login-card__header {
+        background: #1a1a2e;
+        color: #ffffff;
+        padding: 2rem;
+        text-align: center;
+    }
+    
+    .login-card__icon {
+        width: 80px;
+        height: 80px;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 1rem;
+    }
+    
+    .login-card__icon i {
+        font-size: 2.5rem;
+    }
+    
+    .login-card__title {
+        font-family: var(--font-heading);
+        font-size: 1.75rem;
+        font-weight: 700;
+        margin-bottom: 0.5rem;
+        color: #ffffff;
+    }
+    
+    .login-card__subtitle {
+        font-size: 0.95rem;
+        color: rgba(255, 255, 255, 0.9);
+    }
+    
+    .login-card__body {
+        padding: 2rem;
+    }
+    
+    .form-group {
+        margin-bottom: 1.5rem;
+    }
+    
+    .form-label {
+        display: block;
+        margin-bottom: 0.5rem;
+        font-weight: 600;
+        color: var(--color-gray-800);
+    }
+    
+    .form-input {
+        width: 100%;
+        padding: 0.875rem 1rem;
+        font-size: 1rem;
+        border: 2px solid var(--color-gray-200);
+        border-radius: var(--radius-md);
+        transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+        box-sizing: border-box;
+    }
+    
+    .form-input:focus {
+        border-color: var(--color-brand-red);
+        box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1);
+        outline: none;
+    }
+    
+    .form-error {
+        background: #fff5f5;
+        border: 1px solid #feb2b2;
+        color: #c53030;
+        padding: 1rem;
+        border-radius: var(--radius-md);
+        margin-bottom: 1.5rem;
+        font-size: 0.95rem;
+    }
+    
+    .btn-submit {
+        width: 100%;
+        padding: 1rem;
+        font-size: 1.1rem;
+        font-weight: 600;
+        background: var(--color-brand-red);
+        color: var(--color-brand-white);
+        border: none;
+        border-radius: var(--radius-md);
+        cursor: pointer;
+        transition: all var(--transition-normal);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+    }
+    
+    .btn-submit:hover {
+        background: var(--color-primary-dark);
+        transform: translateY(-2px);
+        box-shadow: 0 10px 30px rgba(220, 38, 38, 0.4);
+    }
+    
+    .login-footer {
+        text-align: center;
+        padding: 1.5rem 2rem;
+        background: var(--color-gray-50);
+        border-top: 1px solid var(--color-gray-200);
+    }
+    
+    .login-footer a {
+        color: var(--color-brand-red);
+        text-decoration: none;
+        font-weight: 600;
+    }
+    
+    .login-footer a:hover {
+        text-decoration: underline;
+    }
+    
+    .login-footer__divider {
+        margin: 1rem 0;
+        color: var(--color-gray-400);
+    }
+    
+    .btn-register {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.75rem 1.5rem;
+        background: var(--color-brand-black);
+        color: var(--color-brand-white);
+        text-decoration: none;
+        border-radius: var(--radius-md);
+        font-weight: 600;
+        transition: all var(--transition-normal);
+    }
+    
+    .btn-register:hover {
+        background: var(--color-gray-800);
+        color: var(--color-brand-white);
+        transform: translateY(-2px);
+    }
+</style>
+{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <div class="container">
+        <a href="{% url 'core:home' %}">Главная</a>
+        <span class="separator">/</span>
+        <a href="{% url 'partners:wholesale' %}">Для партнёров</a>
+        <span class="separator">/</span>
+        <span>Вход</span>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<section class="login-page">
+    <div class="container">
+        <div class="login-container">
+            <div class="login-card">
+                <div class="login-card__header">
+                    <div class="login-card__icon">
+                        <i class="bi bi-person-badge"></i>
+                    </div>
+                    <h1 class="login-card__title">Вход для партнёров</h1>
+                    <p class="login-card__subtitle">Введите данные для доступа к каталогу</p>
+                </div>
+                
+                <div class="login-card__body">
+                    {% if user.is_authenticated %}
+                        <div class="form-info" style="background: #fff3cd; border: 1px solid #ffc107; color: #856404; padding: 1rem; border-radius: var(--radius-md); margin-bottom: 1.5rem; text-align: center;">
+                            <i class="bi bi-info-circle"></i>
+                            Вы вошли как <strong>{{ user.email|default:user.username }}</strong>, но у вас нет партнёрского доступа.
+                            <br><small>Выйдите и войдите под партнёрским аккаунтом или <a href="{% url 'partners:register' %}">подайте заявку</a>.</small>
+                            <br><br>
+                            <a href="{% url 'partners:logout' %}" style="display: inline-block; background: #dc3545; color: #fff; padding: 0.5rem 1rem; border-radius: var(--radius-md); text-decoration: none; font-weight: 600;">
+                                <i class="bi bi-box-arrow-right"></i> Выйти
+                            </a>
+                        </div>
+                    {% endif %}
+                    
+                    {% if form.errors %}
+                        <div class="form-error">
+                            {% for field, errors in form.errors.items %}
+                                {% for error in errors %}
+                                    {{ error }}
+                                {% endfor %}
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                    
+                    {% if messages %}
+                        {% for message in messages %}
+                            <div class="form-error" style="{% if message.tags == 'success' %}background: #d4edda; border-color: #28a745; color: #155724;{% endif %}">
+                                {{ message }}
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+                    
+                    <form method="post" novalidate>
+                        {% csrf_token %}
+                        
+                        <div class="form-group">
+                            <label class="form-label" for="id_username">Email</label>
+                            {{ form.username }}
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label" for="id_password">Пароль</label>
+                            {{ form.password }}
+                        </div>
+                        
+                        <button type="submit" class="btn-submit">
+                            <i class="bi bi-box-arrow-in-right"></i> Войти
+                        </button>
+                    </form>
+                </div>
+                
+                <div class="login-footer">
+                    <p>Ещё нет аккаунта?</p>
+                    <div class="login-footer__divider"></div>
+                    <a href="{% url 'partners:register' %}" class="btn-register">
+                        <i class="bi bi-person-plus"></i> Стать партнёром
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}

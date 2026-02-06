@@ -18,7 +18,6 @@ ALLOWED_HOSTS = ['*']
 
 # Application definition
 INSTALLED_APPS = [
-    # Jazzmin должен быть ПЕРВЫМ
     'jazzmin',
     
     'django.contrib.admin',
@@ -40,6 +39,7 @@ INSTALLED_APPS = [
     'catalog.apps.CatalogConfig',
     'core.apps.CoreConfig',
     'orders.apps.OrdersConfig',
+    'partners.apps.PartnersConfig',
 ]
 
 MIDDLEWARE = [
@@ -131,7 +131,7 @@ IMPORT_EXPORT_USE_TRANSACTIONS = True
 PRODUCTS_PER_PAGE = 24
 
 # Static files versioning (обновляйте при изменении CSS/JS)
-STATIC_VERSION = '1.9'
+STATIC_VERSION = '2.7'
 
 # API для 1С
 ONE_C_API_KEY = os.environ.get('ONE_C_API_KEY', 'change-this-secret-key-in-production')
@@ -169,6 +169,7 @@ MAX_OPT_URL = 'https://max.ru/u/f9LHodD0cOKejElDOF7uUTTvaYDYc6GO4a6CfrntKspSX-Tt
 
 # Email settings for orders
 MANAGER_EMAIL = 'onesimus25@mail.ru'  # Email менеджера для получения заказов
+PARTNER_MANAGER_EMAIL = 'onesimus25@mail.ru'  # Email менеджера по опту
 DEFAULT_FROM_EMAIL = 'onesimus25@mail.ru'
 
 # SMTP настройки для Mail.ru
@@ -218,6 +219,7 @@ JAZZMIN_SETTINGS = {
         {"name": "Сайт", "url": "/", "new_window": True},
         {"name": "Быстрое добавление", "url": "/admin/catalog/quick-add/"},
         {"name": "Массовый импорт", "url": "/admin/catalog/bulk-import/"},
+        {"name": "Массовый импорт (опт)", "url": "/admin/partners/bulk-import/"},
         {"name": "Загрузка фото", "url": "/admin/catalog/bulk-images/"},
     ],
     
@@ -235,6 +237,11 @@ JAZZMIN_SETTINGS = {
             "name": "Загрузка фото",
             "url": "/admin/catalog/bulk-images/",
             "icon": "fas fa-images",
+        }],
+        "partners": [{
+            "name": "Массовый импорт товаров",
+            "url": "/admin/partners/bulk-import/",
+            "icon": "fas fa-file-import",
         }]
     },
     
@@ -264,6 +271,9 @@ JAZZMIN_SETTINGS = {
         "catalog.ImportLog": "fas fa-file-import",
         "core.Page": "fas fa-file-alt",
         "orders.Order": "fas fa-shopping-cart",
+        "partners.PartnerRequest": "fas fa-user-plus",
+        "partners.Partner": "fas fa-handshake",
+        "partners.PartnerSettings": "fas fa-cogs",
     },
     
     # Иконки по умолчанию

@@ -13,6 +13,10 @@ from catalog.admin_views import (
     quick_add_product,
     download_import_template,
 )
+from partners.admin_views import (
+    bulk_wholesale_import,
+    download_wholesale_template,
+)
 
 sitemaps = {
     'products': ProductSitemap,
@@ -27,6 +31,10 @@ urlpatterns = [
     path('admin/catalog/quick-add/', quick_add_product, name='admin_quick_add_product'),
     path('admin/catalog/import-template/', download_import_template, name='admin_download_import_template'),
     
+    # Партнёрский импорт (оптовые товары)
+    path('admin/partners/bulk-import/', bulk_wholesale_import, name='admin_bulk_wholesale_import'),
+    path('admin/partners/wholesale-template/', download_wholesale_template, name='admin_download_wholesale_template'),
+    
     # API для 1С
     path('api/1c/', include('catalog.api_urls')),
     
@@ -34,6 +42,7 @@ urlpatterns = [
     path('', include('core.urls')),
     path('catalog/', include('catalog.urls')),
     path('orders/', include('orders.urls')),
+    path('partners/', include('partners.urls')),
     path('sitemap.xml', sitemap, {'sitemaps': sitemaps}, name='django.contrib.sitemaps.views.sitemap'),
 ]
 

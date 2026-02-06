@@ -1,0 +1,351 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Профиль партнёра | {{ SITE_NAME }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .profile-page {
+        padding: 2rem 0 4rem;
+        background: var(--color-gray-100);
+        min-height: 70vh;
+    }
+    
+    .profile-header {
+        background: #1a1a2e;
+        color: #ffffff;
+        padding: 3rem 2rem;
+        border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+        text-align: center;
+    }
+    
+    .profile-header__avatar {
+        width: 100px;
+        height: 100px;
+        background: rgba(255,255,255,0.1);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 1rem;
+    }
+    
+    .profile-header__avatar i {
+        font-size: 3rem;
+        color: #ffffff;
+    }
+    
+    .profile-header__name {
+        font-family: var(--font-heading);
+        font-size: 1.75rem;
+        font-weight: 700;
+        margin-bottom: 0.5rem;
+        color: #ffffff !important;
+    }
+    
+    .profile-header__badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        background: rgba(220, 38, 38, 0.2);
+        color: var(--color-brand-red);
+        padding: 0.5rem 1rem;
+        border-radius: 20px;
+        font-size: 0.9rem;
+    }
+    
+    .profile-card {
+        background: var(--color-white);
+        border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+        box-shadow: var(--shadow-lg);
+        max-width: 700px;
+        margin: 0 auto;
+    }
+    
+    .profile-body {
+        padding: 2rem;
+    }
+    
+    .profile-section {
+        margin-bottom: 2rem;
+    }
+    
+    .profile-section:last-child {
+        margin-bottom: 0;
+    }
+    
+    .profile-section__title {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: var(--color-gray-900);
+        margin-bottom: 1rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 2px solid var(--color-gray-200);
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    
+    .profile-section__title i {
+        color: var(--color-brand-red);
+    }
+    
+    .profile-info {
+        display: grid;
+        gap: 1rem;
+    }
+    
+    .profile-info__item {
+        display: flex;
+        padding: 0.75rem 1rem;
+        background: var(--color-gray-50);
+        border-radius: var(--radius-md);
+    }
+    
+    .profile-info__label {
+        flex: 0 0 40%;
+        color: var(--color-gray-600);
+    }
+    
+    .profile-info__value {
+        flex: 1;
+        color: var(--color-gray-900);
+        font-weight: 500;
+    }
+    
+    .profile-stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 1rem;
+    }
+    
+    .profile-stat {
+        background: var(--color-gray-100);
+        padding: 1.25rem;
+        border-radius: var(--radius-lg);
+        text-align: center;
+    }
+    
+    .profile-stat__value {
+        font-size: 1.75rem;
+        font-weight: 700;
+        color: var(--color-gray-900);
+    }
+    
+    .profile-stat__label {
+        color: var(--color-gray-600);
+        font-size: 0.9rem;
+    }
+    
+    .profile-actions {
+        display: flex;
+        gap: 1rem;
+        padding: 1.5rem 2rem;
+        background: var(--color-gray-50);
+        border-top: 1px solid var(--color-gray-200);
+        border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+    }
+    
+    .profile-btn {
+        flex: 1;
+        padding: 1rem;
+        border-radius: var(--radius-md);
+        text-decoration: none;
+        font-weight: 600;
+        text-align: center;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        transition: all var(--transition-normal);
+    }
+    
+    .profile-btn--primary {
+        background: var(--color-brand-red);
+        color: var(--color-brand-white);
+    }
+    
+    .profile-btn--primary:hover {
+        background: var(--color-primary-dark);
+        color: var(--color-brand-white);
+        transform: translateY(-2px);
+        box-shadow: 0 5px 20px rgba(220, 38, 38, 0.4);
+    }
+    
+    .profile-btn--secondary {
+        background: var(--color-brand-black);
+        color: var(--color-brand-white);
+    }
+    
+    .profile-btn--secondary:hover {
+        background: var(--color-gray-800);
+        color: var(--color-brand-white);
+    }
+    
+    .profile-btn--outline {
+        background: var(--color-white);
+        color: var(--color-gray-600);
+        border: 2px solid var(--color-gray-200);
+    }
+    
+    .profile-btn--outline:hover {
+        border-color: var(--color-brand-red);
+        color: var(--color-brand-red);
+    }
+    
+    .profile-info__link {
+        color: var(--color-brand-red);
+        text-decoration: none;
+        font-weight: 500;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        transition: color var(--transition-fast);
+    }
+    
+    .profile-info__link:hover {
+        color: var(--color-primary-dark);
+        text-decoration: underline;
+    }
+</style>
+{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <div class="container">
+        <a href="{% url 'core:home' %}">Главная</a>
+        <span class="separator">/</span>
+        <a href="{% url 'partners:wholesale' %}">Для партнёров</a>
+        <span class="separator">/</span>
+        <span>Профиль</span>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<section class="profile-page">
+    <div class="container">
+        <div class="profile-card">
+            <div class="profile-header">
+                <div class="profile-header__avatar">
+                    <i class="bi bi-briefcase"></i>
+                </div>
+                <h1 class="profile-header__name">{{ partner.full_name }}</h1>
+                <span class="profile-header__badge">
+                    <i class="bi bi-patch-check"></i> Партнёр
+                </span>
+            </div>
+            
+            <div class="profile-body">
+                <div class="profile-section">
+                    <h2 class="profile-section__title">
+                        <i class="bi bi-person"></i> Контактные данные
+                    </h2>
+                    <div class="profile-info">
+                        <div class="profile-info__item">
+                            <span class="profile-info__label">Email</span>
+                            <span class="profile-info__value">{{ partner.email }}</span>
+                        </div>
+                        <div class="profile-info__item">
+                            <span class="profile-info__label">Телефон</span>
+                            <span class="profile-info__value">{{ partner.phone }}</span>
+                        </div>
+                        <div class="profile-info__item">
+                            <span class="profile-info__label">Город</span>
+                            <span class="profile-info__value">{{ partner.city }}</span>
+                        </div>
+                        {% if partner.company_name %}
+                        <div class="profile-info__item">
+                            <span class="profile-info__label">Компания</span>
+                            <span class="profile-info__value">{{ partner.company_name }}</span>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                {% if partner.inn or partner.kpp or partner.legal_address %}
+                <div class="profile-section">
+                    <h2 class="profile-section__title">
+                        <i class="bi bi-building"></i> Реквизиты
+                    </h2>
+                    <div class="profile-info">
+                        {% if partner.inn %}
+                        <div class="profile-info__item">
+                            <span class="profile-info__label">ИНН</span>
+                            <span class="profile-info__value">{{ partner.inn }}</span>
+                        </div>
+                        {% endif %}
+                        {% if partner.kpp %}
+                        <div class="profile-info__item">
+                            <span class="profile-info__label">КПП</span>
+                            <span class="profile-info__value">{{ partner.kpp }}</span>
+                        </div>
+                        {% endif %}
+                        {% if partner.legal_address %}
+                        <div class="profile-info__item">
+                            <span class="profile-info__label">Юр. адрес</span>
+                            <span class="profile-info__value">{{ partner.legal_address }}</span>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endif %}
+                
+                <div class="profile-section">
+                    <h2 class="profile-section__title">
+                        <i class="bi bi-graph-up"></i> Статистика
+                    </h2>
+                    <div class="profile-stats">
+                        <div class="profile-stat">
+                            <div class="profile-stat__value">
+                                {% if partner.discount_percent > 0 %}{{ partner.discount_percent }}%{% else %}—{% endif %}
+                            </div>
+                            <div class="profile-stat__label">Персональная скидка</div>
+                        </div>
+                        <div class="profile-stat">
+                            <div class="profile-stat__value">
+                                {{ partner.created_at|date:"d.m.Y" }}
+                            </div>
+                            <div class="profile-stat__label">Дата регистрации</div>
+                        </div>
+                        <div class="profile-stat">
+                            <div class="profile-stat__value">
+                                {% if partner.last_login %}{{ partner.last_login|date:"d.m.Y" }}{% else %}—{% endif %}
+                            </div>
+                            <div class="profile-stat__label">Последний вход</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="profile-section">
+                    <h2 class="profile-section__title">
+                        <i class="bi bi-shield-lock"></i> Безопасность
+                    </h2>
+                    <div class="profile-info">
+                        <div class="profile-info__item">
+                            <span class="profile-info__label">Пароль</span>
+                            <span class="profile-info__value">
+                                <a href="{% url 'partners:password_change' %}" class="profile-info__link">
+                                    Изменить пароль <i class="bi bi-arrow-right"></i>
+                                </a>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="profile-actions">
+                <a href="{% url 'partners:catalog' %}" class="profile-btn profile-btn--primary">
+                    <i class="bi bi-grid-3x3-gap"></i> Каталог
+                </a>
+                <a href="{% url 'partners:profile_edit' %}" class="profile-btn profile-btn--secondary">
+                    <i class="bi bi-pencil"></i> Редактировать
+                </a>
+                <a href="{% url 'partners:logout' %}" class="profile-btn profile-btn--outline">
+                    <i class="bi bi-box-arrow-right"></i> Выйти
+                </a>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}

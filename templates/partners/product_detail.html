@@ -1,0 +1,402 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ product.name }} - Оптовая цена | {{ SITE_NAME }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .partner-header {
+        background: var(--color-brand-black);
+        color: var(--color-brand-white);
+        padding: 1rem 0;
+        margin-bottom: 2rem;
+    }
+    
+    .partner-header__inner {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+    
+    .partner-header__back {
+        color: var(--color-brand-white);
+        text-decoration: none;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        opacity: 0.9;
+        transition: opacity var(--transition-fast);
+    }
+    
+    .partner-header__back:hover {
+        opacity: 1;
+        color: var(--color-brand-white);
+    }
+    
+    .partner-header__actions {
+        display: flex;
+        gap: 0.75rem;
+    }
+    
+    .partner-header__btn {
+        padding: 0.5rem 1rem;
+        border-radius: var(--radius-md);
+        text-decoration: none;
+        font-size: 0.9rem;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        background: rgba(255,255,255,0.1);
+        color: var(--color-brand-white);
+        transition: all var(--transition-fast);
+    }
+    
+    .partner-header__btn:hover {
+        background: rgba(255,255,255,0.2);
+        color: var(--color-brand-white);
+    }
+    
+    .related-products .section__title {
+        text-align: center;
+    }
+    
+    .related-products .products-grid {
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        justify-content: center;
+    }
+    
+    
+    .product-gallery__thumb {
+        width: 80px;
+        height: 80px;
+        background: var(--color-gray-100);
+        border-radius: var(--radius-md);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        border: 2px solid transparent;
+        transition: border-color var(--transition-fast);
+    }
+    
+    .product-gallery__thumb--active,
+    .product-gallery__thumb:hover {
+        border-color: var(--color-brand-red);
+    }
+    
+    .product-gallery__thumb img {
+        max-width: 100%;
+        max-height: 100%;
+        object-fit: contain;
+    }
+    
+    
+    
+    .product-info__prices {
+        background: var(--color-gray-100);
+        border-left: 4px solid var(--color-brand-red);
+        padding: 1.5rem;
+        border-radius: var(--radius-lg);
+        margin-bottom: 1.5rem;
+    }
+    
+    .product-info__price-label {
+        font-size: 0.9rem;
+        color: var(--color-gray-700);
+        margin-bottom: 0.5rem;
+    }
+    
+    .product-info__price {
+        font-size: 2.5rem;
+        font-weight: 700;
+        color: var(--color-brand-red);
+        white-space: nowrap;
+    }
+    
+    .product-info__price-retail {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        margin-top: 0.5rem;
+        white-space: nowrap;
+    }
+    
+    .product-info__price-retail span:first-child {
+        text-decoration: line-through;
+        color: var(--color-gray-500);
+    }
+    
+    .product-info__price-savings {
+        background: var(--color-success);
+        color: var(--color-brand-white);
+        padding: 0.25rem 0.5rem;
+        border-radius: var(--radius-sm);
+        font-size: 0.85rem;
+        font-weight: 600;
+    }
+    
+    .product-info__stock {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 1rem;
+        border-radius: var(--radius-md);
+        margin-bottom: 1.5rem;
+    }
+    
+    .product-info__stock--in {
+        background: #d4edda;
+        color: #155724;
+    }
+    
+    .product-info__stock--out {
+        background: #f8d7da;
+        color: #721c24;
+    }
+    
+    .product-info__stock--order {
+        background: #fff3cd;
+        color: #856404;
+    }
+    
+    .product-info__stock i {
+        font-size: 1.25rem;
+    }
+    
+    .product-info__section {
+        margin-bottom: 1.5rem;
+    }
+    
+    .product-info__section-title {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: var(--color-gray-900);
+        margin-bottom: 0.75rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 2px solid var(--color-gray-200);
+    }
+    
+    .product-info__description {
+        color: var(--color-gray-700);
+        line-height: 1.7;
+    }
+    
+    .product-info__characteristics {
+        display: grid;
+        gap: 0.5rem;
+    }
+    
+    .product-info__char-item {
+        display: flex;
+        padding: 0.5rem 0;
+        border-bottom: 1px solid var(--color-gray-200);
+    }
+    
+    .product-info__char-item:last-child {
+        border-bottom: none;
+    }
+    
+    .product-info__char-key {
+        flex: 0 0 40%;
+        color: var(--color-gray-600);
+    }
+    
+    .product-info__char-value {
+        flex: 1;
+        color: var(--color-gray-900);
+        font-weight: 500;
+    }
+    
+    .product-info__applicability {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+    
+    .product-info__applicability-item {
+        background: var(--color-gray-100);
+        padding: 0.5rem 1rem;
+        border-radius: var(--radius-md);
+        font-size: 0.9rem;
+    }
+    
+    
+    @media (max-width: 992px) {
+        .product-layout {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block breadcrumbs %}{% endblock %}
+
+{% block content %}
+<!-- Partner Header -->
+<div class="partner-header">
+    <div class="container">
+        <div class="partner-header__inner">
+            <a href="{% url 'partners:catalog' %}" class="partner-header__back">
+                <i class="bi bi-arrow-left"></i> Назад в каталог
+            </a>
+            <div class="partner-header__actions">
+                <a href="{% url 'partners:profile' %}" class="partner-header__btn">
+                    <i class="bi bi-person"></i> Профиль
+                </a>
+                <a href="{% url 'partners:logout' %}" class="partner-header__btn">
+                    <i class="bi bi-box-arrow-right"></i> Выход
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="product-section">
+    <div class="container">
+        <div class="product-page">
+            <!-- Gallery -->
+            <div class="product-gallery">
+                <div class="product-gallery__main">
+                    {% with main_image=product.get_main_image %}
+                        {% if main_image %}
+                            <img src="{{ main_image.image.url }}" alt="{{ product.name }}" id="mainImage">
+                        {% else %}
+                            <i class="bi bi-image" style="font-size: 5rem; color: #ccc;"></i>
+                        {% endif %}
+                    {% endwith %}
+                </div>
+                
+                {% if product.images.count > 1 %}
+                <div class="product-gallery__thumbs">
+                    {% for image in product.images.all %}
+                    <div class="product-gallery__thumb {% if forloop.first %}product-gallery__thumb--active{% endif %}" 
+                         onclick="changeImage('{{ image.image.url }}', this)">
+                        <img src="{{ image.image.url }}" alt="{{ product.name }}">
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+            
+            <!-- Info -->
+            <div class="product-info">
+                <h1 class="product-info__title">{{ product.name }}</h1>
+                
+                <div class="product-info__meta">
+                    {% if product.article %}
+                    <span class="product-info__meta-item">
+                        <strong>Артикул:</strong> {{ product.article }}
+                    </span>
+                    {% endif %}
+                    {% if product.brand %}
+                    <span class="product-info__meta-item">
+                        <strong>Бренд:</strong> {{ product.brand }}
+                    </span>
+                    {% endif %}
+                    {% if product.category %}
+                    <span class="product-info__meta-item">
+                        <strong>Категория:</strong> {{ product.category.name }}
+                    </span>
+                    {% endif %}
+                </div>
+                
+                <div class="product-info__prices">
+                    <div class="product-info__price-label">Оптовая цена для партнёров</div>
+                    <div class="product-info__price" style="white-space: nowrap;">{{ product.wholesale_price|default:product.price|floatformat:0 }} ₽</div>
+                    {% if product.wholesale_price and product.wholesale_price < product.price %}
+                    <div class="product-info__price-retail" style="white-space: nowrap;">
+                        <span>Розничная: {{ product.price|floatformat:0 }} ₽</span>
+                    </div>
+                    {% endif %}
+                </div>
+                
+                <div class="product-info__stock 
+                    {% if product.availability == 'in_stock' %}product-info__stock--in
+                    {% elif product.availability == 'out_of_stock' %}product-info__stock--out
+                    {% else %}product-info__stock--order{% endif %}">
+                    <i class="bi {% if product.availability == 'in_stock' %}bi-check-circle-fill{% elif product.availability == 'out_of_stock' %}bi-x-circle-fill{% else %}bi-clock-fill{% endif %}"></i>
+                    <span>
+                        {% if product.availability == 'in_stock' %}
+                            В наличии{% if product.quantity %}: {{ product.quantity }} шт.{% endif %}
+                        {% elif product.availability == 'out_of_stock' %}
+                            Нет в наличии
+                        {% else %}
+                            Под заказ
+                        {% endif %}
+                    </span>
+                </div>
+                
+                {% if product.short_description %}
+                <div class="product-info__section">
+                    <div class="product-info__description">{{ product.short_description }}</div>
+                </div>
+                {% endif %}
+                
+                {% if characteristics %}
+                <div class="product-info__section">
+                    <h3 class="product-info__section-title">Характеристики</h3>
+                    <div class="product-info__characteristics">
+                        {% for key, value in characteristics %}
+                        <div class="product-info__char-item">
+                            <span class="product-info__char-key">{{ key }}</span>
+                            <span class="product-info__char-value">{{ value }}</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+                
+                {% if product.applicability %}
+                <div class="product-info__section">
+                    <h3 class="product-info__section-title">Применимость</h3>
+                    <div class="product-info__applicability">
+                        {% for item in product.get_applicability_list %}
+                        <span class="product-info__applicability-item">{{ item }}</span>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+                
+                {% if product.cross_numbers %}
+                <div class="product-info__section">
+                    <h3 class="product-info__section-title">Кросс-номера</h3>
+                    <div class="product-info__applicability">
+                        {% for num in product.get_cross_numbers_list %}
+                        <span class="product-info__applicability-item">{{ num }}</span>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+                
+                {% if product.description %}
+                <div class="product-info__section">
+                    <h3 class="product-info__section-title">Описание</h3>
+                    <div class="product-info__description">{{ product.description|linebreaks }}</div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        {% if similar_products %}
+        <div class="related-products">
+            <h2 class="section__title">Товары для этого автомобиля</h2>
+            <div class="products-grid">
+                {% for item in similar_products %}
+                {% include 'partners/includes/product_card.html' with product=item %}
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</section>
+
+<script>
+function changeImage(url, thumb) {
+    document.getElementById('mainImage').src = url;
+    document.querySelectorAll('.product-gallery__thumb').forEach(t => {
+        t.classList.remove('product-gallery__thumb--active');
+    });
+    thumb.classList.add('product-gallery__thumb--active');
+}
+</script>
+{% endblock %}

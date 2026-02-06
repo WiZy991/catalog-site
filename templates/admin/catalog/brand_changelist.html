@@ -1,0 +1,25 @@
+{% extends "admin/change_list.html" %}
+{% load i18n admin_urls %}
+
+{% block object-tools-items %}
+    {{ block.super }}
+{% endblock %}
+
+{% block content %}
+    <div style="margin-bottom: 20px;">
+        <a href="{{ sync_from_products_url }}" 
+           style="display: inline-block; background: #dc3545; color: white; padding: 10px 20px; border-radius: 4px; text-decoration: none;">
+            Синхронизировать из товаров
+        </a>
+    </div>
+    
+    {% if show_sync_buttons and not cl.result_count %}
+    <div style="background: #2d2d2d; border: 1px solid #444; border-radius: 8px; padding: 20px; margin-bottom: 20px; text-align: center;">
+        <h3 style="margin-top: 0; color: #fff;">Справочник брендов пуст</h3>
+        <p style="color: #aaa; margin-bottom: 15px;">
+            Нажмите кнопку выше или "Добавить Бренд" справа
+        </p>
+    </div>
+    {% endif %}
+    {{ block.super }}
+{% endblock %}

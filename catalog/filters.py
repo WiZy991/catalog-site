@@ -50,22 +50,41 @@ class ProductFilter(django_filters.FilterSet):
         fields = ['brand', 'condition', 'availability']
 
     def filter_search(self, queryset, name, value):
-        """Поиск по названию, артикулу, бренду и кросс-номерам."""
-        return queryset.filter(
-            models.Q(name__icontains=value) |
-            models.Q(article__icontains=value) |
-            models.Q(brand__icontains=value) |
-            models.Q(cross_numbers__icontains=value) |
-            models.Q(applicability__icontains=value)
-        )
+        """Поиск по названию, артикулу, бренду и кросс-номерам (по частичным совпадениям слов)."""
+        if not value or not value.strip():
+            return queryset
+        
+        # Разбиваем запрос на отдельные слова (минимум 2 символа)
+        query_words = [word.strip() for word in value.split() if len(word.strip()) >= 2]
+        
+        if not query_words:
+            # Если слово слишком короткое, ищем весь запрос целиком
+            query_words = [value.strip()]
+        
+        # Для каждого слова создаём условие поиска
+        # Используем AND - товар должен содержать ВСЕ слова из запроса
+        for word in query_words:
+            word_q = (
+                models.Q(name__icontains=word) |
+                models.Q(article__icontains=word) |
+                models.Q(brand__icontains=word) |
+                models.Q(cross_numbers__icontains=word) |
+                models.Q(applicability__icontains=word)
+            )
+            queryset = queryset.filter(word_q)
+        
+        return queryset
 
 
 def get_brand_choices(category=None):
-    """Получить список брендов для фильтра."""
-    queryset = Product.objects.filter(is_active=True).exclude(brand='')
-    if category:
-        descendants = category.get_descendants(include_self=True)
-        queryset = queryset.filter(category__in=descendants)
-    brands = queryset.values_list('brand', flat=True).distinct().order_by('brand')
-    return [(b, b) for b in brands if b]
+    """
+    Получить список брендов для фильтра.
+    Показывает ВСЕ активные бренды из справочника.
+    """
+    from .models import Brand
+    
+    # Получаем все активные бренды из справочника
+    active_brands = Brand.objects.filter(is_active=True).order_by('name').values_list('name', flat=True)
+    
+    return [(b, b) for b in active_brands if b]
 

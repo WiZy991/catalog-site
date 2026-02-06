@@ -1,0 +1,661 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Каталог для партнёров{% if current_category %} - {{ current_category.name }}{% endif %} | {{ SITE_NAME }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Prevent page shift */
+    body {
+        overflow-x: hidden;
+        max-width: 100vw;
+    }
+    
+    .public-catalog-header {
+        background: #1a1a2e;
+        color: #ffffff;
+        padding: 2rem 0;
+        margin-bottom: 2rem;
+    }
+    
+    .public-catalog-header__inner {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 1rem;
+    }
+    
+    .public-catalog-header__title {
+        font-family: var(--font-heading);
+        font-size: 1.75rem;
+        font-weight: 700;
+        margin: 0;
+        color: #ffffff !important;
+    }
+    
+    .public-catalog-header__notice {
+        background: rgba(220, 38, 38, 0.2);
+        border: 1px solid rgba(220, 38, 38, 0.5);
+        padding: 0.75rem 1.25rem;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        margin-top: 0.75rem;
+        color: #ffffff !important;
+    }
+    
+    .public-catalog-header__notice i {
+        color: #dc3545;
+    }
+    
+    .public-catalog-header__actions {
+        display: flex;
+        gap: 0.75rem;
+    }
+    
+    .public-catalog-header__btn {
+        padding: 0.75rem 1.5rem;
+        border-radius: var(--radius-md);
+        text-decoration: none;
+        font-weight: 600;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        transition: all var(--transition-normal);
+    }
+    
+    .public-catalog-header__btn--primary {
+        background: var(--color-brand-red);
+        color: var(--color-brand-white);
+    }
+    
+    .public-catalog-header__btn--primary:hover {
+        background: var(--color-primary-dark);
+        color: var(--color-brand-white);
+        transform: translateY(-2px);
+        box-shadow: 0 5px 20px rgba(220, 38, 38, 0.4);
+    }
+    
+    .public-catalog-header__btn--secondary {
+        background: rgba(255,255,255,0.1);
+        color: var(--color-brand-white);
+    }
+    
+    .public-catalog-header__btn--secondary:hover {
+        background: rgba(255,255,255,0.2);
+        color: var(--color-brand-white);
+    }
+    
+    .catalog-page {
+        padding-bottom: 4rem;
+        width: 100%;
+        overflow-x: hidden;
+    }
+    
+    .catalog-page .container {
+        max-width: 100% !important;
+        width: 100% !important;
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
+    
+    .catalog-content-wrapper {
+        display: flex;
+        gap: 1.5rem;
+        width: 100%;
+        align-items: flex-start;
+        margin-top: 0;
+    }
+    
+    .catalog-sidebar {
+        background: var(--color-white);
+        border-radius: var(--radius-lg);
+        padding: 1.25rem;
+        box-shadow: var(--shadow-sm);
+        border: 2px solid var(--color-gray-200);
+        height: fit-content;
+        position: sticky;
+        top: 20px;
+        flex-shrink: 0;
+        width: 220px;
+    }
+    
+    .sidebar-title {
+        font-size: 1.1rem;
+        font-weight: 600;
+        margin-bottom: 1rem;
+        color: var(--color-gray-900);
+    }
+    
+    .category-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+    
+    .category-list__item {
+        margin-bottom: 0.5rem;
+    }
+    
+    .category-list__link {
+        display: block;
+        padding: 0.5rem 0.75rem;
+        border-radius: var(--radius-md);
+        text-decoration: none;
+        color: var(--color-gray-700);
+        transition: all var(--transition-fast);
+    }
+    
+    .category-list__link:hover,
+    .category-list__link--active {
+        background: var(--color-gray-100);
+        color: var(--color-brand-red);
+    }
+    
+    .category-list__link--active {
+        font-weight: 600;
+    }
+    
+    .catalog-main {
+        min-height: 500px;
+        flex: 1;
+        overflow: hidden;
+    }
+    
+    .catalog-controls {
+        display: flex;
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+        padding-bottom: 0;
+    }
+    
+    .search-box {
+        display: flex;
+        background: var(--color-white);
+        border: 2px solid var(--color-gray-200);
+        border-radius: var(--radius-md);
+        overflow: hidden;
+        flex: 1;
+        max-width: 400px;
+    }
+    
+    .search-box__input {
+        border: none;
+        padding: 0.5rem 1rem;
+        flex: 1;
+        font-size: 0.95rem;
+        outline: none;
+    }
+    
+    .search-box__input:focus {
+        outline: none;
+        box-shadow: none;
+    }
+    
+    .search-box:focus-within {
+        border-color: var(--color-brand-red);
+    }
+    
+    .search-box__btn {
+        background: var(--color-brand-red);
+        color: var(--color-brand-white);
+        border: none;
+        padding: 0.5rem 1rem;
+        cursor: pointer;
+    }
+    
+    /* Price hidden block */
+    .product-card__price-hidden {
+        background: var(--color-gray-100);
+        border: 1px solid var(--color-gray-200);
+        padding: 0.75rem;
+        border-radius: var(--radius-md);
+        text-align: center;
+        font-size: 0.85rem;
+        color: var(--color-gray-700);
+        white-space: normal;
+        word-wrap: break-word;
+    }
+    
+    .product-card__price-hidden a {
+        color: var(--color-brand-red);
+        text-decoration: none;
+        font-weight: 600;
+    }
+    
+    .product-card__price-hidden a:hover {
+        text-decoration: underline;
+    }
+    
+    /* Products table */
+    .products-table-wrapper {
+        background: var(--color-white);
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow-sm);
+        border: 2px solid var(--color-gray-200);
+        overflow-x: auto;
+        overflow-y: visible;
+        width: 100%;
+        max-width: 100%;
+        margin: 0;
+    }
+    
+    .products-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.95rem;
+        table-layout: auto;
+    }
+    
+    .products-table thead {
+        background: var(--color-gray-100);
+    }
+    
+    .products-table th {
+        padding: 0.75rem 1rem;
+        text-align: left;
+        font-weight: 600;
+        color: var(--color-gray-900);
+        border-bottom: 2px solid var(--color-gray-200);
+    }
+    
+    .products-table th:first-child {
+        border-top-left-radius: var(--radius-lg);
+    }
+    
+    .products-table th:last-child {
+        border-top-right-radius: var(--radius-lg);
+    }
+    
+    .products-table__row {
+        border-bottom: 1px solid var(--color-gray-200);
+    }
+    
+    .products-table__row:hover {
+        background: var(--color-gray-50);
+    }
+    
+    .products-table__row:last-child {
+        border-bottom: none;
+    }
+    
+    .products-table tbody tr {
+        opacity: 1 !important;
+        visibility: visible !important;
+        display: table-row !important;
+        will-change: auto !important;
+        transform: none !important;
+        backface-visibility: visible !important;
+    }
+    
+    .products-table-wrapper * {
+        will-change: auto !important;
+    }
+    
+    .products-table td {
+        padding: 0.75rem 1rem;
+        vertical-align: top;
+    }
+    
+    .products-table__brand {
+        font-weight: 600;
+        color: var(--color-gray-900);
+    }
+    
+    .products-table__article {
+        font-family: 'Courier New', monospace;
+        color: var(--color-gray-700);
+    }
+    
+    .products-table__description {
+        word-wrap: break-word;
+        overflow-wrap: break-word;
+    }
+    
+    .products-table__link {
+        color: var(--color-gray-900);
+        text-decoration: none;
+        font-weight: 500;
+        display: block;
+        margin-bottom: 0.5rem;
+        transition: color var(--transition-fast);
+    }
+    
+    .products-table__link:hover {
+        color: var(--color-brand-red);
+        text-decoration: underline;
+    }
+    
+    .products-table__applicability {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.25rem;
+        margin-top: 0.5rem;
+    }
+    
+    .products-table__applicability-tag {
+        background: var(--color-gray-100);
+        color: var(--color-gray-700);
+        padding: 0.25rem 0.5rem;
+        border-radius: var(--radius-sm);
+        font-size: 0.85rem;
+    }
+    
+    .products-table__availability {
+        white-space: normal;
+    }
+    
+    .availability-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 0.75rem;
+        border-radius: var(--radius-md);
+        font-size: 0.9rem;
+        font-weight: 500;
+        white-space: nowrap;
+    }
+    
+    .availability-badge--in {
+        background: #d4edda;
+        color: #155724;
+    }
+    
+    .availability-badge--order {
+        background: #fff3cd;
+        color: #856404;
+    }
+    
+    .availability-badge--out {
+        background: #f8d7da;
+        color: #721c24;
+    }
+    
+    .products-table__price {
+        white-space: normal;
+    }
+    
+    .products-table__order {
+        white-space: normal;
+    }
+    
+    .btn--sm {
+        padding: 0.5rem 1rem;
+        font-size: 0.9rem;
+    }
+    
+    .text-muted {
+        color: var(--color-gray-500);
+        font-style: italic;
+    }
+    
+    /* Pagination */
+    .pagination {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 0.5rem;
+        margin-top: 2rem;
+        flex-wrap: wrap;
+    }
+    
+    .pagination__link {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 40px;
+        height: 40px;
+        padding: 0 0.75rem;
+        border-radius: 8px;
+        text-decoration: none;
+        color: #333;
+        background: #fff;
+        border: 1px solid #ddd;
+        font-weight: 500;
+        transition: all 0.2s;
+    }
+    
+    .pagination__link:hover {
+        background: #f5f5f5;
+        border-color: #ccc;
+    }
+    
+    .pagination__link--active {
+        background: #dc3545;
+        color: #fff;
+        border-color: #dc3545;
+    }
+    
+    .pagination__link--active:hover {
+        background: #c82333;
+        border-color: #c82333;
+    }
+    
+    .empty-results {
+        text-align: center;
+        padding: 4rem 2rem;
+        background: var(--color-white);
+        border-radius: var(--radius-lg);
+    }
+    
+    @media (max-width: 992px) {
+        .catalog-content-wrapper {
+            flex-direction: column;
+        }
+        
+        .catalog-sidebar {
+            position: static;
+            width: 100%;
+        }
+    }
+    
+    @media (max-width: 768px) {
+        .public-catalog-header__inner {
+            flex-direction: column;
+            text-align: center;
+        }
+        
+        .public-catalog-header__notice {
+            width: 100%;
+            justify-content: center;
+        }
+        
+        .public-catalog-header__actions {
+            width: 100%;
+            flex-direction: column;
+        }
+        
+        .public-catalog-header__btn {
+            justify-content: center;
+        }
+        
+        .products-table-wrapper {
+            overflow-x: auto;
+        }
+        
+        .products-table {
+            font-size: 0.85rem;
+        }
+        
+        .products-table th,
+        .products-table td {
+            padding: 0.75rem 0.5rem;
+        }
+        
+        .products-table__description {
+            max-width: 250px;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <div class="container">
+        <a href="{% url 'core:home' %}">Главная</a>
+        <span class="separator">/</span>
+        <a href="{% url 'partners:wholesale' %}">Для партнёров</a>
+        <span class="separator">/</span>
+        <span>Каталог</span>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- Header -->
+<div class="public-catalog-header">
+    <div class="container">
+        <div class="public-catalog-header__inner">
+            <div>
+                <h1 class="public-catalog-header__title">
+                    Каталог для партнёров
+                </h1>
+                <div class="public-catalog-header__notice">
+                    <i class="bi bi-lock"></i>
+                    <span>{{ partner_settings.price_hidden_text|default:"Цены доступны после регистрации" }}</span>
+                </div>
+            </div>
+            <div class="public-catalog-header__actions">
+                <a href="{% url 'partners:login' %}" class="public-catalog-header__btn public-catalog-header__btn--secondary">
+                    <i class="bi bi-box-arrow-in-right"></i> Войти
+                </a>
+                <a href="{% url 'partners:register' %}" class="public-catalog-header__btn public-catalog-header__btn--primary">
+                    <i class="bi bi-unlock"></i> Получить доступ
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="catalog-page">
+    <div class="container">
+        <!-- Search Controls -->
+        <div class="catalog-controls">
+            <form action="" method="get" class="search-box">
+                <input type="text" name="q" value="{{ search_query }}" 
+                       placeholder="Поиск по названию, артикулу..." 
+                       class="search-box__input">
+                <button type="submit" class="search-box__btn">
+                    <i class="bi bi-search"></i>
+                </button>
+            </form>
+        </div>
+        
+        <div class="catalog-content-wrapper">
+            <!-- Sidebar -->
+            <aside class="catalog-sidebar">
+                <h3 class="sidebar-title">Категории</h3>
+                <ul class="category-list">
+                    <li class="category-list__item">
+                        <a href="{% url 'partners:public_catalog' %}" 
+                           class="category-list__link {% if not current_category %}category-list__link--active{% endif %}">
+                            Все товары
+                        </a>
+                    </li>
+                    {% for category in categories %}
+                    <li class="category-list__item">
+                        <a href="{% url 'partners:public_catalog_category' category.slug %}" 
+                           class="category-list__link {% if current_category.pk == category.pk %}category-list__link--active{% endif %}">
+                            {{ category.name }}
+                        </a>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </aside>
+            
+            <!-- Main Content -->
+            <main class="catalog-main">
+                {% if products %}
+                <div class="products-table-wrapper">
+                    <table class="products-table">
+                        <thead>
+                            <tr>
+                                <th>Бренд</th>
+                                <th>Код детали</th>
+                                <th>Описание</th>
+                                <th>Цена</th>
+                                <th>Заказ</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for product in products %}
+                            <tr class="products-table__row">
+                                <td class="products-table__brand">
+                                    {% if product.brand %}
+                                        {{ product.brand }}
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endif %}
+                                </td>
+                                <td class="products-table__article">
+                                    {% if product.article %}
+                                        {{ product.article }}
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endif %}
+                                </td>
+                                <td class="products-table__description">
+                                    <a href="{% url 'partners:public_product' product.slug %}" class="products-table__link">
+                                        {{ product.name }}
+                                    </a>
+                                    {% if product.get_applicability_list %}
+                                    <div class="products-table__applicability">
+                                        {% for item in product.get_applicability_list|slice:":3" %}
+                                        <span class="products-table__applicability-tag">{{ item }}</span>
+                                        {% endfor %}
+                                    </div>
+                                    {% endif %}
+                                </td>
+                                <td class="products-table__price">
+                                    <div class="product-card__price-hidden">
+                                        <i class="bi bi-lock"></i> Цена по запросу
+                                    </div>
+                                </td>
+                                <td class="products-table__order">
+                                    <a href="{% url 'partners:public_product' product.slug %}" class="btn btn--sm btn--primary">
+                                        <i class="bi bi-eye"></i> Подробнее
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                
+                {% if page_obj.has_other_pages %}
+                <nav class="pagination">
+                    {% if page_obj.has_previous %}
+                        <a href="?page={{ page_obj.previous_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}" 
+                           class="pagination__link">&laquo; Назад</a>
+                    {% endif %}
+                    
+                    {% for num in page_obj.paginator.page_range %}
+                        {% if page_obj.number == num %}
+                            <span class="pagination__link pagination__link--active">{{ num }}</span>
+                        {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                            <a href="?page={{ num }}{% if search_query %}&q={{ search_query }}{% endif %}" 
+                               class="pagination__link">{{ num }}</a>
+                        {% endif %}
+                    {% endfor %}
+                    
+                    {% if page_obj.has_next %}
+                        <a href="?page={{ page_obj.next_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}" 
+                           class="pagination__link">Вперёд &raquo;</a>
+                    {% endif %}
+                </nav>
+                {% endif %}
+                
+                {% else %}
+                <div class="empty-results">
+                    <i class="bi bi-search" style="font-size: 4rem; color: #e9ecef;"></i>
+                    <h2>Товары не найдены</h2>
+                    <p style="color: #666;">Попробуйте изменить параметры поиска.</p>
+                </div>
+                {% endif %}
+            </main>
+        </div>
+    </div>
+</section>
+{% endblock %}

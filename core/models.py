@@ -11,6 +11,8 @@ class Page(models.Model):
         ('contacts', 'Контакты'),
         ('wholesale', 'Оптовые продажи'),
         ('public-offer', 'Не является публичной офертой'),
+        ('privacy-policy', 'Политика конфиденциальности'),
+        ('consent', 'Согласие на обработку персональных данных'),
     ]
     
     slug = models.CharField('Тип страницы', max_length=50, choices=SLUG_CHOICES, unique=True)
@@ -36,7 +38,14 @@ class Page(models.Model):
             'contacts': 'core:contacts',
             'wholesale': 'core:wholesale',
             'public-offer': 'core:public_offer',
+            'privacy-policy': 'core:privacy_policy',
+            'consent': 'core:consent',
         }
-        url_name = slug_map.get(self.slug, 'core:home')
-        return reverse(url_name)
+        url_name = slug_map.get(self.slug)
+        if url_name:
+            try:
+                return reverse(url_name)
+            except Exception:
+                return '/'
+        return '/'
 

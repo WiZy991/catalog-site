@@ -20,7 +20,7 @@ class HomeView(TemplateView):
         context['categories'] = Category.objects.filter(
             parent=None, 
             is_active=True
-        ).order_by('order', 'name')[:6]
+        ).order_by('name')[:6]
         # Защита от ошибки, если миграции не применены
         try:
             context['promotions'] = Promotion.objects.filter(
@@ -96,11 +96,43 @@ class PublicOfferView(TemplateView):
 class PrivacyPolicyView(TemplateView):
     """Страница Политики в отношении обработки персональных данных."""
     template_name = 'core/privacy_policy.html'
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        try:
+            page = Page.objects.get(slug='privacy-policy', is_active=True)
+            context['page'] = page
+        except Page.DoesNotExist:
+            context['page'] = None
+        return context
 
 
 class ConsentView(TemplateView):
     """Страница Согласия на обработку персональных данных."""
     template_name = 'core/consent.html'
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        try:
+            page = Page.objects.get(slug='consent', is_active=True)
+            context['page'] = page
+        except Page.DoesNotExist:
+            context['page'] = None
+        return context
+
+
+class WholesaleView(TemplateView):
+    """Страница Оптовые продажи."""
+    template_name = 'core/wholesale.html'
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        try:
+            page = Page.objects.get(slug='wholesale', is_active=True)
+            context['page'] = page
+        except Page.DoesNotExist:
+            context['page'] = None
+        return context
 
 
 def robots_txt(request):
@@ -113,6 +145,12 @@ Sitemap: {scheme}://{host}/sitemap.xml
 Disallow: /admin/
 Disallow: /media/
 Disallow: /static/
+Disallow: /partners/
+Disallow: /partners/catalog/
+Disallow: /partners/browse/
+Disallow: /partners/login/
+Disallow: /partners/register/
+Disallow: /partners/profile/
 """.format(scheme=request.scheme, host=request.get_host())
     return HttpResponse(content, content_type='text/plain')
 

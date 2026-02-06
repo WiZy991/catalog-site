@@ -225,16 +225,20 @@ class FarpostExportMixin:
 @admin.register(Category)
 class CategoryAdmin(DraggableMPTTAdmin):
     """Админка для категорий."""
-    list_display = ['tree_actions', 'indented_title', 'slug', 'product_count', 'is_active', 'order']
+    list_display = ['tree_actions', 'indented_title', 'slug', 'has_keywords', 'product_count', 'is_active', 'order']
     list_display_links = ['indented_title']
     list_editable = ['is_active', 'order']
     list_filter = ['is_active', 'level']
-    search_fields = ['name', 'slug']
+    search_fields = ['name', 'slug', 'keywords']
     prepopulated_fields = {'slug': ('name',)}
     
     fieldsets = (
         (None, {
             'fields': ('name', 'slug', 'parent', 'image', 'description')
+        }),
+        ('Автоопределение товаров', {
+            'fields': ('keywords',),
+            'description': 'Укажите ключевые слова через запятую. При импорте товаров система будет автоматически распределять их в эту категорию, если название товара содержит одно из ключевых слов.'
         }),
         ('SEO', {
             'fields': ('meta_title', 'meta_description', 'seo_text'),
@@ -244,6 +248,44 @@ class CategoryAdmin(DraggableMPTTAdmin):
             'fields': ('is_active', 'order')
         }),
     )
+    
+    def has_keywords(self, obj):
+        """Показывает, есть ли у категории ключевые слова."""
+        if obj.keywords:
+            keywords_list = obj.get_keywords_list()
+            if keywords_list:
+                return f'✅ {len(keywords_list)} слов'
+        return '—'
+    has_keywords.short_description = 'Ключевые слова'
+    
+    def save_model(self, request, obj, form, change):
+        """Сохраняем категорию и пересчитываем дерево MPTT при изменении order."""
+        old_order = None
+        if change and obj.pk:
+            try:
+                old_obj = Category.objects.get(pk=obj.pk)
+                old_order = old_obj.order
+            except Category.DoesNotExist:
+                pass
+        
+        super().save_model(request, obj, form, change)
+        
+        # Если изменился order, пересчитываем дерево MPTT
+        if change and old_order is not None and old_order != obj.order:
+            Category.objects.rebuild()
+    
+    def save_formset(self, request, form, formset, change):
+        """После сохранения инлайн-форм пересчитываем дерево."""
+        super().save_formset(request, form, formset, change)
+        # Пересчитываем дерево MPTT после bulk-операций
+        Category.objects.rebuild()
+    
+    def changelist_view(self, request, extra_context=None):
+        """При изменении порядка через list_editable пересчитываем дерево."""
+        response = super().changelist_view(request, extra_context)
+        if request.method == 'POST' and '_save' in request.POST:
+            Category.objects.rebuild()
+        return response
 
 
 @admin.register(Product)
@@ -252,11 +294,11 @@ class ProductAdmin(ImportExportModelAdmin, FarpostExportMixin, admin.ModelAdmin)
     resource_class = ProductResource
     list_display = [
         'image_preview', 'name', 'external_id', 'article', 'brand', 'category', 
-        'price', 'availability', 'is_active', 'created_at'
+        'price', 'wholesale_price', 'availability', 'is_active', 'created_at'
     ]
     list_display_links = ['name']
     list_filter = ['is_active', 'is_featured', 'condition', 'availability', 'category', 'brand']
-    list_editable = ['price', 'availability', 'is_active']
+    list_editable = ['price', 'wholesale_price', 'availability', 'is_active']
     search_fields = ['name', 'external_id', 'article', 'brand', 'cross_numbers', 'applicability']
     prepopulated_fields = {'slug': ('name',)}
     autocomplete_fields = ['category']
@@ -270,7 +312,7 @@ class ProductAdmin(ImportExportModelAdmin, FarpostExportMixin, admin.ModelAdmin)
             'fields': ('name', 'slug', 'external_id', 'article', 'brand', 'category')
         }),
         ('Цена и наличие', {
-            'fields': ('price', 'old_price', 'condition', 'availability', 'quantity')
+            'fields': ('price', 'wholesale_price', 'old_price', 'condition', 'availability', 'quantity')
         }),
         ('Описание', {
             'fields': ('short_description', 'description', 'characteristics')
@@ -394,16 +436,154 @@ class ProductImageAdmin(admin.ModelAdmin):
 @admin.register(Brand)
 class BrandAdmin(admin.ModelAdmin):
     """Админка для брендов."""
-    list_display = ['name', 'slug', 'logo_preview', 'is_active', 'order']
+    list_display = ['name', 'slug', 'product_count', 'logo_preview', 'is_active', 'order']
     list_editable = ['is_active', 'order']
+    list_filter = ['is_active']
     search_fields = ['name']
     prepopulated_fields = {'slug': ('name',)}
+    ordering = ['name']
+    actions = ['sync_brands_from_products']
+    change_list_template = 'admin/catalog/brand_changelist.html'
+    
+    fieldsets = (
+        (None, {
+            'fields': ('name', 'slug', 'logo', 'description')
+        }),
+        ('Настройки', {
+            'fields': ('is_active', 'order')
+        }),
+    )
 
     def logo_preview(self, obj):
         if obj.logo:
             return format_html('<img src="{}" style="max-height: 30px;"/>', obj.logo.url)
         return '-'
     logo_preview.short_description = 'Логотип'
+    
+    def product_count(self, obj):
+        """Количество товаров с этим брендом."""
+        count = Product.objects.filter(brand__iexact=obj.name).count()
+        if count > 0:
+            url = f"/admin/catalog/product/?brand__iexact={obj.name}"
+            return format_html('<a href="{}">{}</a>', url, count)
+        return 0
+    product_count.short_description = 'Товаров'
+    
+    @admin.action(description='🔄 Синхронизировать бренды из товаров')
+    def sync_brands_from_products(self, request, queryset):
+        """Добавляет все бренды из товаров в справочник."""
+        from catalog.services import clear_brands_cache
+        
+        # Получаем уникальные бренды из товаров
+        product_brands = Product.objects.exclude(
+            brand__isnull=True
+        ).exclude(
+            brand=''
+        ).values_list('brand', flat=True).distinct()
+        
+        created_count = 0
+        existing_count = 0
+        
+        for brand_name in product_brands:
+            brand_name = brand_name.strip()
+            if not brand_name:
+                continue
+            
+            # Нормализуем название (первая буква заглавная)
+            normalized_name = brand_name.strip()
+            
+            # Проверяем, есть ли уже такой бренд (без учёта регистра)
+            existing = Brand.objects.filter(name__iexact=normalized_name).first()
+            if existing:
+                existing_count += 1
+            else:
+                Brand.objects.create(
+                    name=normalized_name,
+                    is_active=True
+                )
+                created_count += 1
+        
+        # Очищаем кэш брендов
+        clear_brands_cache()
+        
+        self.message_user(
+            request,
+            f'Синхронизация завершена: добавлено {created_count} новых брендов, '
+            f'{existing_count} уже существовали.',
+            messages.SUCCESS
+        )
+    
+    def save_model(self, request, obj, form, change):
+        """Очищает кэш брендов при сохранении."""
+        super().save_model(request, obj, form, change)
+        from catalog.services import clear_brands_cache
+        clear_brands_cache()
+    
+    def delete_model(self, request, obj):
+        """Очищает кэш брендов при удалении."""
+        super().delete_model(request, obj)
+        from catalog.services import clear_brands_cache
+        clear_brands_cache()
+    
+    def get_urls(self):
+        """Добавляет кастомные URL для синхронизации."""
+        from django.urls import path
+        urls = super().get_urls()
+        custom_urls = [
+            path('sync-from-products/', self.admin_site.admin_view(self.sync_from_products_view), name='brand_sync_from_products'),
+        ]
+        return custom_urls + urls
+    
+    def sync_from_products_view(self, request):
+        """View для синхронизации брендов из товаров."""
+        from catalog.services import clear_brands_cache
+        from django.shortcuts import redirect
+        
+        # Получаем уникальные бренды из товаров
+        product_brands = Product.objects.exclude(
+            brand__isnull=True
+        ).exclude(
+            brand=''
+        ).values_list('brand', flat=True).distinct()
+        
+        # Нормализуем и убираем дубликаты (разный регистр)
+        unique_brands = set()
+        for brand in product_brands:
+            if brand and brand.strip():
+                unique_brands.add(brand.strip())
+        
+        created_count = 0
+        
+        for brand_name in unique_brands:
+            # Проверяем, есть ли уже такой бренд (без учёта регистра)
+            if not Brand.objects.filter(name__iexact=brand_name).exists():
+                Brand.objects.create(name=brand_name, is_active=True)
+                created_count += 1
+        
+        clear_brands_cache()
+        
+        total_brands = Brand.objects.count()
+        
+        if created_count > 0:
+            self.message_user(
+                request,
+                f'Добавлено {created_count} новых брендов. Всего в справочнике: {total_brands}',
+                messages.SUCCESS
+            )
+        else:
+            self.message_user(
+                request,
+                f'Все бренды уже в справочнике. Всего брендов: {total_brands}',
+                messages.INFO
+            )
+        return redirect('admin:catalog_brand_changelist')
+    
+    def changelist_view(self, request, extra_context=None):
+        """Добавляет кнопки синхронизации на страницу списка."""
+        extra_context = extra_context or {}
+        extra_context['show_sync_buttons'] = True
+        extra_context['sync_from_products_url'] = 'sync-from-products/'
+        return super().changelist_view(request, extra_context=extra_context)
 
 
 @admin.register(ImportLog)

@@ -11,6 +11,7 @@ urlpatterns = [
     path('public-offer/', views.PublicOfferView.as_view(), name='public_offer'),
     path('privacy-policy/', views.PrivacyPolicyView.as_view(), name='privacy_policy'),
     path('consent/', views.ConsentView.as_view(), name='consent'),
+    path('wholesale/', views.WholesaleView.as_view(), name='wholesale'),
     path('robots.txt', views.robots_txt, name='robots'),
 ]
 

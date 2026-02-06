@@ -1,0 +1,365 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Регистрация партнёра | {{ SITE_NAME }}{% endblock %}
+
+{% block meta_description %}Регистрация оптового партнёра. Получите доступ к специальным ценам и актуальной информации о наличии товаров.{% endblock %}
+
+{% block extra_css %}
+<style>
+    .register-page {
+        min-height: 70vh;
+        padding: 60px 0;
+        background: var(--color-gray-100);
+    }
+    
+    .register-container {
+        max-width: 600px;
+        margin: 0 auto;
+    }
+    
+    .register-card {
+        background: var(--color-white);
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow-lg);
+        overflow: hidden;
+    }
+    
+    .register-card__header {
+        background: #1a1a2e;
+        color: #ffffff;
+        padding: 2rem;
+        text-align: center;
+    }
+    
+    .register-card__title {
+        font-family: var(--font-heading);
+        font-size: 1.75rem;
+        font-weight: 700;
+        margin-bottom: 0.5rem;
+        color: #ffffff !important;
+    }
+    
+    .register-card__subtitle {
+        font-size: 0.95rem;
+        color: rgba(255, 255, 255, 0.9) !important;
+    }
+    
+    .register-card__body {
+        padding: 2rem;
+    }
+    
+    .form-group {
+        margin-bottom: 1.5rem;
+    }
+    
+    .form-label {
+        display: block;
+        margin-bottom: 0.5rem;
+        font-weight: 600;
+        color: var(--color-gray-800);
+    }
+    
+    .form-label .required {
+        color: var(--color-brand-red);
+    }
+    
+    .form-input,
+    .form-textarea {
+        width: 100%;
+        padding: 0.875rem 1rem;
+        font-size: 1rem;
+        border: 2px solid var(--color-gray-200);
+        border-radius: var(--radius-md);
+        transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+        box-sizing: border-box;
+    }
+    
+    .form-input:focus,
+    .form-textarea:focus {
+        border-color: var(--color-brand-red);
+        box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1);
+        outline: none;
+    }
+    
+    .form-textarea {
+        resize: vertical;
+        min-height: 100px;
+    }
+    
+    .form-help {
+        font-size: 0.85rem;
+        color: var(--color-gray-600);
+        margin-top: 0.5rem;
+    }
+    
+    .form-error {
+        color: var(--color-danger);
+        font-size: 0.875rem;
+        margin-top: 0.5rem;
+    }
+    
+    .form-error ul {
+        margin: 0;
+        padding-left: 1.25rem;
+    }
+    
+    .btn-submit {
+        width: 100%;
+        padding: 1rem;
+        font-size: 1.1rem;
+        font-weight: 600;
+        background: var(--color-brand-red);
+        color: var(--color-brand-white);
+        border: none;
+        border-radius: var(--radius-md);
+        cursor: pointer;
+        transition: all var(--transition-normal);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+    }
+    
+    .btn-submit:hover {
+        background: var(--color-primary-dark);
+        transform: translateY(-2px);
+        box-shadow: 0 10px 30px rgba(220, 38, 38, 0.4);
+    }
+    
+    .register-footer {
+        text-align: center;
+        padding: 1.5rem 2rem;
+        background: var(--color-gray-50);
+        border-top: 1px solid var(--color-gray-200);
+    }
+    
+    .register-footer a {
+        color: var(--color-brand-red);
+        text-decoration: none;
+        font-weight: 600;
+    }
+    
+    .register-footer a:hover {
+        text-decoration: underline;
+    }
+    
+    .privacy-notice {
+        font-size: 0.85rem;
+        color: var(--color-gray-600);
+        text-align: center;
+        margin-top: 1.5rem;
+    }
+    
+    .privacy-notice a {
+        color: var(--color-brand-red);
+    }
+</style>
+{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <div class="container">
+        <a href="{% url 'core:home' %}">Главная</a>
+        <span class="separator">/</span>
+        <a href="{% url 'partners:wholesale' %}">Для партнёров</a>
+        <span class="separator">/</span>
+        <span>Регистрация</span>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<section class="register-page">
+    <div class="container">
+        <div class="register-container">
+            <div class="register-card">
+                <div class="register-card__header">
+                    <h1 class="register-card__title">Регистрация партнёра</h1>
+                    <p class="register-card__subtitle">Заполните форму для получения оптового доступа</p>
+                </div>
+                
+                <div class="register-card__body">
+                    <form method="post" novalidate>
+                        {% csrf_token %}
+                        
+                        <div class="form-group">
+                            <label class="form-label" for="id_full_name">
+                                ФИО контактного лица <span class="required">*</span>
+                            </label>
+                            {{ form.full_name }}
+                            {% if form.full_name.errors %}
+                                <div class="form-error">{{ form.full_name.errors }}</div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label" for="id_phone">
+                                Телефон <span class="required">*</span>
+                            </label>
+                            {{ form.phone }}
+                            {% if form.phone.errors %}
+                                <div class="form-error">{{ form.phone.errors }}</div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label" for="id_email">
+                                E-mail <span class="required">*</span>
+                            </label>
+                            {{ form.email }}
+                            {% if form.email.errors %}
+                                <div class="form-error">{{ form.email.errors }}</div>
+                            {% endif %}
+                            <p class="form-help">На этот email будут отправлены данные для входа</p>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label" for="id_city">
+                                Город <span class="required">*</span>
+                            </label>
+                            {{ form.city }}
+                            {% if form.city.errors %}
+                                <div class="form-error">{{ form.city.errors }}</div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label" for="id_comment">
+                                Комментарий
+                            </label>
+                            {{ form.comment }}
+                            {% if form.comment.errors %}
+                                <div class="form-error">{{ form.comment.errors }}</div>
+                            {% endif %}
+                            <p class="form-help">Информация о компании, сфера деятельности и т.д.</p>
+                        </div>
+                        
+                        <button type="submit" class="btn-submit">
+                            <i class="bi bi-send"></i> Отправить заявку
+                        </button>
+                        
+                        <p class="privacy-notice">
+                            Отправляя заявку, вы соглашаетесь с 
+                            <a href="{% url 'core:privacy_policy' %}" target="_blank">политикой конфиденциальности</a> 
+                            и даёте 
+                            <a href="{% url 'core:consent' %}" target="_blank">согласие на обработку персональных данных</a>.
+                        </p>
+                    </form>
+                </div>
+                
+                {% block extra_js %}
+                <script>
+                document.addEventListener('DOMContentLoaded', function() {
+                    // Маска для телефона
+                    const phoneInput = document.getElementById('id_phone');
+                    
+                    if (phoneInput) {
+                        // Функция форматирования телефона
+                        function formatPhone(value) {
+                            // Удаляем все нецифровые символы
+                            let numbers = value.replace(/\D/g, '');
+                            
+                            // Если начинается с 8, заменяем на 7
+                            if (numbers.startsWith('8')) {
+                                numbers = '7' + numbers.substring(1);
+                            }
+                            
+                            // Если не начинается с 7, добавляем 7
+                            if (numbers.length > 0 && !numbers.startsWith('7')) {
+                                numbers = '7' + numbers;
+                            }
+                            
+                            // Ограничиваем до 11 цифр (7 + 10)
+                            numbers = numbers.substring(0, 11);
+                            
+                            // Форматируем в +7 (XXX) XXX-XX-XX
+                            let formatted = '';
+                            if (numbers.length > 0) {
+                                formatted = '+7';
+                                if (numbers.length > 1) {
+                                    formatted += ' (' + numbers.substring(1, 4);
+                                }
+                                if (numbers.length >= 4) {
+                                    formatted += ') ' + numbers.substring(4, 7);
+                                }
+                                if (numbers.length >= 7) {
+                                    formatted += '-' + numbers.substring(7, 9);
+                                }
+                                if (numbers.length >= 9) {
+                                    formatted += '-' + numbers.substring(9, 11);
+                                }
+                            }
+                            
+                            return formatted;
+                        }
+                        
+                        // Обработка ввода
+                        phoneInput.addEventListener('input', function(e) {
+                            const cursorPosition = this.selectionStart;
+                            const oldValue = this.value;
+                            const newValue = formatPhone(this.value);
+                            
+                            this.value = newValue;
+                            
+                            // Восстанавливаем позицию курсора
+                            let newCursorPosition = cursorPosition;
+                            if (oldValue.length !== newValue.length) {
+                                // Если длина изменилась, корректируем позицию
+                                const diff = newValue.length - oldValue.length;
+                                newCursorPosition = Math.max(0, Math.min(newValue.length, cursorPosition + diff));
+                            }
+                            
+                            this.setSelectionRange(newCursorPosition, newCursorPosition);
+                        });
+                        
+                        // Обработка вставки (Ctrl+V)
+                        phoneInput.addEventListener('paste', function(e) {
+                            e.preventDefault();
+                            const pastedText = (e.clipboardData || window.clipboardData).getData('text');
+                            const formatted = formatPhone(pastedText);
+                            this.value = formatted;
+                            
+                            // Устанавливаем курсор в конец
+                            this.setSelectionRange(formatted.length, formatted.length);
+                        });
+                        
+                        // Обработка фокуса - если поле пустое, добавляем +7
+                        phoneInput.addEventListener('focus', function() {
+                            if (!this.value || this.value.trim() === '' || this.value === '+7 (999) 123-45-67') {
+                                this.value = '+7 (';
+                                this.setSelectionRange(4, 4);
+                            }
+                        });
+                        
+                        // Обработка клавиш Backspace и Delete
+                        phoneInput.addEventListener('keydown', function(e) {
+                            const cursorPosition = this.selectionStart;
+                            
+                            // Если пытаемся удалить символ форматирования, удаляем цифру
+                            if ((e.key === 'Backspace' || e.key === 'Delete') && cursorPosition > 0) {
+                                const char = this.value[cursorPosition - 1];
+                                if (char && !/\d/.test(char)) {
+                                    e.preventDefault();
+                                    // Удаляем предыдущую цифру
+                                    const before = this.value.substring(0, cursorPosition - 1);
+                                    const after = this.value.substring(cursorPosition);
+                                    const combined = before + after;
+                                    this.value = formatPhone(combined);
+                                    this.setSelectionRange(cursorPosition - 1, cursorPosition - 1);
+                                }
+                            }
+                        });
+                    }
+                });
+                </script>
+                {% endblock %}
+                
+                <div class="register-footer">
+                    Уже зарегистрированы? <a href="{% url 'partners:login' %}">Войти</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}

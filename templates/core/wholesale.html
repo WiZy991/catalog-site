@@ -1,0 +1,63 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Оптовые продажи - {{ SITE_NAME }}{% endblock %}
+{% block meta_description %}Оптовые продажи автозапчастей {{ SITE_NAME }}. Выгодные условия для оптовых покупателей.{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="breadcrumbs" aria-label="Хлебные крошки">
+    <div class="container">
+        <ol class="breadcrumbs__list" itemscope itemtype="https://schema.org/BreadcrumbList">
+            <li class="breadcrumbs__item" itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
+                <a href="{% url 'core:home' %}" itemprop="item"><span itemprop="name">Главная</span></a>
+                <meta itemprop="position" content="1">
+            </li>
+            <li class="breadcrumbs__item breadcrumbs__item--active" itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
+                <span itemprop="name">Оптовые продажи</span>
+                <meta itemprop="position" content="2">
+            </li>
+        </ol>
+    </div>
+</nav>
+{% endblock %}
+
+{% block content %}
+<section class="page-section">
+    <div class="container">
+        <h1 class="page-title">{% if page %}{{ page.title }}{% else %}Оптовые продажи{% endif %}</h1>
+        
+        {% if page and page.content %}
+        <div class="page-content">
+            {{ page.content|safe }}
+        </div>
+        {% else %}
+        
+        <div class="page-content">
+            <p>Мы предлагаем выгодные условия для оптовых покупателей автозапчастей.</p>
+            
+            <h2>Преимущества работы с нами</h2>
+            <ul>
+                <li>Прямые поставки от производителя</li>
+                <li>Специальные цены для оптовых клиентов</li>
+                <li>Индивидуальные условия сотрудничества</li>
+                <li>Гибкая система скидок</li>
+                <li>Быстрая обработка заказов</li>
+            </ul>
+            
+            <h2>Как стать оптовым клиентом</h2>
+            <ol>
+                <li>Свяжитесь с нами по телефону или через форму обратной связи</li>
+                <li>Сообщите о вашем интересе к оптовым закупкам</li>
+                <li>Получите персональное предложение и прайс-лист</li>
+                <li>Заключите договор на выгодных условиях</li>
+            </ol>
+            
+            <h2>Контакты для оптовых клиентов</h2>
+            <p>Телефон: <a href="tel:{{ SITE_PHONE }}">{{ SITE_PHONE }}</a></p>
+            <p>Email: <a href="mailto:{{ SITE_EMAIL }}">{{ SITE_EMAIL }}</a></p>
+        </div>
+        
+        {% endif %}
+    </div>
+</section>
+{% endblock %}

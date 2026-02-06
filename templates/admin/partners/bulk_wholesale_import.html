@@ -1,0 +1,159 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block title %}{{ title }} | Админ{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">
+            <i class="fas fa-file-import"></i> {{ title }}
+        </h3>
+    </div>
+    <div class="card-body">
+        <div class="alert alert-info">
+            <h5><i class="fas fa-info-circle"></i> Импорт для партнёрского раздела</h5>
+            <p>Загрузите файл с товарами для оптового каталога. Поддерживаются:</p>
+            <ul>
+                <li><strong>CSV</strong> — разделитель: точка с запятой (;)</li>
+                <li><strong>Excel</strong> — .xls, .xlsx</li>
+            </ul>
+            <p class="mb-0">
+                <a href="/admin/partners/wholesale-template/" class="btn btn-sm btn-outline-primary">
+                    <i class="fas fa-download"></i> Скачать шаблон CSV
+                </a>
+            </p>
+        </div>
+        
+        <div class="alert alert-success">
+            <h5><i class="fas fa-magic"></i> Особенности оптового импорта:</h5>
+            <ul class="mb-0">
+                <li><strong>Оптовая цена</strong> — колонка "Оптовая цена", "Опт" или "wholesale_price"</li>
+                <li><strong>Розничная цена</strong> — колонка "Цена", "Розничная" или "price"</li>
+                <li>Товары обновляются по артикулу, если уже существуют</li>
+                <li>Категории и бренды определяются автоматически по названию</li>
+                <li>Остатки обновляют статус наличия автоматически</li>
+            </ul>
+        </div>
+        
+        <form method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+            
+            <div class="form-group mb-3">
+                <label for="id_file" class="form-label">Файл данных</label>
+                <input type="file" name="file" id="id_file" accept=".csv,.xls,.xlsx" class="form-control" required>
+                <small class="form-text text-muted">Загрузите CSV или Excel файл с товарами</small>
+            </div>
+            
+            <div class="row mb-3">
+                <div class="col-md-4">
+                    <div class="form-check">
+                        <input type="checkbox" name="auto_category" id="id_auto_category" class="form-check-input" checked>
+                        <label class="form-check-label" for="id_auto_category">
+                            Автоматически определять категории
+                        </label>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="form-check">
+                        <input type="checkbox" name="auto_brand" id="id_auto_brand" class="form-check-input" checked>
+                        <label class="form-check-label" for="id_auto_brand">
+                            Автоматически определять бренды
+                        </label>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="form-check">
+                        <input type="checkbox" name="update_existing" id="id_update_existing" class="form-check-input" checked>
+                        <label class="form-check-label" for="id_update_existing">
+                            Обновлять существующие товары
+                        </label>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-file-import"></i> Импортировать
+                </button>
+                <a href="{% url 'admin:partners_wholesaleproduct_changelist' %}" class="btn btn-secondary">
+                    Отмена
+                </a>
+            </div>
+        </form>
+        
+        <hr>
+        
+        <h5>Поддерживаемые колонки:</h5>
+        <table class="table table-sm table-bordered">
+            <thead>
+                <tr>
+                    <th>Колонка</th>
+                    <th>Альтернативные названия</th>
+                    <th>Описание</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr><td><code>Артикул</code></td><td>article, код</td><td>Артикул товара (ключ для обновления)</td></tr>
+                <tr><td><code>Название</code></td><td>name, наименование, номенклатура</td><td>Название товара *</td></tr>
+                <tr><td><code>Розничная цена</code></td><td>цена, price</td><td>Розничная цена для основного сайта</td></tr>
+                <tr><td><code>Оптовая цена</code></td><td>опт, wholesale, wholesale_price</td><td><strong>Оптовая цена для партнёров</strong></td></tr>
+                <tr><td><code>Остаток</code></td><td>склад, quantity</td><td>Количество на складе</td></tr>
+                <tr><td><code>Бренд</code></td><td>brand, производитель</td><td>Бренд/производитель</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<style>
+.card { margin: 20px; }
+.form-group { margin-bottom: 1rem; }
+.alert-info {
+    background-color: rgba(23, 162, 184, 0.2) !important;
+    border-color: rgba(23, 162, 184, 0.5) !important;
+    color: #a8d8e6 !important;
+}
+.alert-info h5 {
+    color: #a8d8e6 !important;
+    font-weight: 600;
+}
+.alert-info ul, .alert-info p {
+    color: #a8d8e6 !important;
+}
+.alert-success {
+    background-color: rgba(40, 167, 69, 0.2) !important;
+    border-color: rgba(40, 167, 69, 0.5) !important;
+    color: #90ee90 !important;
+}
+.alert-success h5 {
+    color: #90ee90 !important;
+    font-weight: 600;
+}
+.alert-success ul {
+    color: #90ee90 !important;
+}
+code { 
+    background: rgba(255,255,255,0.1) !important; 
+    padding: 2px 6px; 
+    border-radius: 3px;
+    color: #ffd700 !important;
+    font-weight: 500;
+}
+.form-label {
+    color: #fff !important;
+    font-weight: 500;
+}
+.form-text {
+    color: rgba(255,255,255,0.7) !important;
+}
+.form-check-label {
+    color: #fff !important;
+}
+.table th {
+    color: #fff !important;
+}
+.table td {
+    color: rgba(255,255,255,0.9) !important;
+}
+</style>
+{% endblock %}

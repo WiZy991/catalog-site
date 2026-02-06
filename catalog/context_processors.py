@@ -8,10 +8,10 @@ def categories_processor(request):
     root_categories = Category.objects.filter(
         parent=None, 
         is_active=True
-    ).order_by('order', 'name').prefetch_related(
+    ).order_by('name').prefetch_related(
         Prefetch(
             'children',
-            queryset=Category.objects.filter(is_active=True).order_by('order', 'name')
+            queryset=Category.objects.filter(is_active=True).order_by('name')
         )
     )
     return {

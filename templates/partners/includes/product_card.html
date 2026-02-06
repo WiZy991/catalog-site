@@ -1,0 +1,92 @@
+<article class="product-card" itemscope itemtype="https://schema.org/Product">
+    <div class="product-card__wrapper">
+        <a href="{% url 'partners:product' product.slug %}" class="product-card__link">
+            <div class="product-card__image">
+                {% with main_image=product.get_main_image %}
+                {% if main_image %}
+                <img src="{{ main_image.image.url }}" alt="{{ main_image.alt|default:product.name }}" loading="lazy" itemprop="image">
+                {% else %}
+                <div class="product-card__placeholder">
+                    <i class="bi bi-image"></i>
+                </div>
+                {% endif %}
+                {% endwith %}
+                
+                {% if product.has_discount %}
+                <span class="product-card__badge product-card__badge--sale">-{{ product.discount_percent }}%</span>
+                {% endif %}
+                
+                {% if product.is_featured %}
+                <span class="product-card__badge product-card__badge--featured">Хит</span>
+                {% endif %}
+            </div>
+            
+            <div class="product-card__content">
+                <h3 class="product-card__title" itemprop="name">{{ product.name|truncatechars:80 }}</h3>
+                
+                <div class="product-card__meta">
+                    {% if product.article %}
+                    <span class="product-card__article">Кросс-номер: {{ product.article }}</span>
+                    {% endif %}
+                    {% if product.brand %}
+                    <span class="product-card__brand" itemprop="brand">Бренд: {{ product.brand }}</span>
+                    {% endif %}
+                </div>
+                
+                {% if product.short_description %}
+                <div class="product-card__description">
+                    {{ product.short_description|truncatechars:100 }}
+                </div>
+                {% endif %}
+                
+                {% if product.get_characteristics_list %}
+                <div class="product-card__characteristics">
+                    {% for key, value in product.get_characteristics_list|slice:":2" %}
+                    <span class="product-card__char-item">{{ key }}: {{ value|truncatechars:30 }}</span>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                
+                {% if product.get_applicability_list %}
+                <div class="product-card__applicability">
+                    <span class="product-card__applicability-label">Применимо:</span>
+                    {% for item in product.get_applicability_list|slice:":1" %}
+                    <span class="product-card__applicability-tag">{{ item|truncatechars:40 }}</span>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                
+                <div class="product-card__availability availability--{{ product.availability }}">
+                    {% if product.availability == 'in_stock' %}
+                    <i class="bi bi-check-circle"></i> В наличии
+                    {% elif product.availability == 'order' %}
+                    <i class="bi bi-clock"></i> Под заказ
+                    {% else %}
+                    <i class="bi bi-x-circle"></i> Нет в наличии
+                    {% endif %}
+                </div>
+                
+                <div class="product-card__footer">
+                    <div class="product-card__price" itemprop="offers" itemscope itemtype="https://schema.org/Offer">
+                        <span class="product-card__current-price" itemprop="price" content="{{ product.wholesale_price|default:product.price }}">
+                            {{ product.wholesale_price|default:product.price|floatformat:0 }} ₽
+                        </span>
+                        <meta itemprop="priceCurrency" content="RUB">
+                        {% if product.wholesale_price and product.wholesale_price < product.price %}
+                        <span class="product-card__old-price">{{ product.price|floatformat:0 }} ₽</span>
+                        {% endif %}
+                    </div>
+                    <span class="product-card__btn">Подробнее</span>
+                </div>
+            </div>
+        </a>
+        
+        {% if product.availability == 'in_stock' %}
+        <div class="product-card__actions">
+            <button class="product-card__add-cart" type="button" data-product-id="{{ product.id }}" title="Добавить в корзину">
+                <i class="bi bi-cart-plus"></i>
+            </button>
+        </div>
+        {% endif %}
+    </div>
+</article>

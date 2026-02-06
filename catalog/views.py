@@ -16,13 +16,30 @@ class CatalogView(ListView):
     context_object_name = 'categories'
 
     def get_queryset(self):
-        return Category.objects.filter(parent=None, is_active=True).order_by('order', 'name').prefetch_related('children')
+        # Показываем все активные корневые категории, отсортированные по order
+        return Category.objects.filter(
+            parent=None,
+            is_active=True
+        ).order_by('order', 'name').prefetch_related('children')
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        # Добавляем подкатегории для каждой категории
+        # Фильтруем категории, у которых есть товары (включая подкатегории)
+        categories_with_products = []
         for category in context['categories']:
             category.active_children = category.children.filter(is_active=True)
+            # Проверяем, есть ли товары в категории или её подкатегориях (только retail)
+            descendants = category.get_descendants(include_self=True)
+            product_count = Product.objects.filter(
+                category__in=descendants,
+                is_active=True,
+                catalog_type='retail'
+            ).count()
+            if product_count > 0:
+                category.retail_product_count = product_count
+                categories_with_products.append(category)
+        
+        context['categories'] = categories_with_products
         return context
 
 
@@ -68,7 +85,8 @@ class CategoryView(ListView):
         descendants = self.category.get_descendants(include_self=True)
         queryset = Product.objects.filter(
             category__in=descendants,
-            is_active=True
+            is_active=True,
+            catalog_type='retail'  # Только товары из основного каталога
         ).select_related('category').prefetch_related('images')
         
         # Применяем фильтры
@@ -80,7 +98,7 @@ class CategoryView(ListView):
         context['category'] = self.category
         context['breadcrumbs'] = self.category.get_ancestors(include_self=True)
         # Получаем подкатегории через related_name 'children'
-        context['subcategories'] = self.category.children.filter(is_active=True).order_by('order', 'name')
+        context['subcategories'] = self.category.children.filter(is_active=True).order_by('name')
         context['filter'] = self.filterset
         
         # Пагинация
@@ -93,7 +111,8 @@ class CategoryView(ListView):
         # Данные для фильтров
         all_products = Product.objects.filter(
             category__in=self.category.get_descendants(include_self=True),
-            is_active=True
+            is_active=True,
+            catalog_type='retail'  # Только товары из основного каталога
         )
         context['brands'] = get_brand_choices(self.category)
         context['price_range'] = all_products.aggregate(min_price=Min('price'), max_price=Max('price'))
@@ -170,7 +189,8 @@ class CatalogItemView(ListView):
             descendants = category.get_descendants(include_self=True)
             queryset = Product.objects.filter(
                 category__in=descendants,
-                is_active=True
+                is_active=True,
+                catalog_type='retail'  # Только товары из основного каталога
             ).select_related('category').prefetch_related('images')
             
             # Применяем фильтры
@@ -186,7 +206,7 @@ class CatalogItemView(ListView):
             context = super().get_context_data(**kwargs)
             context['category'] = self.category
             context['breadcrumbs'] = self.category.get_ancestors(include_self=True)
-            context['subcategories'] = self.category.children.filter(is_active=True).order_by('order', 'name')
+            context['subcategories'] = self.category.children.filter(is_active=True).order_by('name')
             context['filter'] = self.filterset
             
             # Пагинация
@@ -199,7 +219,8 @@ class CatalogItemView(ListView):
             # Данные для фильтров
             all_products = Product.objects.filter(
                 category__in=self.category.get_descendants(include_self=True),
-                is_active=True
+                is_active=True,
+                catalog_type='retail'  # Только товары из основного каталога
             )
             context['brands'] = get_brand_choices(self.category)
             context['price_range'] = all_products.aggregate(min_price=Min('price'), max_price=Max('price'))
@@ -293,7 +314,10 @@ class ProductView(DetailView):
     slug_url_kwarg = 'slug'
 
     def get_queryset(self):
-        return Product.objects.filter(is_active=True).select_related('category').prefetch_related('images')
+        return Product.objects.filter(
+            is_active=True,
+            catalog_type='retail'  # Только товары из основного каталога
+        ).select_related('category').prefetch_related('images')
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -312,55 +336,78 @@ class ProductView(DetailView):
             if product_applicability_list:
                 import re
                 
-                # Извлекаем коды моделей из применимости (например, "NHW20" из "NHW20 F/R" или "FZ380" из "FZ380/HZ380")
+                # Извлекаем коды моделей и применимость из элементов применимости
                 def extract_model_codes(applicability_items):
-                    """Извлекает коды моделей из элементов применимости."""
+                    """Извлекает коды моделей и применимость из элементов применимости."""
                     model_codes = set()
+                    applicability_strings = set()
+                    
                     for item in applicability_items:
                         item_clean = item.strip()
                         if not item_clean:
                             continue
                         
-                        # Ищем коды моделей - обычно это буквы+цифры в начале строки (например, NHW20, FZ380, LC80)
-                        # Паттерн: одна или несколько букв, затем цифры (минимум 2 цифры для кода модели)
-                        model_matches = re.findall(r'\b([A-Z]{1,4}\d{2,})\b', item_clean, re.IGNORECASE)
-                        for code in model_matches:
-                            model_codes.add(code.upper())
-                        
-                        # Также добавляем полную строку (нормализованную) для случаев, когда код модели - это вся строка
+                        # Добавляем полную строку применимости (нормализованную)
                         item_normalized = re.sub(r'\s+', ' ', item_clean).upper().strip()
                         if item_normalized:
-                            model_codes.add(item_normalized)
+                            applicability_strings.add(item_normalized)
+                        
+                        # Ищем коды моделей - обычно это буквы+цифры (например, NHW20, FZ380, LC80, 2GR)
+                        # Паттерн: буквы+цифры или цифры+буквы (например, 2GR, 1NZ, 3RZ)
+                        # Также ищем стандартные коды: 1-4 буквы + 2+ цифры
+                        model_matches = re.findall(r'\b([A-Z]{1,4}\d{2,}|\d{1,2}[A-Z]{1,3}[#]?)\b', item_clean, re.IGNORECASE)
+                        for code in model_matches:
+                            # Убираем символ # в конце для сравнения
+                            code_clean = code.upper().rstrip('#')
+                            if len(code_clean) >= 2:  # Минимум 2 символа для кода
+                                model_codes.add(code_clean)
+                        
+                        # Также ищем отдельные коды моделей в строке (например, "2GR#" из "2GR#")
+                        # Извлекаем все возможные коды моделей
+                        all_codes = re.findall(r'\b([A-Z0-9#]{2,6})\b', item_clean, re.IGNORECASE)
+                        for code in all_codes:
+                            code_clean = code.upper().rstrip('#')
+                            # Проверяем, что это похоже на код модели (содержит и буквы, и цифры, или короткий код)
+                            if (re.search(r'[A-Z]', code_clean) and re.search(r'\d', code_clean)) or len(code_clean) <= 4:
+                                if len(code_clean) >= 2:
+                                    model_codes.add(code_clean)
                     
-                    return model_codes
+                    return model_codes, applicability_strings
                 
-                # Извлекаем коды моделей текущего товара
-                product_model_codes = extract_model_codes(product_applicability_list)
+                # Извлекаем коды моделей и применимость текущего товара
+                product_model_codes, product_applicability_strings = extract_model_codes(product_applicability_list)
                 
-                if product_model_codes:
+                if product_model_codes or product_applicability_strings:
                     # Получаем ВСЕ активные товары с применимостью (кроме текущего)
+                    # ВАЖНО: не ограничиваемся категорией, чтобы показать все товары для этой машины
                     all_candidates = list(Product.objects.filter(
                         is_active=True,
+                        catalog_type='retail',  # Только товары из основного каталога
                         applicability__isnull=False
                     ).exclude(
                         pk=product.pk,
                         applicability=''
-                    ).select_related('category').prefetch_related('images')[:200])
+                    ).select_related('category').prefetch_related('images')[:300])
                     
-                    # Точная проверка пересечения кодов моделей
+                    # Точная проверка пересечения кодов моделей и применимости
                     matching_products = []
                     
                     for candidate_product in all_candidates:
                         if not candidate_product.applicability:
                             continue
                         
-                        # Извлекаем коды моделей кандидата
+                        # Извлекаем коды моделей и применимость кандидата
                         candidate_applicability_list = candidate_product.get_applicability_list()
-                        candidate_model_codes = extract_model_codes(candidate_applicability_list)
+                        candidate_model_codes, candidate_applicability_strings = extract_model_codes(candidate_applicability_list)
                         
-                        # Проверяем пересечение кодов моделей
-                        # Товар попадает в подборку только если есть хотя бы один общий код модели
-                        if product_model_codes & candidate_model_codes:  # Пересечение множеств
+                        # Проверяем пересечение:
+                        # 1. Точное совпадение кодов моделей
+                        # 2. Или точное совпадение строк применимости
+                        model_match = product_model_codes & candidate_model_codes
+                        applicability_match = product_applicability_strings & candidate_applicability_strings
+                        
+                        # Товар попадает в подборку только если есть точное совпадение
+                        if model_match or applicability_match:
                             matching_products.append(candidate_product)
                         
                         # Ограничиваем количество результатов
@@ -381,7 +428,8 @@ class ProductView(DetailView):
             related_products = Product.objects.filter(
                 brand__iexact=brand_normalized,
                 category=product.category,
-                is_active=True
+                is_active=True,
+                catalog_type='retail'  # Только товары из основного каталога
             ).exclude(pk=product.pk).select_related('category').prefetch_related('images')[:12]
         
         # Приоритет 3: Если не нашли, ищем товары того же бренда в дочерних категориях
@@ -391,19 +439,31 @@ class ProductView(DetailView):
             related_products = Product.objects.filter(
                 brand__iexact=brand_normalized,
                 category__in=descendants,
-                is_active=True
+                is_active=True,
+                catalog_type='retail'  # Только товары из основного каталога
             ).exclude(pk=product.pk).select_related('category').prefetch_related('images')[:12]
         
         # Приоритет 4: Если не нашли, берем из той же категории (только если нет бренда)
         if not related_products.exists() and product.category and not product.brand:
             related_products = Product.objects.filter(
                 category=product.category,
-                is_active=True
+                is_active=True,
+                catalog_type='retail'  # Только товары из основного каталога
             ).exclude(pk=product.pk).select_related('category').prefetch_related('images')[:12]
         
         context['related_products'] = related_products[:6]  # Показываем максимум 6
         context['images'] = product.images.all()
-        context['characteristics'] = product.get_characteristics_list()
+        
+        # Получаем характеристики и добавляем вольтаж, если он есть в применимости
+        characteristics = product.get_characteristics_list()
+        voltage = product.get_voltage_from_applicability()
+        if voltage:
+            # Проверяем, нет ли уже вольтажа в характеристиках
+            has_voltage = any(key.lower() in ['вольтаж', 'voltage', 'напряжение'] for key, _ in characteristics)
+            if not has_voltage:
+                characteristics.append(('Напряжение', voltage))
+        
+        context['characteristics'] = characteristics
         context['cross_numbers'] = product.get_cross_numbers_list()
         context['applicability'] = product.get_applicability_list()
         
@@ -420,10 +480,14 @@ def filter_products_ajax(request):
         descendants = category.get_descendants(include_self=True)
         queryset = Product.objects.filter(
             category__in=descendants,
-            is_active=True
+            is_active=True,
+            catalog_type='retail'  # Только товары из основного каталога
         )
     else:
-        queryset = Product.objects.filter(is_active=True)
+        queryset = Product.objects.filter(
+            is_active=True,
+            catalog_type='retail'  # Только товары из основного каталога
+        )
     
     # Применяем фильтры
     filterset = ProductFilter(request.GET, queryset=queryset)
@@ -452,19 +516,48 @@ def filter_products_ajax(request):
 
 
 def search_products(request):
-    """Поиск товаров."""
+    """Поиск товаров (регистронезависимый, включая кириллицу, по частичным совпадениям слов)."""
+    from django.db.models.functions import Lower
+    
     query = request.GET.get('q', '').strip()
     page = request.GET.get('page', 1)
     
     if query:
+        # Разбиваем запрос на отдельные слова (минимум 2 символа)
+        query_words = [word.strip() for word in query.split() if len(word.strip()) >= 2]
+        
+        if not query_words:
+            # Если слово слишком короткое, ищем весь запрос целиком
+            query_words = [query.strip()]
+        
+        # Используем комбинацию методов для надежного регистронезависимого поиска
+        # Для SQLite лучше использовать iregex, для других БД - icontains
         products = Product.objects.filter(
-            Q(name__icontains=query) |
-            Q(article__icontains=query) |
-            Q(brand__icontains=query) |
-            Q(cross_numbers__icontains=query) |
-            Q(applicability__icontains=query),
-            is_active=True
-        ).select_related('category').prefetch_related('images')
+            is_active=True,
+            catalog_type='retail'  # Только товары из основного каталога
+        )
+        
+        # Для каждого слова создаём условие поиска
+        # Используем AND - товар должен содержать ВСЕ слова из запроса
+        for word in query_words:
+            word_escaped = word.replace('\\', '\\\\').replace('(', '\\(').replace(')', '\\)').replace('[', '\\[').replace(']', '\\]')
+            word_q = (
+                # Используем iregex для регистронезависимого поиска (лучше работает с кириллицей в SQLite)
+                Q(name__iregex=word_escaped) |
+                Q(article__iregex=word_escaped) |
+                Q(brand__iregex=word_escaped) |
+                Q(cross_numbers__iregex=word_escaped) |
+                Q(applicability__iregex=word_escaped) |
+                # Резервный вариант с icontains (на случай проблем с regex)
+                Q(name__icontains=word) |
+                Q(article__icontains=word) |
+                Q(brand__icontains=word) |
+                Q(cross_numbers__icontains=word) |
+                Q(applicability__icontains=word)
+            )
+            products = products.filter(word_q)
+        
+        products = products.select_related('category').prefetch_related('images').distinct()
     else:
         products = Product.objects.none()
     
