@@ -367,9 +367,12 @@ class PublicPartnerCatalogView(ListView):
             # Используем AND - товар должен содержать ВСЕ слова из запроса
             for word in query_words:
                 # Названия товаров хранятся с большой буквы (кириллица)
-                # Преобразуем первую букву в заглавную для поиска в name
-                # Для кириллицы capitalize() работает правильно
-                word_capitalize = word.capitalize() if word else word
+                # Преобразуем первую букву в заглавную вручную для надежности
+                if word:
+                    # Преобразуем первую букву в заглавную (работает для кириллицы)
+                    word_capitalize = word[0].upper() + word[1:].lower() if len(word) > 1 else word.upper()
+                else:
+                    word_capitalize = word
                 word_upper = word.upper()
                 word_escaped = word.replace('\\', '\\\\').replace('(', '\\(').replace(')', '\\)').replace('[', '\\[').replace(']', '\\]')
                 
@@ -377,7 +380,7 @@ class PublicPartnerCatalogView(ListView):
                 # Для остальных полей - используем icontains/iregex (работает для латиницы и цифр)
                 word_q = (
                     # Название товара - ищем с заглавной буквы (как хранится в базе: "Крестовина")
-                    # Это работает когда пользователь вводит "крестовина" -> преобразуется в "Крестовина"
+                    # "крестовина" -> "Крестовина" -> найдет товары
                     Q(name__contains=word_capitalize) |
                     # Также пробуем в верхнем регистре (на случай, если есть варианты "КРЕСТОВИНА")
                     Q(name__contains=word_upper) |
@@ -510,9 +513,12 @@ class PartnerCatalogView(PartnerRequiredMixin, ListView):
             # Используем AND - товар должен содержать ВСЕ слова из запроса
             for word in query_words:
                 # Названия товаров хранятся с большой буквы (кириллица)
-                # Преобразуем первую букву в заглавную для поиска в name
-                # Для кириллицы capitalize() работает правильно
-                word_capitalize = word.capitalize() if word else word
+                # Преобразуем первую букву в заглавную вручную для надежности
+                if word:
+                    # Преобразуем первую букву в заглавную (работает для кириллицы)
+                    word_capitalize = word[0].upper() + word[1:].lower() if len(word) > 1 else word.upper()
+                else:
+                    word_capitalize = word
                 word_upper = word.upper()
                 word_escaped = word.replace('\\', '\\\\').replace('(', '\\(').replace(')', '\\)').replace('[', '\\[').replace(']', '\\]')
                 
@@ -520,7 +526,7 @@ class PartnerCatalogView(PartnerRequiredMixin, ListView):
                 # Для остальных полей - используем icontains/iregex (работает для латиницы и цифр)
                 word_q = (
                     # Название товара - ищем с заглавной буквы (как хранится в базе: "Крестовина")
-                    # Это работает когда пользователь вводит "крестовина" -> преобразуется в "Крестовина"
+                    # "крестовина" -> "Крестовина" -> найдет товары
                     Q(name__contains=word_capitalize) |
                     # Также пробуем в верхнем регистре (на случай, если есть варианты "КРЕСТОВИНА")
                     Q(name__contains=word_upper) |
