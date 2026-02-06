@@ -280,20 +280,26 @@ def detect_brand(text):
     """
     Автоматически определяет бренд по тексту.
     Использует бренды из базы данных.
-    Проверяет более длинные совпадения первыми, чтобы избежать проблем типа TOYO вместо TOYOTA.
+    
+    Важно: TOYO и TOYOTA - это разные бренды!
+    Проверяет более длинные совпадения первыми, чтобы если в тексте есть "TOYOTA",
+    то находился именно "TOYOTA", а не "TOYO".
+    Но если в тексте только "TOYO", то находится именно "TOYO".
     """
     text_upper = text.upper()
     known_brands = get_known_brands()
     
     # Сортируем бренды по длине в убывающем порядке, чтобы более длинные совпадения проверялись первыми
-    # Это решает проблему, когда "TOYO" находится раньше "TOYOTA"
+    # Это важно для случаев, когда один бренд является частью другого (например, TOYO и TOYOTA)
     sorted_brands = sorted(known_brands, key=lambda x: len(x), reverse=True)
     
     for brand in sorted_brands:
         brand_upper = brand.upper()
-        # Используем границы слов для точного совпадения
-        # Проверяем, что бренд не является частью другого слова
-        pattern = r'\b' + re.escape(brand_upper) + r'\b'
+        # Используем более точную проверку: бренд должен быть отдельным словом
+        # Учитываем различные разделители: пробелы, запятые, начало/конец строки
+        # Паттерн: начало строки ИЛИ не буква/цифра, затем бренд, затем не буква/цифра ИЛИ конец строки
+        # Это гарантирует, что "TOYO" не будет найден в "TOYOTA", и наоборот
+        pattern = r'(?:^|[^A-Z0-9])' + re.escape(brand_upper) + r'(?:[^A-Z0-9]|$)'
         if re.search(pattern, text_upper):
             return brand
     
@@ -1406,9 +1412,17 @@ def process_bulk_import_wholesale(data_rows, auto_category=True, auto_brand=True
                     article = parsed['article']
                 
                 # Определяем бренд
+                # Приоритет: явно указанный бренд в данных > автоматически определенный из названия
                 if auto_brand:
-                    brand = row.get('brand', '').strip() or parsed['brand'] or ''
+                    # Если бренд явно указан в данных, используем его (даже если он не в списке известных)
+                    explicit_brand = row.get('brand', '').strip()
+                    if explicit_brand:
+                        brand = explicit_brand
+                    else:
+                        # Если бренд не указан, пытаемся определить автоматически
+                        brand = parsed['brand'] or ''
                 else:
+                    # Если auto_brand=False, используем только явно указанный бренд
                     brand = row.get('brand', '').strip()
                 
                 # Определяем категорию
