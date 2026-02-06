@@ -365,11 +365,15 @@ class PublicPartnerCatalogView(ListView):
             # Для каждого слова создаём условие поиска
             # Используем AND - товар должен содержать ВСЕ слова из запроса
             for word in query_words:
+                # Ищем слово во всех релевантных полях товара
                 word_q = (
                     Q(name__icontains=word) |
                     Q(article__icontains=word) |
                     Q(brand__icontains=word) |
-                    Q(cross_numbers__icontains=word)
+                    Q(cross_numbers__icontains=word) |
+                    Q(applicability__icontains=word) |
+                    Q(description__icontains=word) |
+                    Q(short_description__icontains=word)
                 )
                 queryset = queryset.filter(word_q)
             
@@ -482,11 +486,15 @@ class PartnerCatalogView(PartnerRequiredMixin, ListView):
             # Для каждого слова создаём условие поиска
             # Используем AND - товар должен содержать ВСЕ слова из запроса
             for word in query_words:
+                # Ищем слово во всех релевантных полях товара
                 word_q = (
                     Q(name__icontains=word) |
                     Q(article__icontains=word) |
                     Q(brand__icontains=word) |
-                    Q(cross_numbers__icontains=word)
+                    Q(cross_numbers__icontains=word) |
+                    Q(applicability__icontains=word) |
+                    Q(description__icontains=word) |
+                    Q(short_description__icontains=word)
                 )
                 queryset = queryset.filter(word_q)
             
