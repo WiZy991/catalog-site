@@ -365,15 +365,17 @@ class PublicPartnerCatalogView(ListView):
             # Для каждого слова создаём условие поиска
             # Используем AND - товар должен содержать ВСЕ слова из запроса
             for word in query_words:
-                # Ищем слово во всех релевантных полях товара
+                # Экранируем специальные символы для regex
+                word_escaped = word.replace('\\', '\\\\').replace('(', '\\(').replace(')', '\\)').replace('[', '\\[').replace(']', '\\]').replace('.', '\\.').replace('*', '\\*').replace('+', '\\+').replace('?', '\\?').replace('^', '\\^').replace('$', '\\$').replace('|', '\\|')
+                # Используем iregex для надежного регистронезависимого поиска (особенно важно для SQLite с кириллицей)
                 word_q = (
-                    Q(name__icontains=word) |
-                    Q(article__icontains=word) |
-                    Q(brand__icontains=word) |
-                    Q(cross_numbers__icontains=word) |
-                    Q(applicability__icontains=word) |
-                    Q(description__icontains=word) |
-                    Q(short_description__icontains=word)
+                    Q(name__iregex=word_escaped) |
+                    Q(article__iregex=word_escaped) |
+                    Q(brand__iregex=word_escaped) |
+                    Q(cross_numbers__iregex=word_escaped) |
+                    Q(applicability__iregex=word_escaped) |
+                    Q(description__iregex=word_escaped) |
+                    Q(short_description__iregex=word_escaped)
                 )
                 queryset = queryset.filter(word_q)
             
@@ -486,15 +488,17 @@ class PartnerCatalogView(PartnerRequiredMixin, ListView):
             # Для каждого слова создаём условие поиска
             # Используем AND - товар должен содержать ВСЕ слова из запроса
             for word in query_words:
-                # Ищем слово во всех релевантных полях товара
+                # Экранируем специальные символы для regex
+                word_escaped = word.replace('\\', '\\\\').replace('(', '\\(').replace(')', '\\)').replace('[', '\\[').replace(']', '\\]').replace('.', '\\.').replace('*', '\\*').replace('+', '\\+').replace('?', '\\?').replace('^', '\\^').replace('$', '\\$').replace('|', '\\|')
+                # Используем iregex для надежного регистронезависимого поиска (особенно важно для SQLite с кириллицей)
                 word_q = (
-                    Q(name__icontains=word) |
-                    Q(article__icontains=word) |
-                    Q(brand__icontains=word) |
-                    Q(cross_numbers__icontains=word) |
-                    Q(applicability__icontains=word) |
-                    Q(description__icontains=word) |
-                    Q(short_description__icontains=word)
+                    Q(name__iregex=word_escaped) |
+                    Q(article__iregex=word_escaped) |
+                    Q(brand__iregex=word_escaped) |
+                    Q(cross_numbers__iregex=word_escaped) |
+                    Q(applicability__iregex=word_escaped) |
+                    Q(description__iregex=word_escaped) |
+                    Q(short_description__iregex=word_escaped)
                 )
                 queryset = queryset.filter(word_q)
             
