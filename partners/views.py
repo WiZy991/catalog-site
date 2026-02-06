@@ -366,34 +366,33 @@ class PublicPartnerCatalogView(ListView):
             # Для каждого слова создаём условие поиска
             # Используем AND - товар должен содержать ВСЕ слова из запроса
             for word in query_words:
-                # SQLite не поддерживает регистронезависимый поиск кириллицы через icontains/iregex
-                # Преобразуем слово в верхний регистр, так как данные в базе хранятся с большой буквы
+                # Названия товаров хранятся с большой буквы (кириллица), поэтому для name используем преобразование регистра
+                # Бренды и артикулы могут быть в любом регистре, используем icontains/iregex
                 word_upper = word.upper()
                 word_capitalize = word.capitalize()
+                word_escaped = word.replace('\\', '\\\\').replace('(', '\\(').replace(')', '\\)').replace('[', '\\[').replace(']', '\\]')
                 
-                # Ищем через contains в разных вариантах регистра
+                # Для name (название) - используем contains с преобразованием регистра
+                # Для остальных полей - используем icontains/iregex (работает для латиницы и цифр)
                 word_q = (
+                    # Название товара - ищем в верхнем регистре и с заглавной буквы
                     Q(name__contains=word_upper) |
-                    Q(article__contains=word_upper) |
-                    Q(brand__contains=word_upper) |
-                    Q(cross_numbers__contains=word_upper) |
-                    Q(applicability__contains=word_upper) |
-                    Q(description__contains=word_upper) |
-                    Q(short_description__contains=word_upper) |
                     Q(name__contains=word_capitalize) |
-                    Q(article__contains=word_capitalize) |
-                    Q(brand__contains=word_capitalize) |
-                    Q(cross_numbers__contains=word_capitalize) |
-                    Q(applicability__contains=word_capitalize) |
-                    Q(description__contains=word_capitalize) |
-                    Q(short_description__contains=word_capitalize) |
                     Q(name__contains=word) |
-                    Q(article__contains=word) |
-                    Q(brand__contains=word) |
-                    Q(cross_numbers__contains=word) |
-                    Q(applicability__contains=word) |
-                    Q(description__contains=word) |
-                    Q(short_description__contains=word)
+                    # Остальные поля - регистронезависимый поиск
+                    Q(article__icontains=word) |
+                    Q(brand__icontains=word) |
+                    Q(cross_numbers__icontains=word) |
+                    Q(applicability__icontains=word) |
+                    Q(description__icontains=word) |
+                    Q(short_description__icontains=word) |
+                    # Также пробуем iregex для надежности
+                    Q(article__iregex=word_escaped) |
+                    Q(brand__iregex=word_escaped) |
+                    Q(cross_numbers__iregex=word_escaped) |
+                    Q(applicability__iregex=word_escaped) |
+                    Q(description__iregex=word_escaped) |
+                    Q(short_description__iregex=word_escaped)
                 )
                 queryset = queryset.filter(word_q)
             
@@ -506,34 +505,33 @@ class PartnerCatalogView(PartnerRequiredMixin, ListView):
             # Для каждого слова создаём условие поиска
             # Используем AND - товар должен содержать ВСЕ слова из запроса
             for word in query_words:
-                # SQLite не поддерживает регистронезависимый поиск кириллицы через icontains/iregex
-                # Преобразуем слово в верхний регистр, так как данные в базе хранятся с большой буквы
+                # Названия товаров хранятся с большой буквы (кириллица), поэтому для name используем преобразование регистра
+                # Бренды и артикулы могут быть в любом регистре, используем icontains/iregex
                 word_upper = word.upper()
                 word_capitalize = word.capitalize()
+                word_escaped = word.replace('\\', '\\\\').replace('(', '\\(').replace(')', '\\)').replace('[', '\\[').replace(']', '\\]')
                 
-                # Ищем через contains в разных вариантах регистра
+                # Для name (название) - используем contains с преобразованием регистра
+                # Для остальных полей - используем icontains/iregex (работает для латиницы и цифр)
                 word_q = (
+                    # Название товара - ищем в верхнем регистре и с заглавной буквы
                     Q(name__contains=word_upper) |
-                    Q(article__contains=word_upper) |
-                    Q(brand__contains=word_upper) |
-                    Q(cross_numbers__contains=word_upper) |
-                    Q(applicability__contains=word_upper) |
-                    Q(description__contains=word_upper) |
-                    Q(short_description__contains=word_upper) |
                     Q(name__contains=word_capitalize) |
-                    Q(article__contains=word_capitalize) |
-                    Q(brand__contains=word_capitalize) |
-                    Q(cross_numbers__contains=word_capitalize) |
-                    Q(applicability__contains=word_capitalize) |
-                    Q(description__contains=word_capitalize) |
-                    Q(short_description__contains=word_capitalize) |
                     Q(name__contains=word) |
-                    Q(article__contains=word) |
-                    Q(brand__contains=word) |
-                    Q(cross_numbers__contains=word) |
-                    Q(applicability__contains=word) |
-                    Q(description__contains=word) |
-                    Q(short_description__contains=word)
+                    # Остальные поля - регистронезависимый поиск
+                    Q(article__icontains=word) |
+                    Q(brand__icontains=word) |
+                    Q(cross_numbers__icontains=word) |
+                    Q(applicability__icontains=word) |
+                    Q(description__icontains=word) |
+                    Q(short_description__icontains=word) |
+                    # Также пробуем iregex для надежности
+                    Q(article__iregex=word_escaped) |
+                    Q(brand__iregex=word_escaped) |
+                    Q(cross_numbers__iregex=word_escaped) |
+                    Q(applicability__iregex=word_escaped) |
+                    Q(description__iregex=word_escaped) |
+                    Q(short_description__iregex=word_escaped)
                 )
                 queryset = queryset.filter(word_q)
             
