@@ -366,15 +366,11 @@ class PublicPartnerCatalogView(ListView):
             # Для каждого слова создаём условие поиска
             # Используем AND - товар должен содержать ВСЕ слова из запроса
             for word in query_words:
-                # Для SQLite с кириллицей: используем комбинацию iregex и icontains
-                # Создаем варианты слова для максимального покрытия
-                word_escaped = re.escape(word)
-                word_upper = word.upper()
-                word_lower = word.lower()
-                
-                # Комбинация iregex (для кириллицы) и icontains (резервный вариант)
+                # Экранируем специальные символы для regex (как в розничном каталоге)
+                word_escaped = word.replace('\\', '\\\\').replace('(', '\\(').replace(')', '\\)').replace('[', '\\[').replace(']', '\\]')
+                # Используем комбинацию iregex и icontains (как в розничном каталоге)
                 word_q = (
-                    # iregex - работает лучше с кириллицей в SQLite
+                    # Используем iregex для регистронезависимого поиска (лучше работает с кириллицей в SQLite)
                     Q(name__iregex=word_escaped) |
                     Q(article__iregex=word_escaped) |
                     Q(brand__iregex=word_escaped) |
@@ -382,30 +378,14 @@ class PublicPartnerCatalogView(ListView):
                     Q(applicability__iregex=word_escaped) |
                     Q(description__iregex=word_escaped) |
                     Q(short_description__iregex=word_escaped) |
-                    # icontains - резервный вариант для случаев, когда iregex не работает
+                    # Резервный вариант с icontains (на случай проблем с regex)
                     Q(name__icontains=word) |
                     Q(article__icontains=word) |
                     Q(brand__icontains=word) |
                     Q(cross_numbers__icontains=word) |
                     Q(applicability__icontains=word) |
                     Q(description__icontains=word) |
-                    Q(short_description__icontains=word) |
-                    # Дополнительно ищем в верхнем регистре (на случай, если данные в верхнем регистре)
-                    Q(name__icontains=word_upper) |
-                    Q(article__icontains=word_upper) |
-                    Q(brand__icontains=word_upper) |
-                    Q(cross_numbers__icontains=word_upper) |
-                    Q(applicability__icontains=word_upper) |
-                    Q(description__icontains=word_upper) |
-                    Q(short_description__icontains=word_upper) |
-                    # И в нижнем регистре
-                    Q(name__icontains=word_lower) |
-                    Q(article__icontains=word_lower) |
-                    Q(brand__icontains=word_lower) |
-                    Q(cross_numbers__icontains=word_lower) |
-                    Q(applicability__icontains=word_lower) |
-                    Q(description__icontains=word_lower) |
-                    Q(short_description__icontains=word_lower)
+                    Q(short_description__icontains=word)
                 )
                 queryset = queryset.filter(word_q)
             
@@ -518,15 +498,11 @@ class PartnerCatalogView(PartnerRequiredMixin, ListView):
             # Для каждого слова создаём условие поиска
             # Используем AND - товар должен содержать ВСЕ слова из запроса
             for word in query_words:
-                # Для SQLite с кириллицей: используем комбинацию iregex и icontains
-                # Создаем варианты слова для максимального покрытия
-                word_escaped = re.escape(word)
-                word_upper = word.upper()
-                word_lower = word.lower()
-                
-                # Комбинация iregex (для кириллицы) и icontains (резервный вариант)
+                # Экранируем специальные символы для regex (как в розничном каталоге)
+                word_escaped = word.replace('\\', '\\\\').replace('(', '\\(').replace(')', '\\)').replace('[', '\\[').replace(']', '\\]')
+                # Используем комбинацию iregex и icontains (как в розничном каталоге)
                 word_q = (
-                    # iregex - работает лучше с кириллицей в SQLite
+                    # Используем iregex для регистронезависимого поиска (лучше работает с кириллицей в SQLite)
                     Q(name__iregex=word_escaped) |
                     Q(article__iregex=word_escaped) |
                     Q(brand__iregex=word_escaped) |
@@ -534,30 +510,14 @@ class PartnerCatalogView(PartnerRequiredMixin, ListView):
                     Q(applicability__iregex=word_escaped) |
                     Q(description__iregex=word_escaped) |
                     Q(short_description__iregex=word_escaped) |
-                    # icontains - резервный вариант для случаев, когда iregex не работает
+                    # Резервный вариант с icontains (на случай проблем с regex)
                     Q(name__icontains=word) |
                     Q(article__icontains=word) |
                     Q(brand__icontains=word) |
                     Q(cross_numbers__icontains=word) |
                     Q(applicability__icontains=word) |
                     Q(description__icontains=word) |
-                    Q(short_description__icontains=word) |
-                    # Дополнительно ищем в верхнем регистре (на случай, если данные в верхнем регистре)
-                    Q(name__icontains=word_upper) |
-                    Q(article__icontains=word_upper) |
-                    Q(brand__icontains=word_upper) |
-                    Q(cross_numbers__icontains=word_upper) |
-                    Q(applicability__icontains=word_upper) |
-                    Q(description__icontains=word_upper) |
-                    Q(short_description__icontains=word_upper) |
-                    # И в нижнем регистре
-                    Q(name__icontains=word_lower) |
-                    Q(article__icontains=word_lower) |
-                    Q(brand__icontains=word_lower) |
-                    Q(cross_numbers__icontains=word_lower) |
-                    Q(applicability__icontains=word_lower) |
-                    Q(description__icontains=word_lower) |
-                    Q(short_description__icontains=word_lower)
+                    Q(short_description__icontains=word)
                 )
                 queryset = queryset.filter(word_q)
             
