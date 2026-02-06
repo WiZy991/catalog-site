@@ -1,3 +1,4 @@
+import re
 from django.shortcuts import render, redirect, get_object_or_404
 from django.views.generic import TemplateView, ListView, DetailView, FormView, View
 from django.contrib.auth.views import LoginView, LogoutView
@@ -365,9 +366,10 @@ class PublicPartnerCatalogView(ListView):
             # Для каждого слова создаём условие поиска
             # Используем AND - товар должен содержать ВСЕ слова из запроса
             for word in query_words:
-                # Экранируем специальные символы для regex
-                word_escaped = word.replace('\\', '\\\\').replace('(', '\\(').replace(')', '\\)').replace('[', '\\[').replace(']', '\\]').replace('.', '\\.').replace('*', '\\*').replace('+', '\\+').replace('?', '\\?').replace('^', '\\^').replace('$', '\\$').replace('|', '\\|')
-                # Используем iregex для надежного регистронезависимого поиска (особенно важно для SQLite с кириллицей)
+                # Экранируем специальные символы для regex (минимальный набор)
+                word_escaped = re.escape(word)
+                # Используем iregex - это единственный надежный способ для SQLite с кириллицей
+                # iregex работает регистронезависимо и правильно обрабатывает кириллицу
                 word_q = (
                     Q(name__iregex=word_escaped) |
                     Q(article__iregex=word_escaped) |
@@ -488,9 +490,10 @@ class PartnerCatalogView(PartnerRequiredMixin, ListView):
             # Для каждого слова создаём условие поиска
             # Используем AND - товар должен содержать ВСЕ слова из запроса
             for word in query_words:
-                # Экранируем специальные символы для regex
-                word_escaped = word.replace('\\', '\\\\').replace('(', '\\(').replace(')', '\\)').replace('[', '\\[').replace(']', '\\]').replace('.', '\\.').replace('*', '\\*').replace('+', '\\+').replace('?', '\\?').replace('^', '\\^').replace('$', '\\$').replace('|', '\\|')
-                # Используем iregex для надежного регистронезависимого поиска (особенно важно для SQLite с кириллицей)
+                # Экранируем специальные символы для regex (минимальный набор)
+                word_escaped = re.escape(word)
+                # Используем iregex - это единственный надежный способ для SQLite с кириллицей
+                # iregex работает регистронезависимо и правильно обрабатывает кириллицу
                 word_q = (
                     Q(name__iregex=word_escaped) |
                     Q(article__iregex=word_escaped) |
