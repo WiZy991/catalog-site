@@ -366,9 +366,8 @@ class PublicPartnerCatalogView(ListView):
             # Для каждого слова создаём условие поиска
             # Используем AND - товар должен содержать ВСЕ слова из запроса
             for word in query_words:
-                # Экранируем специальные символы для regex (как в розничном каталоге)
+                # Точно такая же логика, как в розничном каталоге (catalog/views.py)
                 word_escaped = word.replace('\\', '\\\\').replace('(', '\\(').replace(')', '\\)').replace('[', '\\[').replace(']', '\\]')
-                # Используем комбинацию iregex и icontains (как в розничном каталоге)
                 word_q = (
                     # Используем iregex для регистронезависимого поиска (лучше работает с кириллицей в SQLite)
                     Q(name__iregex=word_escaped) |
@@ -498,9 +497,8 @@ class PartnerCatalogView(PartnerRequiredMixin, ListView):
             # Для каждого слова создаём условие поиска
             # Используем AND - товар должен содержать ВСЕ слова из запроса
             for word in query_words:
-                # Экранируем специальные символы для regex (как в розничном каталоге)
+                # Точно такая же логика, как в розничном каталоге (catalog/views.py)
                 word_escaped = word.replace('\\', '\\\\').replace('(', '\\(').replace(')', '\\)').replace('[', '\\[').replace(']', '\\]')
-                # Используем комбинацию iregex и icontains (как в розничном каталоге)
                 word_q = (
                     # Используем iregex для регистронезависимого поиска (лучше работает с кириллицей в SQLite)
                     Q(name__iregex=word_escaped) |
