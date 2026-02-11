@@ -78,8 +78,15 @@ def commerceml_exchange(request):
     import os
     from django.conf import settings
     log_file_path = os.path.join(settings.BASE_DIR, 'logs', 'commerceml_requests.log')
-    os.makedirs(os.path.dirname(log_file_path), exist_ok=True)
     
+    # Создаем директорию logs/ если её нет
+    logs_dir = os.path.dirname(log_file_path)
+    try:
+        os.makedirs(logs_dir, exist_ok=True)
+    except Exception as e:
+        logger.error(f"Ошибка создания директории logs/: {e}, BASE_DIR={settings.BASE_DIR}")
+    
+    # Логируем в файл
     try:
         with open(log_file_path, 'a', encoding='utf-8') as f:
             f.write(f"\n{'='*80}\n")
@@ -94,9 +101,15 @@ def commerceml_exchange(request):
             f.write(f"  IP: {client_ip}\n")
             f.write(f"  User-Agent: {request.META.get('HTTP_USER_AGENT', 'None')}\n")
             f.write(f"  Authorization header: {bool(request.META.get('HTTP_AUTHORIZATION'))}\n")
+            f.write(f"  Log file path: {log_file_path}\n")
+            f.write(f"  BASE_DIR: {settings.BASE_DIR}\n")
             f.write(f"{'='*80}\n")
+            f.flush()  # Принудительно записываем в файл
     except Exception as e:
-        logger.error(f"Ошибка записи в файл логов: {e}")
+        # Логируем ошибку и в logger, и в print для гарантии
+        error_msg = f"Ошибка записи в файл логов: {e}, путь: {log_file_path}, BASE_DIR: {settings.BASE_DIR}"
+        logger.error(error_msg)
+        print(f"ERROR: {error_msg}")
     
     # Логируем ВСЕ запросы, даже если они не к CommerceML
     # Используем print для гарантированного вывода (временное решение)
