@@ -75,6 +75,19 @@ def commerceml_exchange(request):
     client_ip = get_client_ip(request)
     
     # Логируем ВСЕ запросы, даже если они не к CommerceML
+    # Используем print для гарантированного вывода (временное решение)
+    print("=" * 80)
+    print(f"CommerceML запрос получен!")
+    print(f"  URL: {request.path}")
+    print(f"  Method: {request.method}")
+    print(f"  GET params: {dict(request.GET)}")
+    print(f"  Type: {exchange_type}")
+    print(f"  Mode: {mode}")
+    print(f"  Filename: {filename}")
+    print(f"  IP: {client_ip}")
+    print("=" * 80)
+    
+    # Также логируем через logger
     logger.info("=" * 80)
     logger.info(f"CommerceML запрос получен!")
     logger.info(f"  URL: {request.path}")

@@ -3,6 +3,7 @@ Middleware для логирования всех запросов к CommerceML
 """
 import logging
 
+# Используем тот же логгер, что и в commerceml_views
 logger = logging.getLogger('catalog.commerceml_views')
 
 

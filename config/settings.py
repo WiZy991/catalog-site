@@ -382,6 +382,22 @@ LOGGING = {
             'level': 'INFO',
             'propagate': False,
         },
+        'catalog.middleware': {
+            'handlers': ['file', 'console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        # Корневой логгер для всех запросов
+        'django': {
+            'handlers': ['file', 'console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+    },
+    # Корневой обработчик для всех логгеров
+    'root': {
+        'handlers': ['file', 'console'],
+        'level': 'INFO',
     },
 }
 
