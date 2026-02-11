@@ -50,6 +50,8 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    # Middleware для логирования CommerceML запросов
+    'catalog.middleware.CommerceMLLoggingMiddleware',
 ]
 
 ROOT_URLCONF = 'config.urls'
