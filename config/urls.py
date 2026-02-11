@@ -26,6 +26,15 @@ sitemaps = {
 }
 
 urlpatterns = [
+    # Стандартный протокол CommerceML 2 обмена с 1С (ОБЯЗАТЕЛЬНО ПЕРВЫМ!)
+    # ВАЖНО: Эти пути должны быть в самом начале списка для правильной работы
+    path('cml/exchange/', commerceml_views.commerceml_exchange, name='commerceml_exchange'),
+    path('cml/exchange', commerceml_views.commerceml_exchange, name='commerceml_exchange_no_slash'),  # Без слэша для совместимости
+    path('1c_exchange.php', commerceml_views.commerceml_exchange, name='commerceml_exchange_php'),
+    
+    # API для 1С
+    path('api/1c/', include('catalog.api_urls')),
+    
     # Кастомные админ-страницы (до admin/)
     path('admin/catalog/bulk-images/', bulk_image_upload, name='admin_bulk_image_upload'),
     path('admin/catalog/bulk-import/', bulk_product_import, name='admin_bulk_product_import'),
@@ -35,15 +44,6 @@ urlpatterns = [
     # Партнёрский импорт (оптовые товары)
     path('admin/partners/bulk-import/', bulk_wholesale_import, name='admin_bulk_wholesale_import'),
     path('admin/partners/wholesale-template/', download_wholesale_template, name='admin_download_wholesale_template'),
-    
-    # Стандартный протокол CommerceML 2 обмена с 1С (должен быть ДО других путей)
-    # ВАЖНО: Эти пути должны быть в начале списка для правильной работы
-    path('cml/exchange/', commerceml_views.commerceml_exchange, name='commerceml_exchange'),
-    path('cml/exchange', commerceml_views.commerceml_exchange, name='commerceml_exchange_no_slash'),  # Без слэша для совместимости
-    path('1c_exchange.php', commerceml_views.commerceml_exchange, name='commerceml_exchange_php'),
-    
-    # API для 1С
-    path('api/1c/', include('catalog.api_urls')),
     
     path('admin/', admin.site.urls),
     path('', include('core.urls')),
