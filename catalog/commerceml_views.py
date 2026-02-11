@@ -77,17 +77,41 @@ def commerceml_exchange(request):
     # КРИТИЧЕСКОЕ ЛОГИРОВАНИЕ - записываем в файл напрямую для гарантии
     import os
     from django.conf import settings
+    
+    # Определяем путь к файлу логов
     log_file_path = os.path.join(settings.BASE_DIR, 'logs', 'commerceml_requests.log')
+    logs_dir = os.path.dirname(log_file_path)
+    
+    # Логируем информацию о путях в logger (это точно сработает)
+    logger.info(f"CommerceML LOG: BASE_DIR={settings.BASE_DIR}")
+    logger.info(f"CommerceML LOG: logs_dir={logs_dir}")
+    logger.info(f"CommerceML LOG: log_file_path={log_file_path}")
+    logger.info(f"CommerceML LOG: logs_dir exists={os.path.exists(logs_dir)}")
+    logger.info(f"CommerceML LOG: logs_dir is writable={os.access(logs_dir, os.W_OK) if os.path.exists(logs_dir) else 'N/A'}")
     
     # Создаем директорию logs/ если её нет
-    logs_dir = os.path.dirname(log_file_path)
     try:
         os.makedirs(logs_dir, exist_ok=True)
+        logger.info(f"CommerceML LOG: Директория logs/ создана или уже существует")
     except Exception as e:
-        logger.error(f"Ошибка создания директории logs/: {e}, BASE_DIR={settings.BASE_DIR}")
+        error_msg = f"Ошибка создания директории logs/: {e}, BASE_DIR={settings.BASE_DIR}, logs_dir={logs_dir}"
+        logger.error(error_msg)
+        print(f"ERROR: {error_msg}")
     
     # Логируем в файл
     try:
+        # Проверяем, можем ли мы записать в файл
+        if os.path.exists(logs_dir):
+            test_file = os.path.join(logs_dir, 'test_write.tmp')
+            try:
+                with open(test_file, 'w') as f:
+                    f.write('test')
+                os.remove(test_file)
+                logger.info(f"CommerceML LOG: Проверка записи в logs/ прошла успешно")
+            except Exception as test_e:
+                logger.error(f"CommerceML LOG: НЕ МОЖЕМ записать в logs/: {test_e}")
+        
+        # Пытаемся записать в файл логов
         with open(log_file_path, 'a', encoding='utf-8') as f:
             f.write(f"\n{'='*80}\n")
             f.write(f"{timezone.now().strftime('%Y-%m-%d %H:%M:%S')} - CommerceML запрос получен!\n")
@@ -105,10 +129,14 @@ def commerceml_exchange(request):
             f.write(f"  BASE_DIR: {settings.BASE_DIR}\n")
             f.write(f"{'='*80}\n")
             f.flush()  # Принудительно записываем в файл
+            os.fsync(f.fileno())  # Синхронизируем с диском
+        logger.info(f"CommerceML LOG: Файл успешно записан: {log_file_path}")
+        logger.info(f"CommerceML LOG: Файл существует: {os.path.exists(log_file_path)}")
+        logger.info(f"CommerceML LOG: Размер файла: {os.path.getsize(log_file_path) if os.path.exists(log_file_path) else 'N/A'}")
     except Exception as e:
         # Логируем ошибку и в logger, и в print для гарантии
-        error_msg = f"Ошибка записи в файл логов: {e}, путь: {log_file_path}, BASE_DIR: {settings.BASE_DIR}"
-        logger.error(error_msg)
+        error_msg = f"Ошибка записи в файл логов: {e}, путь: {log_file_path}, BASE_DIR: {settings.BASE_DIR}, logs_dir: {logs_dir}"
+        logger.error(error_msg, exc_info=True)
         print(f"ERROR: {error_msg}")
     
     # Логируем ВСЕ запросы, даже если они не к CommerceML
