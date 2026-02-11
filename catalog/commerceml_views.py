@@ -120,18 +120,27 @@ def handle_checkauth(request):
     - имя Cookie
     - значение Cookie
     """
+    logger.info("handle_checkauth вызван")
+    
     # Проверяем базовую HTTP авторизацию
     if not check_basic_auth(request):
+        logger.warning("Ошибка авторизации в checkauth")
         return HttpResponse('failure\nОшибка авторизации', status=401)
+    
+    logger.info("Авторизация успешна, создаем сессию")
     
     # Генерируем Cookie для сессии
     import secrets
     cookie_name = '1c_exchange_session'
     cookie_value = secrets.token_urlsafe(32)
     
+    logger.info(f"Создана сессия: {cookie_value[:20]}...")
+    
     # Сохраняем сессию (можно использовать кеш или БД)
     from django.core.cache import cache
     cache.set(f'1c_session_{cookie_value}', True, timeout=3600)  # 1 час
+    
+    logger.info("Сессия сохранена в кеш, отправляем ответ")
     
     response = HttpResponse('success\n{}\n{}'.format(cookie_name, cookie_value))
     response.set_cookie(cookie_name, cookie_value, max_age=3600)
@@ -158,11 +167,16 @@ def handle_init(request):
     - zip=yes или zip=no
     - file_limit=<число>
     """
+    logger.info("handle_init вызван")
+    
     if not check_session_cookie(request):
+        logger.warning("Сессия недействительна в init")
         return HttpResponse('failure\nСессия недействительна', status=401)
     
+    logger.info("Сессия валидна, отправляем параметры")
     zip_support = 'yes' if SUPPORT_ZIP else 'no'
     response_text = f'zip={zip_support}\nfile_limit={FILE_LIMIT}'
+    logger.info(f"Отправляем параметры: {response_text}")
     return HttpResponse(response_text)
 
 
