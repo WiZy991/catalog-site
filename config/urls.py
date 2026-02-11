@@ -37,6 +37,7 @@ urlpatterns = [
     path('admin/partners/wholesale-template/', download_wholesale_template, name='admin_download_wholesale_template'),
     
     # Стандартный протокол CommerceML 2 обмена с 1С (должен быть ДО других путей)
+    # ВАЖНО: Эти пути должны быть в начале списка для правильной работы
     path('cml/exchange/', commerceml_views.commerceml_exchange, name='commerceml_exchange'),
     path('cml/exchange', commerceml_views.commerceml_exchange, name='commerceml_exchange_no_slash'),  # Без слэша для совместимости
     path('1c_exchange.php', commerceml_views.commerceml_exchange, name='commerceml_exchange_php'),
