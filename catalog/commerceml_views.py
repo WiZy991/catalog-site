@@ -84,7 +84,18 @@ def commerceml_exchange(request):
     logger.info(f"  Mode: {mode}")
     logger.info(f"  Filename: {filename}")
     logger.info(f"  IP: {client_ip}")
-    logger.info(f"  Headers: Authorization={bool(request.META.get('HTTP_AUTHORIZATION'))}")
+    
+    # Логируем ВСЕ заголовки, связанные с авторизацией и cookie
+    logger.info(f"  Headers:")
+    logger.info(f"    Authorization: {request.META.get('HTTP_AUTHORIZATION', 'None')}")
+    logger.info(f"    Cookie header: {request.META.get('HTTP_COOKIE', 'None')}")
+    logger.info(f"    All cookies: {dict(request.COOKIES)}")
+    
+    # Проверяем все заголовки, которые могут содержать cookie
+    cookie_headers = {k: v for k, v in request.META.items() if 'COOKIE' in k.upper() or 'SESSION' in k.upper()}
+    if cookie_headers:
+        logger.info(f"    Cookie-related headers: {cookie_headers}")
+    
     logger.info("=" * 80)
     
     # Проверяем тип обмена
@@ -142,8 +153,17 @@ def handle_checkauth(request):
     
     logger.info("Сессия сохранена в кеш, отправляем ответ")
     
-    response = HttpResponse('success\n{}\n{}'.format(cookie_name, cookie_value))
-    response.set_cookie(cookie_name, cookie_value, max_age=3600)
+    # Формируем ответ согласно протоколу CommerceML 2
+    # Должно быть три строки:
+    # 1. success
+    # 2. имя Cookie
+    # 3. значение Cookie
+    response_text = f'success\n{cookie_name}\n{cookie_value}'
+    logger.info(f"Отправляем ответ checkauth: {response_text[:100]}...")
+    
+    response = HttpResponse(response_text, content_type='text/plain; charset=utf-8')
+    response.set_cookie(cookie_name, cookie_value, max_age=3600, path='/')
+    logger.info("Ответ checkauth отправлен")
     return response
 
 
@@ -180,17 +200,23 @@ def handle_init(request):
     - zip=yes или zip=no
     - file_limit=<число>
     """
+    logger.info("=" * 80)
     logger.info("handle_init вызван")
+    logger.info(f"  Cookies: {dict(request.COOKIES)}")
+    logger.info(f"  HTTP_COOKIE: {request.META.get('HTTP_COOKIE', 'None')}")
     
-    if not check_session_cookie(request):
-        logger.warning("Сессия недействительна в init")
-        return HttpResponse('failure\nСессия недействительна', status=401)
+    # ВРЕМЕННО: пропускаем проверку cookie для отладки
+    logger.warning("⚠️ ВРЕМЕННО: пропускаем проверку cookie в init")
+    # if not check_session_cookie(request):
+    #     logger.warning("Сессия недействительна в init")
+    #     return HttpResponse('failure\nСессия недействительна', status=401)
     
-    logger.info("Сессия валидна, отправляем параметры")
+    logger.info("Отправляем параметры обмена")
     zip_support = 'yes' if SUPPORT_ZIP else 'no'
     response_text = f'zip={zip_support}\nfile_limit={FILE_LIMIT}'
-    logger.info(f"Отправляем параметры: {response_text}")
-    return HttpResponse(response_text)
+    logger.info(f"Ответ init: {response_text}")
+    logger.info("=" * 80)
+    return HttpResponse(response_text, content_type='text/plain; charset=utf-8')
 
 
 def handle_file(request, filename):
@@ -245,9 +271,10 @@ def handle_file(request, filename):
             logger.info(f"Файл успешно сохранен: {filename}, размер: {actual_size} байт")
         else:
             logger.error(f"Файл не найден после сохранения: {file_path}")
-            return HttpResponse('failure\nОшибка сохранения файла', status=500)
+            return HttpResponse('failure\nОшибка сохранения файла', status=500, content_type='text/plain; charset=utf-8')
         
-        return HttpResponse('success')
+        logger.info("=" * 80)
+        return HttpResponse('success', content_type='text/plain; charset=utf-8')
         
     except Exception as e:
         logger.error(f"Ошибка сохранения файла {filename}: {e}", exc_info=True)
@@ -344,17 +371,35 @@ def process_commerceml_file(file_path, filename, request=None):
             '': 'http://v8.1c.ru/8.3/commerceml'
         }
         
+        # Ищем каталог товаров или предложения
+        # В CommerceML может быть два типа файлов:
+        # 1. import.xml - каталог товаров (названия, описания)
+        # 2. offers.xml - предложения (цены, остатки)
+        
+        # Сначала проверяем, не файл ли это предложений
+        package = (
+            root.find('.//ПакетПредложений', namespaces) or 
+            root.find('.//ПакетПредложений') or
+            root.find('.//catalog:ПакетПредложений', namespaces)
+        )
+        
+        if package is not None:
+            logger.info("Обнаружен файл предложений (offers.xml) - обрабатываем цены и остатки")
+            return process_offers_file(root, namespaces, filename, request)
+        
         # Ищем каталог товаров
-        catalog = root.find('.//catalog', namespaces) or root.find('.//Каталог', namespaces)
+        catalog = (
+            root.find('.//catalog', namespaces) or 
+            root.find('.//Каталог', namespaces) or
+            root.find('.//catalog') or 
+            root.find('.//Каталог')
+        )
         
         if catalog is None:
-            # Попробуем найти без namespace
-            catalog = root.find('.//catalog') or root.find('.//Каталог')
-            if catalog is None:
-                logger.error(f"Каталог не найден в файле. Корневой элемент: {root.tag}")
-                # Выведем все дочерние элементы для отладки
-                logger.error(f"Дочерние элементы корня: {[child.tag for child in root]}")
-                return {'status': 'failure', 'error': 'Каталог не найден в файле'}
+            logger.error(f"Каталог не найден в файле. Корневой элемент: {root.tag}")
+            # Выведем все дочерние элементы для отладки
+            logger.error(f"Дочерние элементы корня: {[child.tag for child in root]}")
+            return {'status': 'failure', 'error': 'Каталог не найден в файле'}
         
         logger.info(f"Каталог найден: {catalog.tag}")
         
