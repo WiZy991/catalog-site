@@ -81,6 +81,14 @@ DATABASES = {
     }
 }
 
+# Cache (необходимо для сохранения сессий 1С)
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'unique-snowflake',
+    }
+}
+
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
     {

@@ -152,11 +152,23 @@ def check_session_cookie(request):
     cookie_name = '1c_exchange_session'
     cookie_value = request.COOKIES.get(cookie_name)
     
+    logger.info(f"Проверка cookie: есть={bool(cookie_value)}, значение={cookie_value[:20] if cookie_value else 'None'}...")
+    
     if not cookie_value:
+        logger.warning("Cookie не передана в запросе")
         return False
     
     from django.core.cache import cache
-    return cache.get(f'1c_session_{cookie_value}') is not None
+    session_exists = cache.get(f'1c_session_{cookie_value}') is not None
+    logger.info(f"Сессия в кеше: {session_exists}")
+    
+    # ВРЕМЕННО: если кеш не работает, разрешаем доступ (только для отладки!)
+    if not session_exists:
+        logger.warning("Сессия не найдена в кеше, но разрешаем доступ для отладки")
+        # Раскомментируйте следующую строку, если кеш не работает:
+        # return True
+    
+    return session_exists
 
 
 def handle_init(request):
