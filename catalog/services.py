@@ -340,9 +340,19 @@ def extract_article(text):
 def parse_product_name(name):
     """
     Парсит название товара и извлекает данные.
-    Возвращает словарь с полями: brand, article, category, clean_name, oem_number, applicability
+    Возвращает словарь с полями: brand, article, category, clean_name, oem_number, applicability, characteristics
     
-    Поддерживает формат: "Амортизатор DAIHATSU 332120 /48510-B1020 M300/M301 F/R/L 2WD"
+    Поддерживает 4 типа номенклатуры:
+    1. Наименование и размер: "Газлифт 20*450"
+       - Извлекает: размер (20*450) → characteristics
+    2. Характеристика с одним OEM: "Клапан VVTI TOYOTA 15330-20010 1MZFE"
+       - Извлекает: бренд (TOYOTA), OEM (15330-20010) → article и cross_numbers, применимость (1MZFE)
+    3. Характеристика с фирменным артикулом и OEM: "Диск сцепления TOYOTA TYD150U 31250-25160 1KDFTV 260*170*10*29"
+       - Извлекает: бренд (TOYOTA), артикул (TYD150U) → article, OEM (31250-25160) → cross_numbers, 
+         применимость (1KDFTV), размер (260*170*10*29) → characteristics
+    4. Характеристика с двумя фирменными артикулами и OEM: "Свеча зажигания DENSO IK16#4(5303#4)/BKR5EIX-11(5464) 90919-01209 1GFE IRIDIUM"
+       - Извлекает: бренд (DENSO), артикулы (IK16#4(5303#4)/BKR5EIX-11(5464)) → article, 
+         OEM (90919-01209) → cross_numbers, применимость (1GFE), материал (IRIDIUM) → characteristics
     """
     result = {
         'brand': None,
@@ -351,6 +361,7 @@ def parse_product_name(name):
         'clean_name': name,
         'oem_number': None,
         'applicability': None,
+        'characteristics': None,
     }
     
     # Определяем категорию
@@ -359,175 +370,301 @@ def parse_product_name(name):
     # Определяем бренд
     result['brand'] = detect_brand(name)
     
-    # Ищем OEM номер (формат: /48510-B1020 или /51601-S5P-G03 или /02255)
-    # В формате клиента: "Амортизатор, DAIHATSU 332120 /48510-B1020 M300/M301..."
-    # Или: "Катушка зажигания, TOYOTA 90919-A2002 / 02255 2GR#"
-    # Или: "Катушка зажигания, HONDA 30520-PAA-A01 / 30520 PAA A01" (OEM может быть разделен пробелами)
-    # OEM номер - это код после последнего слеша, обычно короткий (4-6 символов) или с дефисом
-    # Находим все слеши и берем OEM после последнего слеша
-    slash_positions = [i for i, char in enumerate(name) if char == '/']
-    if slash_positions:
-        # Берем последний слеш
-        last_slash_pos = slash_positions[-1]
-        after_last_slash = name[last_slash_pos + 1:].strip()
-        
-        # Сначала пробуем найти OEM номер как единое целое (до первого пробела)
-        oem_match = re.match(r'^([A-Z0-9\-]{3,20})(?:\s|$)', after_last_slash)
-        if oem_match:
-            oem_candidate = oem_match.group(1)
-            # Проверяем, что это не слишком длинное (не применимость)
-            # OEM обычно короче 20 символов и не содержит пробелов
-            if len(oem_candidate) <= 20 and ' ' not in oem_candidate:
-                # Дополнительно отфильтровываем коды двигателей (1NZFE, 2ZR-FE и т.п.)
-                engine_pattern = re.compile(r'^\d?[A-Z]{2,4}-?F[E|D]$', re.IGNORECASE)
-                if not engine_pattern.match(oem_candidate):
-                    result['oem_number'] = oem_candidate
-        
-        # Если не нашли единый OEM, пробуем найти разделенный пробелами (для HONDA и других)
-        # Формат: "30520 PAA A01" или "30520-PAA-A01" (может быть разделен)
-        if not result['oem_number']:
-            # Ищем паттерн: несколько групп букв/цифр, разделенных пробелами или дефисами
-            # Обычно это 2-4 группы по 2-6 символов каждая
-            oem_parts_match = re.match(r'^([A-Z0-9]{3,6}(?:[\s\-][A-Z0-9]{2,6}){0,3})', after_last_slash)
-            if oem_parts_match:
-                oem_candidate = oem_parts_match.group(1)
-                # Убираем пробелы и дефисы для проверки
-                oem_clean = re.sub(r'[\s\-]', '', oem_candidate)
-                # Проверяем, что общая длина разумная (6-20 символов)
-                if 6 <= len(oem_clean) <= 20:
-                    # Сохраняем OEM номер с дефисами (если были) или без пробелов
-                    # Если были дефисы, сохраняем с дефисами, иначе убираем пробелы
-                    if '-' in oem_candidate:
-                        result['oem_number'] = oem_candidate.replace(' ', '-')
-                    else:
-                        result['oem_number'] = oem_candidate.replace(' ', '')
-        
-        # Специальная обработка для Nissan OEM номеров
-        # Nissan OEM часто имеет формат: 22620-AA000, 16546-ED00A и т.д.
-        if not result['oem_number'] and result.get('brand', '').upper() == 'NISSAN':
-            nissan_oem_match = re.match(r'^(\d{5}-[A-Z]{1,2}\d{3}[A-Z]?)(?:\s|$)', after_last_slash)
-            if nissan_oem_match:
-                result['oem_number'] = nissan_oem_match.group(1)
+    # Ищем OEM номер в разных форматах
+    # Форматы OEM: 15330-20010, 31250-25160, 90919-01209, 48510-B1020, 51601-S5P-G03
+    # Паттерн: 5 цифр + дефис + 5 цифр/букв (Toyota/Nissan/Honda стиль)
+    # Или: 5 цифр + дефис + буквы + цифры (Nissan стиль: 22620-AA000)
     
-    # Извлекаем артикул
-    # ПРИОРИТЕТ: Если есть OEM номер, используем его как артикул (код детали)
-    # Для брендов TOYO/GUT формат: TT-124, TU-1210, GUT-25 (буквы-дефис-цифры)
-    # Для других брендов: 6-значное число после бренда, перед OEM номером
+    # Сначала ищем стандартный формат OEM: 5 цифр-5 цифр или 5 цифр-буквы-цифры
+    oem_patterns = [
+        r'\b(\d{5}-\d{5})\b',  # Toyota/Honda: 15330-20010, 31250-25160, 90919-01209
+        r'\b(\d{5}-[A-Z]{1,2}\d{3}[A-Z]?)\b',  # Nissan: 22620-AA000, 16546-ED00A
+        r'\b(\d{5}-[A-Z0-9]{3,6})\b',  # Общий формат: 48510-B1020, 51601-S5P-G03
+    ]
     
-    # Если есть OEM номер, используем его как артикул (код детали)
-    if result.get('oem_number'):
-        result['article'] = result['oem_number']
-    else:
-        # Если OEM номера нет, ищем артикул производителя
-        if result['brand']:
-            brand_upper = result['brand'].upper()
-            brand_escaped = re.escape(result['brand'])
+    for pattern in oem_patterns:
+        oem_matches = re.findall(pattern, name)
+        if oem_matches:
+            # Берем последний найденный OEM (обычно он идет после артикулов)
+            oem_candidate = oem_matches[-1]
+            # Проверяем, что это не часть артикула или другого кода
+            # OEM обычно не содержит специальных символов кроме дефиса
+            if re.match(r'^\d{5}-[A-Z0-9\-]{3,10}$', oem_candidate, re.IGNORECASE):
+                result['oem_number'] = oem_candidate.upper()
+                break
+    
+    # Если не нашли через паттерны, пробуем найти после слеша (старый формат)
+    if not result['oem_number']:
+        slash_positions = [i for i, char in enumerate(name) if char == '/']
+        if slash_positions:
+            # Берем последний слеш
+            last_slash_pos = slash_positions[-1]
+            after_last_slash = name[last_slash_pos + 1:].strip()
             
+            # Ищем OEM номер как единое целое (до первого пробела)
+            oem_match = re.match(r'^([A-Z0-9\-]{3,20})(?:\s|$)', after_last_slash)
+            if oem_match:
+                oem_candidate = oem_match.group(1)
+                if len(oem_candidate) <= 20 and ' ' not in oem_candidate:
+                    engine_pattern = re.compile(r'^\d?[A-Z]{2,4}-?F[E|D]$', re.IGNORECASE)
+                    if not engine_pattern.match(oem_candidate):
+                        result['oem_number'] = oem_candidate
+    
+    # Извлекаем фирменный артикул производителя
+    # ЛОГИКА для 4 типов номенклатуры:
+    # Тип 1: "Газлифт 20*450" - артикула нет
+    # Тип 2: "Клапан VVTI TOYOTA 15330-20010 1MZFE" - артикула нет, только OEM
+    # Тип 3: "Диск сцепления TOYOTA TYD150U 31250-25160" - фирменный артикул TYD150U
+    # Тип 4: "Свеча зажигания DENSO IK16#4(5303#4)/BKR5EIX-11(5464) 90919-01209" - два артикула через слеш
+    
+    if result['brand']:
+        brand_upper = result['brand'].upper()
+        brand_escaped = re.escape(result['brand'])
+        
+        # Ищем фирменный артикул после бренда, перед OEM номером
+        # Формат: БРЕНД [АРТИКУЛ] OEM
+        if result.get('oem_number'):
+            # Если есть OEM, ищем артикул между брендом и OEM
+            brand_pos = name.upper().find(brand_upper)
+            if brand_pos != -1:
+                after_brand = name[brand_pos + len(result['brand']):].strip()
+                # Ищем позицию OEM номера
+                oem_pos = after_brand.upper().find(result['oem_number'].upper())
+                if oem_pos > 0:
+                    # Между брендом и OEM должен быть артикул
+                    article_part = after_brand[:oem_pos].strip()
+                    
+                    # Паттерны для фирменных артикулов (в порядке приоритета)
+                    article_patterns = [
+                        # Тип 4: Два артикула через слеш с скобками: IK16#4(5303#4)/BKR5EIX-11(5464)
+                        r'\b([A-Z0-9#\-]+(?:\([A-Z0-9#\-]+\))?/[A-Z0-9#\-]+(?:\([A-Z0-9#\-]+\))?)\b',
+                        # Тип 4: Два артикула через слеш без скобок: IK16#4/BKR5EIX-11
+                        r'\b([A-Z0-9#\-]+/[A-Z0-9#\-]+)\b',
+                        # Тип 3: Артикул с скобками: IK16#4(5303#4)
+                        r'\b([A-Z]{2,8}\d{0,4}[A-Z0-9#\-]*\([A-Z0-9#\-]+\))\b',
+                        # Тип 3: Простой артикул: TYD150U, IK16#4, BKR5EIX-11
+                        r'\b([A-Z]{2,8}\d{0,4}[A-Z0-9#\-]{0,10})\b',
+                    ]
+                    
+                    for pattern in article_patterns:
+                        article_match = re.search(pattern, article_part, re.IGNORECASE)
+                        if article_match:
+                            candidate = article_match.group(1).strip()
+                            # Проверяем, что это не OEM номер (OEM обычно 5 цифр-5 цифр)
+                            if not re.match(r'^\d{5}-\d{5}$', candidate):
+                                # Проверяем, что это не код двигателя
+                                if not re.match(r'^\d?[A-Z]{2,4}-?F[E|D]$', candidate, re.IGNORECASE):
+                                    result['article'] = candidate.upper()
+                                    break
+        
+        # Если не нашли через OEM, ищем стандартные форматы
+        if not result['article']:
             # Для TOYO, GMB, FEBEST и подобных - ищем артикул типа TT-124, TU-1210, GUT-25
             if brand_upper in ['TOYO', 'GMB', 'FEBEST', 'ASAKASHI', 'MASUMA', 'GUT', 'GKN']:
-                # Ищем паттерн: бренд + пробел + артикул (2-3 буквы + дефис + цифры)
                 toyo_article_match = re.search(rf'\b{brand_escaped}\s+([A-Z]{{2,3}}-\d{{1,4}})\b', name, re.IGNORECASE)
                 if toyo_article_match:
                     result['article'] = toyo_article_match.group(1).upper()
             
-            # Если не нашли TOYO-стиль, ищем стандартный формат: бренд + число (6 цифр)
+            # Ищем формат: бренд + пробел + артикул (буквы+цифры, может быть с дефисом, #, скобками)
             if not result['article']:
-                article_match = re.search(rf'\b{brand_escaped}[,\s]+(\d{{6}})\b', name, re.IGNORECASE)
-                if article_match:
-                    result['article'] = article_match.group(1)
-            
-            # Для брендов с длинными артикулами (например, TOYOTA 90919-A2002)
-            if not result['article']:
-                # Ищем формат: бренд + пробел + 5 цифр + дефис + буквы/цифры
-                long_article_match = re.search(rf'\b{brand_escaped}[,\s]+(\d{{5}}-[A-Z0-9]{{3,6}})\b', name, re.IGNORECASE)
-                if long_article_match:
-                    result['article'] = long_article_match.group(1).upper()
-
-        # Если не нашли через бренд, ищем TOYO-стиль артикул (TT-124, TU-1210) сразу после запятой
-        if not result['article']:
-            # Ищем формат "Крестовина, TOYO TT-124" - артикул типа XX-NNN сразу после бренда
-            toyo_pattern = re.search(r'\b(TOYO|GMB|FEBEST|GUT)\s+([A-Z]{2,3}-\d{1,4})\b', name, re.IGNORECASE)
-            if toyo_pattern:
-                result['article'] = toyo_pattern.group(2).upper()
+                # Паттерн: бренд + пробел + артикул (2-30 символов: буквы, цифры, дефисы, #, скобки, слеши)
+                brand_article_match = re.search(rf'\b{brand_escaped}\s+([A-Z0-9#\-\(\)/]{{2,30}})\b', name, re.IGNORECASE)
+                if brand_article_match:
+                    candidate = brand_article_match.group(1).strip()
+                    # Проверяем, что это не OEM номер (5 цифр-5 цифр)
+                    if not re.match(r'^\d{5}-\d{5}$', candidate):
+                        # Проверяем, что это не код двигателя
+                        if not re.match(r'^\d?[A-Z]{2,4}-?F[E|D]$', candidate, re.IGNORECASE):
+                            # Проверяем, что это похоже на артикул (содержит буквы)
+                            if re.search(r'[A-Z]', candidate, re.IGNORECASE):
+                                result['article'] = candidate.upper()
+    
+    # Если не нашли фирменный артикул, используем OEM как артикул (код детали)
+    # Это для типов 1 и 2, где нет фирменного артикула
+    if not result['article'] and result.get('oem_number'):
+        result['article'] = result['oem_number']
+    
+    # Если все еще не нашли, пробуем стандартные методы
+    if not result['article']:
+        # Ищем 6-значные числа
+        article_matches = re.findall(r'\b(\d{6})\b', name)
+        if article_matches:
+            for match in reversed(article_matches):
+                if match not in ['202512', '202518', '202425']:
+                    result['article'] = match
+                    break
         
-        # Если не нашли, ищем 6-значные числа до слеша
-        if not result['article']:
-            before_oem = name.split('/')[0] if '/' in name else name
-            # Ищем 6-значные числа (формат артикулов в файле клиента: 332120, 333433 и т.д.)
-            article_matches = re.findall(r'\b(\d{6})\b', before_oem)
-            if article_matches:
-                # Берем последнее найденное число (обычно это артикул, а не часть модели)
-                for match in reversed(article_matches):
-                    # Исключаем числа, которые могут быть частью других кодов
-                    if match not in ['202512', '202518', '202425']:  # Исключаем даты
-                        result['article'] = match
-                        break
-        
-        # Если все еще не нашли, пробуем стандартный метод
+        # Последняя попытка - стандартный метод
         if not result['article']:
             result['article'] = extract_article(name)
     
-    # Извлекаем применимость
-    # Паттерн для кодов двигателей: 1ZRFE, 2ZRFE, 1NZ-FE, 4M40, LD20, RD28 и т.д.
+    # Извлекаем применимость (коды двигателей, модели и т.д.)
+    # Паттерн для кодов двигателей: 1MZFE, 1KDFTV, 1GFE, 1ZRFE, 2ZRFE, 1NZ-FE, 4M40, LD20, RD28 и т.д.
     engine_pattern = r'\b(\d?[A-Z]{1,3}\d?[A-Z]{0,3}-?[A-Z]{0,2}\d{0,2}[A-Z]?)\b'
-    
-    # Ищем связки через слеш типа "1ZRFE/2ZRFE" или "LD20/RD28"
-    # Это обычно двигатели или кузова
-    slash_groups = re.findall(r'([A-Z0-9#\-]+(?:/[A-Z0-9#\-]+)+)', name)
     
     applicability_parts = []
     
+    # Ищем коды двигателей (формат: 1MZFE, 1KDFTV, 1GFE и т.д.)
+    # Обычно они идут после OEM номера или в конце названия
+    engine_matches = re.findall(r'\b(\d[A-Z]{2,5}[A-Z]?)\b', name, re.IGNORECASE)
+    for eng in engine_matches:
+        eng_upper = eng.upper()
+        # Проверяем, что это не часть артикула или OEM номера
+        if (eng_upper not in (result.get('article') or '').upper() and 
+            eng_upper not in (result.get('oem_number') or '').upper() and
+            len(eng_upper) >= 3 and len(eng_upper) <= 8):
+            # Проверяем, что это похоже на код двигателя (содержит и буквы, и цифры)
+            if re.search(r'[A-Z]', eng_upper) and re.search(r'\d', eng_upper):
+                applicability_parts.append(eng_upper)
+    
+    # Ищем связки через слеш типа "1ZRFE/2ZRFE" или "LD20/RD28"
+    # Но исключаем артикулы типа "IK16#4(5303#4)/BKR5EIX-11(5464)"
+    slash_groups = re.findall(r'([A-Z0-9#\-]+(?:/[A-Z0-9#\-]+)+)', name)
+    
     for group in slash_groups:
+        # Проверяем, что это не артикул (артикулы обычно содержат #, скобки или длинные)
+        # Артикулы типа IK16#4(5303#4)/BKR5EIX-11(5464) содержат # или скобки
+        if '#' in group or '(' in group:
+            continue
         # Проверяем, что это не артикул (артикулы обычно содержат 5+ цифр подряд)
         if not re.search(r'\d{5,}', group):
-            # Это группа типа "1ZRFE/2ZRFE" или "M300/M301"
             parts = group.split('/')
             # Проверяем, похоже ли это на коды двигателей/кузовов
             is_applicability = all(
-                re.match(r'^[A-Z0-9#\-]{2,15}$', p, re.IGNORECASE) 
+                re.match(r'^[A-Z0-9\-]{2,8}$', p, re.IGNORECASE) 
                 for p in parts
             )
             if is_applicability and len(parts) >= 2:
-                # Добавляем все части через запятую
-                applicability_parts.extend(parts)
+                applicability_parts.extend([p.upper() for p in parts])
     
-    # Также ищем отдельные коды двигателей в конце названия
-    # Формат: "... 1ZRFE/2ZRFE" или "... LD20/RD28"
-    end_engines = re.findall(r'\b(\d[A-Z]{1,2}\d?[A-Z]{1,3}[-]?[A-Z]{0,2})\b', name)
-    for eng in end_engines:
-        if eng not in applicability_parts and len(eng) >= 3:
-            # Проверяем что это не часть артикула
-            if not any(eng in (result.get('article') or '') for _ in [1]):
-                applicability_parts.append(eng)
-    
-    # Если нашли применимость из слешей
+    # Убираем дубликаты, сохраняя порядок
     if applicability_parts:
-        # Убираем дубликаты, сохраняя порядок
         seen = set()
         unique_parts = []
         for p in applicability_parts:
             p_upper = p.upper()
-            if p_upper not in seen and p_upper != result.get('article', '').upper():
+            if p_upper not in seen:
                 seen.add(p_upper)
                 unique_parts.append(p)
         if unique_parts:
             result['applicability'] = ', '.join(unique_parts)
     
-    # Старая логика как fallback - для формата "/OEM APPLICABILITY"
-    if not result.get('applicability') and '/' in name:
-        parts = name.split('/', 1)
-        if len(parts) > 1:
-            after_slash = parts[1].strip()
-            # Находим конец OEM номера (первый пробел после слеша)
-            oem_end_match = re.search(r'^([A-Z0-9\-]+)\s+', after_slash)
-            if oem_end_match:
-                # Берем все что после OEM номера
-                applicability_part = after_slash[len(oem_end_match.group(0)):].strip()
-                # Очищаем от служебных слов
-                applicability_part = re.sub(r'\b(НОВЫЙ|NEW)\b', '', applicability_part, flags=re.IGNORECASE)
-                applicability_part = applicability_part.strip()
-                if applicability_part:
-                    result['applicability'] = applicability_part
+    # Извлекаем характеристики (размеры, вольтаж, материал и т.д.)
+    # Характеристики обычно идут в конце названия, после применимости
+    characteristics_parts = []
+    name_upper = name.upper()  # Используем для поиска, не изменяем исходную строку
+    
+    # Ищем размеры (формат: 20*450, 260*170*10*29, 20x450)
+    # Паттерн: числа через * или x
+    size_pattern = r'\b(\d+(?:\*|x)\d+(?:(?:\*|x)\d+)*)\b'
+    size_matches = re.findall(size_pattern, name)
+    for size in size_matches:
+        # Проверяем, что это не часть артикула или OEM
+        size_upper = size.upper()
+        if (size_upper not in (result.get('article') or '').upper() and
+            size_upper not in (result.get('oem_number') or '').upper()):
+            characteristics_parts.append(f"Размер: {size}")
+    
+    # Ищем вольтаж (формат: 12V, 24V, 12V-11V)
+    voltage_patterns = [
+        r'\b(\d+V(?:-\d+V)?)\b',  # 12V, 24V, 12V-11V
+        r'\b(\d+\s*V(?:-\d+\s*V)?)\b',  # 12 V, 24 V (с пробелом)
+    ]
+    for pattern in voltage_patterns:
+        voltage_matches = re.findall(pattern, name, re.IGNORECASE)
+        for voltage in voltage_matches:
+            voltage_clean = voltage.upper().replace(' ', '')
+            # Проверяем, что это не часть артикула или OEM
+            if (voltage_clean not in (result.get('article') or '').upper() and
+                voltage_clean not in (result.get('oem_number') or '').upper()):
+                # Проверяем, что еще не добавлено
+                if not any('Напряжение:' in p and voltage_clean in p for p in characteristics_parts):
+                    characteristics_parts.append(f"Напряжение: {voltage_clean}")
+    
+    # Ищем материал (IRIDIUM, PLATINUM, COPPER и т.д.)
+    material_keywords = [
+        'IRIDIUM', 'ИРИДИЙ', 'ИРИДИЕВЫЙ',
+        'PLATINUM', 'ПЛАТИНА', 'ПЛАТИНОВЫЙ',
+        'COPPER', 'МЕДЬ', 'МЕДНЫЙ',
+        'NICKEL', 'НИКЕЛЬ', 'НИКЕЛЕВЫЙ',
+        'SILVER', 'СЕРЕБРО', 'СЕРЕБРЯНЫЙ',
+    ]
+    for keyword in material_keywords:
+        # Ищем ключевое слово как отдельное слово
+        pattern = r'\b' + re.escape(keyword) + r'\b'
+        if re.search(pattern, name_upper):
+            # Проверяем, что это не часть артикула или бренда
+            keyword_upper = keyword.upper()
+            if (keyword_upper not in (result.get('article') or '').upper() and
+                keyword_upper not in (result.get('brand') or '').upper()):
+                # Определяем русское название
+                material_map = {
+                    'IRIDIUM': 'Иридий',
+                    'ИРИДИЙ': 'Иридий',
+                    'ИРИДИЕВЫЙ': 'Иридий',
+                    'PLATINUM': 'Платина',
+                    'ПЛАТИНА': 'Платина',
+                    'ПЛАТИНОВЫЙ': 'Платина',
+                    'COPPER': 'Медь',
+                    'МЕДЬ': 'Медь',
+                    'МЕДНЫЙ': 'Медь',
+                    'NICKEL': 'Никель',
+                    'НИКЕЛЬ': 'Никель',
+                    'НИКЕЛЕВЫЙ': 'Никель',
+                    'SILVER': 'Серебро',
+                    'СЕРЕБРО': 'Серебро',
+                    'СЕРЕБРЯНЫЙ': 'Серебро',
+                }
+                material_name = material_map.get(keyword_upper, keyword_upper)
+                # Проверяем, что еще не добавлено
+                if not any('Материал:' in p and material_name in p for p in characteristics_parts):
+                    characteristics_parts.append(f"Материал: {material_name}")
+                break
+    
+    # Ищем другие характеристики в конце названия
+    # После применимости и OEM могут быть дополнительные характеристики
+    # Определяем позицию последнего значимого элемента (OEM или применимость)
+    last_element_pos = -1
+    if result.get('oem_number'):
+        oem_pos = name_upper.rfind(result['oem_number'].upper())
+        if oem_pos > last_element_pos:
+            last_element_pos = oem_pos + len(result['oem_number'])
+    
+    if result.get('applicability'):
+        applicability_pos = name_upper.rfind(result['applicability'].upper())
+        if applicability_pos > last_element_pos:
+            last_element_pos = applicability_pos + len(result['applicability'])
+    
+    # Берем текст после последнего элемента
+    if last_element_pos > 0:
+        after_last = name[last_element_pos:].strip()
+        # Убираем уже найденные характеристики из строки для поиска
+        search_text = after_last
+        for char_part in characteristics_parts:
+            if ':' in char_part:
+                char_value = char_part.split(':', 1)[1].strip()
+                search_text = search_text.replace(char_value, '', 1)
+        
+        # Ищем оставшиеся слова (длина 3-20 символов, только буквы)
+        remaining_words = re.findall(r'\b([A-ZА-Я]{3,20})\b', search_text, re.IGNORECASE)
+        for word in remaining_words:
+            word_upper = word.upper()
+            # Пропускаем, если это часть артикула, OEM, применимости или известные материалы
+            if (word_upper not in (result.get('article') or '').upper() and
+                word_upper not in (result.get('oem_number') or '').upper() and
+                word_upper not in (result.get('applicability') or '').upper() and
+                word_upper not in material_keywords and
+                len(word_upper) >= 3):
+                # Это может быть дополнительная характеристика
+                # Добавляем только если это не код двигателя
+                if not re.match(r'^\d[A-Z]{2,5}$', word_upper):
+                    # Проверяем, что еще не добавлено
+                    if not any('Характеристика:' in p and word_upper in p.upper() for p in characteristics_parts):
+                        characteristics_parts.append(f"Характеристика: {word}")
+    
+    # Формируем строку характеристик
+    if characteristics_parts:
+        result['characteristics'] = '\n'.join(characteristics_parts)
     
     return result
 
@@ -1407,9 +1544,41 @@ def process_bulk_import_wholesale(data_rows, auto_category=True, auto_brand=True
                 parsed = parse_product_name(name)
                 
                 # Определяем артикул
+                # ЛОГИКА: 
+                # - Если есть фирменный артикул в parsed - используем его
+                # - Если нет фирменного артикула, но есть OEM - используем OEM как артикул
+                # - Если артикул явно указан в данных - используем его
                 article = str(row.get('article', '')).strip()
                 if not article and parsed['article']:
                     article = parsed['article']
+                
+                # Определяем OEM номер для cross_numbers
+                # OEM номер сохраняем в cross_numbers, если есть фирменный артикул
+                # Если нет фирменного артикула, OEM уже используется как article
+                oem_number = str(row.get('oem_number', '')).strip()
+                if not oem_number and parsed.get('oem_number'):
+                    oem_number = parsed['oem_number']
+                
+                # Определяем применимость
+                applicability = str(row.get('applicability', '')).strip()
+                if not applicability and parsed.get('applicability'):
+                    applicability = parsed['applicability']
+                
+                # Определяем характеристики
+                characteristics = str(row.get('characteristics', '')).strip()
+                if not characteristics and parsed.get('characteristics'):
+                    characteristics = parsed['characteristics']
+                elif characteristics and parsed.get('characteristics'):
+                    # Объединяем существующие и новые характеристики
+                    characteristics = f"{characteristics}\n{parsed['characteristics']}"
+                
+                # Формируем cross_numbers из OEM номера
+                cross_numbers_parts = []
+                if oem_number:
+                    cross_numbers_parts.append(oem_number)
+                if row.get('cross_numbers'):
+                    cross_numbers_parts.append(str(row['cross_numbers']).strip())
+                cross_numbers = ', '.join([p for p in cross_numbers_parts if p]) if cross_numbers_parts else ''
                 
                 # Определяем бренд
                 # Приоритет: явно указанный бренд в данных > автоматически определенный из названия
@@ -1500,6 +1669,19 @@ def process_bulk_import_wholesale(data_rows, auto_category=True, auto_brand=True
                         product.brand = brand
                     if category:
                         product.category = category
+                    if article:
+                        product.article = article
+                    if cross_numbers:
+                        product.cross_numbers = cross_numbers
+                    if applicability:
+                        product.applicability = applicability
+                    if characteristics:
+                        # Объединяем с существующими характеристиками, если есть
+                        existing_chars = product.characteristics or ''
+                        if existing_chars:
+                            product.characteristics = f"{existing_chars}\n{characteristics}"
+                        else:
+                            product.characteristics = characteristics
                     if price_value > 0:
                         product.price = price_value
                     if wholesale_price_value is not None:
@@ -1516,6 +1698,9 @@ def process_bulk_import_wholesale(data_rows, auto_category=True, auto_brand=True
                         article=article,
                         brand=brand,
                         category=category,
+                        cross_numbers=cross_numbers,
+                        applicability=applicability,
+                        characteristics=characteristics,
                         price=price_value,
                         wholesale_price=wholesale_price_value,
                         catalog_type='wholesale',  # ПАРТНЁРСКИЙ КАТАЛОГ!

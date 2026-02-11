@@ -8,7 +8,10 @@ from import_export import resources, fields
 from import_export.admin import ImportExportModelAdmin
 from import_export.widgets import ForeignKeyWidget
 import csv
-from .models import Category, Product, ProductImage, Brand, ImportLog, OneCExchangeLog, FarpostAPISettings, Promotion
+from .models import (
+    Category, Product, ProductImage, Brand, ImportLog, OneCExchangeLog, 
+    FarpostAPISettings, Promotion, ProductCharacteristic, SyncLog
+)
 
 
 class ProductImageInline(admin.TabularInline):
@@ -692,6 +695,53 @@ class OneCExchangeLogAdmin(admin.ModelAdmin):
             'fields': ('created_at',)
         }),
     )
+
+
+@admin.register(ProductCharacteristic)
+class ProductCharacteristicAdmin(admin.ModelAdmin):
+    """Админка для характеристик товаров."""
+    list_display = ['product', 'name', 'value', 'order', 'created_at']
+    list_display_links = ['name']
+    list_editable = ['order']
+    list_filter = ['created_at', 'product']
+    search_fields = ['name', 'value', 'product__name', 'product__article']
+    ordering = ['product', 'order', 'name']
+    raw_id_fields = ['product']
+
+
+@admin.register(SyncLog)
+class SyncLogAdmin(admin.ModelAdmin):
+    """Админка для логов синхронизации."""
+    list_display = ['operation_type', 'status', 'processed_count', 'created_count', 'updated_count', 'errors_count', 'created_at']
+    list_display_links = ['created_at']
+    list_filter = ['operation_type', 'status', 'created_at', 'request_format']
+    search_fields = ['message', 'filename', 'request_ip']
+    readonly_fields = [
+        'operation_type', 'status', 'message', 'processed_count', 'created_count', 
+        'updated_count', 'errors_count', 'errors', 'request_ip', 'request_format', 
+        'filename', 'created_at', 'processing_time'
+    ]
+    ordering = ['-created_at']
+    
+    fieldsets = (
+        ('Основная информация', {
+            'fields': ('operation_type', 'status', 'message', 'created_at', 'processing_time')
+        }),
+        ('Статистика', {
+            'fields': ('processed_count', 'created_count', 'updated_count', 'errors_count')
+        }),
+        ('Детали запроса', {
+            'fields': ('request_ip', 'request_format', 'filename')
+        }),
+        ('Ошибки', {
+            'fields': ('errors',),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    def has_add_permission(self, request):
+        """Запрещаем создание логов вручную."""
+        return False
 
 
 @admin.register(Promotion)

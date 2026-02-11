@@ -417,6 +417,83 @@ class ImportLog(models.Model):
         return f'{self.filename} - {self.created_at}'
 
 
+class ProductCharacteristic(models.Model):
+    """Характеристика товара."""
+    product = models.ForeignKey(
+        Product,
+        on_delete=models.CASCADE,
+        related_name='product_characteristics',
+        verbose_name='Товар'
+    )
+    name = models.CharField('Название характеристики', max_length=200)
+    value = models.CharField('Значение', max_length=500)
+    order = models.PositiveIntegerField('Порядок сортировки', default=0)
+    created_at = models.DateTimeField('Создано', auto_now_add=True)
+    updated_at = models.DateTimeField('Обновлено', auto_now=True)
+
+    class Meta:
+        verbose_name = 'Характеристика товара'
+        verbose_name_plural = 'Характеристики товаров'
+        ordering = ['order', 'name']
+        unique_together = [['product', 'name']]
+        indexes = [
+            models.Index(fields=['product', 'name']),
+        ]
+
+    def __str__(self):
+        return f'{self.product.name} - {self.name}: {self.value}'
+
+
+class SyncLog(models.Model):
+    """Лог синхронизации товаров с 1С."""
+    OPERATION_TYPE_CHOICES = [
+        ('file_upload', 'Загрузка файла'),
+        ('api_sync', 'API синхронизация'),
+    ]
+    
+    STATUS_CHOICES = [
+        ('success', 'Успешно'),
+        ('partial', 'Частично'),
+        ('error', 'Ошибка'),
+        ('unauthorized', 'Не авторизован'),
+    ]
+    
+    operation_type = models.CharField(
+        'Тип операции',
+        max_length=20,
+        choices=OPERATION_TYPE_CHOICES,
+        default='api_sync'
+    )
+    status = models.CharField('Статус', max_length=20, choices=STATUS_CHOICES)
+    message = models.TextField('Сообщение', blank=True)
+    processed_count = models.PositiveIntegerField('Обработано товаров', default=0)
+    created_count = models.PositiveIntegerField('Создано товаров', default=0)
+    updated_count = models.PositiveIntegerField('Обновлено товаров', default=0)
+    errors_count = models.PositiveIntegerField('Ошибок', default=0)
+    errors = models.JSONField('Список ошибок', default=list, blank=True)
+    
+    # Метаданные запроса
+    request_ip = models.GenericIPAddressField('IP адрес', null=True, blank=True)
+    request_format = models.CharField('Формат данных', max_length=20, blank=True, help_text='CSV, XML или JSON')
+    filename = models.CharField('Имя файла', max_length=255, blank=True)
+    
+    created_at = models.DateTimeField('Дата синхронизации', auto_now_add=True)
+    processing_time = models.FloatField('Время обработки (сек)', default=0.0)
+
+    class Meta:
+        verbose_name = 'Лог синхронизации'
+        verbose_name_plural = 'Логи синхронизации'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['-created_at']),
+            models.Index(fields=['status']),
+            models.Index(fields=['operation_type']),
+        ]
+
+    def __str__(self):
+        return f'{self.get_operation_type_display()} - {self.status} - {self.created_at}'
+
+
 class OneCExchangeLog(models.Model):
     """Лог обмена данными с 1С через API."""
     STATUS_CHOICES = [

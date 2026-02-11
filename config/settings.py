@@ -134,7 +134,7 @@ PRODUCTS_PER_PAGE = 24
 STATIC_VERSION = '2.7'
 
 # API для 1С
-ONE_C_API_KEY = os.environ.get('ONE_C_API_KEY', 'change-this-secret-key-in-production')
+ONE_C_API_KEY = 'ваш-секретный-токен'
 
 # Site info (for SEO and templates)
 SITE_NAME = 'Onesimus'
