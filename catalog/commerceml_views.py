@@ -1,0 +1,444 @@
+"""
+Views для обработки стандартного протокола CommerceML 2 обмена с 1С.
+Протокол разработан компаниями «1С» и «1С-Битрикс».
+"""
+import os
+import json
+import logging
+import xml.etree.ElementTree as ET
+from io import BytesIO
+from django.http import HttpResponse, HttpResponseBadRequest
+from django.views.decorators.http import require_http_methods
+from django.views.decorators.csrf import csrf_exempt
+from django.db import transaction
+from django.conf import settings
+from django.utils import timezone
+from django.core.files.storage import default_storage
+from django.core.files.base import ContentFile
+
+from .models import Product, ProductCharacteristic, Category, SyncLog
+from .serializers import validate_product, SerializerValidationError
+
+logger = logging.getLogger(__name__)
+
+# Настройки
+EXCHANGE_DIR = getattr(settings, 'ONE_C_EXCHANGE_DIR', os.path.join(settings.MEDIA_ROOT, '1c_exchange'))
+FILE_LIMIT = getattr(settings, 'ONE_C_FILE_LIMIT', 104857600)  # 100 MB по умолчанию
+SUPPORT_ZIP = getattr(settings, 'ONE_C_SUPPORT_ZIP', True)
+
+# Создаем директорию для обмена, если её нет
+os.makedirs(EXCHANGE_DIR, exist_ok=True)
+
+
+def get_client_ip(request):
+    """Получить IP адрес клиента."""
+    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+    if x_forwarded_for:
+        ip = x_forwarded_for.split(',')[0]
+    else:
+        ip = request.META.get('REMOTE_ADDR')
+    return ip
+
+
+def check_basic_auth(request):
+    """Проверка базовой HTTP авторизации (логин/пароль из админки Django)."""
+    if 'HTTP_AUTHORIZATION' in request.META:
+        auth = request.META['HTTP_AUTHORIZATION'].split()
+        if len(auth) == 2 and auth[0].lower() == 'basic':
+            import base64
+            try:
+                username, password = base64.b64decode(auth[1]).decode('utf-8').split(':', 1)
+                from django.contrib.auth import authenticate
+                user = authenticate(request, username=username, password=password)
+                if user and user.is_active and user.is_staff:
+                    return True
+            except Exception as e:
+                logger.error(f"Ошибка проверки авторизации: {e}")
+    return False
+
+
+@csrf_exempt
+@require_http_methods(["GET", "POST"])
+def commerceml_exchange(request):
+    """
+    Обработчик стандартного протокола CommerceML 2 обмена с 1С.
+    
+    Параметры запроса:
+    - type: catalog (тип обмена)
+    - mode: checkauth, init, file, import (режим обмена)
+    - filename: имя файла (для режимов file и import)
+    """
+    exchange_type = request.GET.get('type', '')
+    mode = request.GET.get('mode', '')
+    filename = request.GET.get('filename', '')
+    
+    # Проверяем тип обмена
+    if exchange_type != 'catalog':
+        return HttpResponse('failure\nНеподдерживаемый тип обмена', status=400)
+    
+    # Обрабатываем режимы
+    if mode == 'checkauth':
+        return handle_checkauth(request)
+    elif mode == 'init':
+        return handle_init(request)
+    elif mode == 'file':
+        return handle_file(request, filename)
+    elif mode == 'import':
+        return handle_import(request, filename)
+    else:
+        return HttpResponse('failure\nНеизвестный режим обмена', status=400)
+
+
+def handle_checkauth(request):
+    """
+    Режим A: Начало сеанса
+    Проверка авторизации и установка Cookie.
+    
+    Возвращает три строки:
+    - success
+    - имя Cookie
+    - значение Cookie
+    """
+    # Проверяем базовую HTTP авторизацию
+    if not check_basic_auth(request):
+        return HttpResponse('failure\nОшибка авторизации', status=401)
+    
+    # Генерируем Cookie для сессии
+    import secrets
+    cookie_name = '1c_exchange_session'
+    cookie_value = secrets.token_urlsafe(32)
+    
+    # Сохраняем сессию (можно использовать кеш или БД)
+    from django.core.cache import cache
+    cache.set(f'1c_session_{cookie_value}', True, timeout=3600)  # 1 час
+    
+    response = HttpResponse('success\n{}\n{}'.format(cookie_name, cookie_value))
+    response.set_cookie(cookie_name, cookie_value, max_age=3600)
+    return response
+
+
+def check_session_cookie(request):
+    """Проверка Cookie сессии."""
+    cookie_name = '1c_exchange_session'
+    cookie_value = request.COOKIES.get(cookie_name)
+    
+    if not cookie_value:
+        return False
+    
+    from django.core.cache import cache
+    return cache.get(f'1c_session_{cookie_value}') is not None
+
+
+def handle_init(request):
+    """
+    Режим B: Запрос параметров от сайта
+    
+    Возвращает две строки:
+    - zip=yes или zip=no
+    - file_limit=<число>
+    """
+    if not check_session_cookie(request):
+        return HttpResponse('failure\nСессия недействительна', status=401)
+    
+    zip_support = 'yes' if SUPPORT_ZIP else 'no'
+    response_text = f'zip={zip_support}\nfile_limit={FILE_LIMIT}'
+    return HttpResponse(response_text)
+
+
+def handle_file(request, filename):
+    """
+    Режим C: Выгрузка на сайт файлов обмена
+    
+    Принимает файл через POST и сохраняет его.
+    Возвращает 'success' при успешной записи.
+    """
+    if not check_session_cookie(request):
+        return HttpResponse('failure\nСессия недействительна', status=401)
+    
+    if request.method != 'POST':
+        return HttpResponse('failure\nТребуется POST запрос', status=405)
+    
+    if not filename:
+        return HttpResponse('failure\nНе указано имя файла', status=400)
+    
+    try:
+        # Получаем содержимое файла
+        file_content = request.body
+        
+        if len(file_content) > FILE_LIMIT:
+            return HttpResponse('failure\nФайл превышает лимит размера', status=413)
+        
+        # Сохраняем файл
+        file_path = os.path.join(EXCHANGE_DIR, filename)
+        with open(file_path, 'wb') as f:
+            f.write(file_content)
+        
+        logger.info(f"Файл сохранен: {filename}, размер: {len(file_content)} байт")
+        return HttpResponse('success')
+        
+    except Exception as e:
+        logger.error(f"Ошибка сохранения файла {filename}: {e}")
+        return HttpResponse(f'failure\nОшибка сохранения файла: {str(e)}', status=500)
+
+
+def handle_import(request, filename):
+    """
+    Режим D: Пошаговая загрузка данных
+    
+    Обрабатывает файл CommerceML 2 и импортирует товары.
+    
+    Возвращает:
+    - progress - если обработка еще не завершена
+    - success - при успешном завершении
+    - failure - при ошибке
+    """
+    if not check_session_cookie(request):
+        return HttpResponse('failure\nСессия недействительна', status=401)
+    
+    if not filename:
+        return HttpResponse('failure\nНе указано имя файла', status=400)
+    
+    file_path = os.path.join(EXCHANGE_DIR, filename)
+    
+    if not os.path.exists(file_path):
+        return HttpResponse('failure\nФайл не найден', status=404)
+    
+    try:
+        # Парсим и обрабатываем файл CommerceML 2
+        result = process_commerceml_file(file_path, filename, request)
+        
+        if result['status'] == 'success':
+            return HttpResponse('success')
+        elif result['status'] == 'progress':
+            progress_info = result.get('progress', '')
+            return HttpResponse(f'progress\n{progress_info}')
+        else:
+            error_msg = result.get('error', 'Неизвестная ошибка')
+            return HttpResponse(f'failure\n{error_msg}', status=500)
+            
+    except Exception as e:
+        logger.error(f"Ошибка обработки файла {filename}: {e}", exc_info=True)
+        return HttpResponse(f'failure\nОшибка обработки: {str(e)}', status=500)
+
+
+def process_commerceml_file(file_path, filename, request=None):
+    """
+    Обработка файла CommerceML 2.
+    
+    Парсит XML в формате CommerceML 2 и импортирует товары в базу данных.
+    """
+    start_time = timezone.now()
+    
+    try:
+        # Парсим XML
+        tree = ET.parse(file_path)
+        root = tree.getroot()
+        
+        # Определяем namespace CommerceML
+        namespaces = {
+            'cml': 'http://v8.1c.ru/8.3/commerceml',
+            '': 'http://v8.1c.ru/8.3/commerceml'
+        }
+        
+        # Ищем каталог товаров
+        catalog = root.find('.//catalog', namespaces) or root.find('.//Каталог', namespaces)
+        
+        if catalog is None:
+            return {'status': 'failure', 'error': 'Каталог не найден в файле'}
+        
+        # Извлекаем товары
+        products_data = []
+        
+        # Ищем товары в разных возможных местах
+        products_elements = (
+            catalog.findall('.//catalog:Товары/catalog:Товар', namespaces) or
+            catalog.findall('.//Товары/Товар') or
+            catalog.findall('.//catalog:Товар', namespaces) or
+            catalog.findall('.//Товар')
+        )
+        
+        for product_elem in products_elements:
+            product_data = parse_commerceml_product(product_elem, namespaces)
+            if product_data:
+                products_data.append(product_data)
+        
+        if not products_data:
+            return {'status': 'success', 'message': 'Товары не найдены в файле'}
+        
+        # Обрабатываем товары в транзакции
+        processed_count = 0
+        created_count = 0
+        updated_count = 0
+        errors = []
+        
+        with transaction.atomic():
+            for product_data in products_data:
+                try:
+                    product, error, was_created = process_product_from_commerceml(product_data)
+                    if product:
+                        processed_count += 1
+                        if was_created:
+                            created_count += 1
+                        else:
+                            updated_count += 1
+                    elif error:
+                        errors.append({
+                            'sku': product_data.get('sku', 'unknown'),
+                            'error': error
+                        })
+                except Exception as e:
+                    logger.error(f"Ошибка обработки товара: {e}", exc_info=True)
+                    errors.append({
+                        'sku': product_data.get('sku', 'unknown'),
+                        'error': str(e)
+                    })
+        
+        # Создаем лог синхронизации
+        processing_time = (timezone.now() - start_time).total_seconds()
+        
+        request_ip = get_client_ip(request) if request else None
+        
+        sync_log = SyncLog.objects.create(
+            operation_type='file_upload',
+            status='success' if not errors else 'partial',
+            message=f'Обработано товаров из файла {filename}',
+            processed_count=processed_count,
+            created_count=created_count,
+            updated_count=updated_count,
+            errors_count=len(errors),
+            errors=errors,
+            request_ip=request_ip,
+            request_format='CommerceML 2',
+            filename=filename,
+            processing_time=processing_time
+        )
+        
+        logger.info(f"Импорт завершен: обработано {processed_count}, создано {created_count}, обновлено {updated_count}, ошибок {len(errors)}")
+        
+        return {
+            'status': 'success',
+            'processed': processed_count,
+            'created': created_count,
+            'updated': updated_count,
+            'errors': len(errors)
+        }
+        
+    except ET.ParseError as e:
+        return {'status': 'failure', 'error': f'Ошибка парсинга XML: {str(e)}'}
+    except Exception as e:
+        logger.error(f"Ошибка обработки файла CommerceML: {e}", exc_info=True)
+        return {'status': 'failure', 'error': str(e)}
+
+
+def parse_commerceml_product(product_elem, namespaces):
+    """
+    Парсит элемент товара из CommerceML 2 XML.
+    
+    Возвращает словарь с данными товара в формате, совместимом с validate_product.
+    """
+    product_data = {}
+    
+    # Идентификатор товара (Ид)
+    id_elem = product_elem.find('catalog:Ид', namespaces) or product_elem.find('Ид')
+    if id_elem is not None and id_elem.text:
+        product_data['sku'] = id_elem.text.strip()
+        product_data['external_id'] = id_elem.text.strip()
+    
+    # Артикул
+    article_elem = product_elem.find('catalog:Артикул', namespaces) or product_elem.find('Артикул')
+    if article_elem is not None and article_elem.text:
+        product_data['article'] = article_elem.text.strip()
+        if 'sku' not in product_data:
+            product_data['sku'] = article_elem.text.strip()
+    
+    # Наименование
+    name_elem = product_elem.find('catalog:Наименование', namespaces) or product_elem.find('Наименование')
+    if name_elem is not None and name_elem.text:
+        product_data['name'] = name_elem.text.strip()
+    
+    # Описание
+    description_elem = product_elem.find('catalog:Описание', namespaces) or product_elem.find('Описание')
+    if description_elem is not None and description_elem.text:
+        product_data['description'] = description_elem.text.strip()
+    
+    # Цены (ищем в предложениях)
+    # В CommerceML цены обычно в отдельном файле предложений, но могут быть и здесь
+    price_elem = product_elem.find('.//catalog:ЦенаЗаЕдиницу', namespaces) or product_elem.find('.//ЦенаЗаЕдиницу')
+    if price_elem is not None and price_elem.text:
+        try:
+            product_data['price'] = float(price_elem.text.strip().replace(',', '.'))
+        except (ValueError, AttributeError):
+            pass
+    
+    # Остатки (ищем в предложениях)
+    quantity_elem = product_elem.find('.//catalog:Количество', namespaces) or product_elem.find('.//Количество')
+    if quantity_elem is not None and quantity_elem.text:
+        try:
+            product_data['stock'] = int(float(quantity_elem.text.strip().replace(',', '.')))
+        except (ValueError, AttributeError):
+            pass
+    
+    # Категория (группа)
+    group_elem = product_elem.find('catalog:Группы/catalog:Ид', namespaces) or product_elem.find('Группы/Ид')
+    if group_elem is not None and group_elem.text:
+        # Нужно найти название группы по Ид
+        # Пока просто сохраняем Ид, название найдем позже
+        product_data['category_id'] = group_elem.text.strip()
+    
+    # Характеристики
+    characteristics = []
+    props_elem = product_elem.find('catalog:ЗначенияСвойств', namespaces) or product_elem.find('ЗначенияСвойств')
+    if props_elem is not None:
+        for prop_elem in props_elem.findall('catalog:ЗначенияСвойства', namespaces) or props_elem.findall('ЗначенияСвойства'):
+            prop_id = prop_elem.find('catalog:Ид', namespaces) or prop_elem.find('Ид')
+            prop_value = prop_elem.find('catalog:Значение', namespaces) or prop_elem.find('Значение')
+            
+            if prop_id is not None and prop_value is not None:
+                # Нужно найти название свойства по Ид
+                # Пока используем Ид как название
+                prop_name = prop_id.text.strip() if prop_id.text else 'Свойство'
+                prop_val = prop_value.text.strip() if prop_value.text else ''
+                
+                if prop_name and prop_val:
+                    characteristics.append({
+                        'name': prop_name,
+                        'value': prop_val
+                    })
+    
+    if characteristics:
+        product_data['characteristics'] = characteristics
+    
+    # Активность
+    product_data['is_active'] = True
+    
+    return product_data if product_data.get('sku') and product_data.get('name') else None
+
+
+def process_product_from_commerceml(product_data):
+    """
+    Обрабатывает товар из CommerceML формата.
+    Использует ту же логику, что и process_product из one_c_views.py.
+    """
+    from .one_c_views import process_product
+    
+    # Преобразуем данные в формат, ожидаемый process_product
+    # process_product ожидает sku, name, price, stock, category, characteristics, is_active
+    
+    # Если есть external_id, используем его как sku
+    if 'external_id' in product_data and product_data['external_id']:
+        product_data['sku'] = product_data['external_id']
+    elif 'article' in product_data and product_data['article']:
+        if 'sku' not in product_data or not product_data['sku']:
+            product_data['sku'] = product_data['article']
+    
+    # Убеждаемся, что есть sku
+    if 'sku' not in product_data or not product_data['sku']:
+        return None, "Отсутствует идентификатор товара (Ид или Артикул)", False
+    
+    # Обрабатываем категорию
+    if 'category_id' in product_data:
+        # Пока не обрабатываем категорию по Ид, можно добавить позже
+        pass
+    
+    # Вызываем стандартную функцию обработки
+    return process_product(product_data, sync_log=None)

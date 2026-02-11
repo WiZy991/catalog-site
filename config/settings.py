@@ -136,6 +136,11 @@ STATIC_VERSION = '2.7'
 # API для 1С
 ONE_C_API_KEY = '1XV8XYzbGBNVsMKhV8jYZ6823o9Aw7JZjpuvSYQiAhdhsS2V6M2tyBCUAGvtwHZxrn1u2sDjzU6FQ9lECSnzvHgEeE1ZRuLcTwVlHPcM5pEwr6tZ9M04ptPLE1vZK81r'
 
+# Настройки для стандартного протокола CommerceML 2 обмена с 1С
+ONE_C_EXCHANGE_DIR = os.path.join(MEDIA_ROOT, '1c_exchange')  # Директория для временного хранения файлов обмена
+ONE_C_FILE_LIMIT = 104857600  # Максимальный размер файла в байтах (100 MB)
+ONE_C_SUPPORT_ZIP = True  # Поддержка ZIP сжатия
+
 # Site info (for SEO and templates)
 SITE_NAME = 'Onesimus'
 COMPANY_NAME = 'Onesimus'

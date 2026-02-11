@@ -243,15 +243,26 @@ def process_product(product_data, sync_log=None):
                 })
             return None, error_msg, False
         
-        # Проверяем, существует ли товар с таким артикулом
+        # Определяем идентификатор товара
+        # Используем sku как external_id для совместимости со старой системой
+        # Если товар уже существует с таким external_id - обновляем его
+        # Если нет - ищем по артикулу, если и там нет - создаем новый
         sku = validated_data['sku']
-        existing_product = Product.objects.filter(article=sku).first()
+        
+        # Сначала ищем по external_id (как в старой системе)
+        existing_product = Product.objects.filter(external_id=sku).first()
+        
+        # Если не нашли по external_id, ищем по артикулу
+        if not existing_product:
+            existing_product = Product.objects.filter(article=sku).first()
+        
         was_created = existing_product is None
         
         if was_created:
             # Создаем новый товар
             product = Product(
-                article=sku,
+                external_id=sku,  # Используем sku как external_id для совместимости
+                article=sku,      # Также сохраняем в article
                 name=validated_data['name'],
                 price=validated_data['price'],
                 quantity=validated_data.get('stock', 0),
@@ -260,6 +271,12 @@ def process_product(product_data, sync_log=None):
         else:
             # Обновляем существующий товар
             product = existing_product
+            # Обновляем external_id, если его не было
+            if not product.external_id:
+                product.external_id = sku
+            # Обновляем article, если его не было или он отличается
+            if not product.article or product.article != sku:
+                product.article = sku
         
         # Обновляем поля товара
         product.name = validated_data['name']
