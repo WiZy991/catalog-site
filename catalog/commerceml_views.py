@@ -74,6 +74,30 @@ def commerceml_exchange(request):
     filename = request.GET.get('filename', '')
     client_ip = get_client_ip(request)
     
+    # КРИТИЧЕСКОЕ ЛОГИРОВАНИЕ - записываем в файл напрямую для гарантии
+    import os
+    from django.conf import settings
+    log_file_path = os.path.join(settings.BASE_DIR, 'logs', 'commerceml_requests.log')
+    os.makedirs(os.path.dirname(log_file_path), exist_ok=True)
+    
+    try:
+        with open(log_file_path, 'a', encoding='utf-8') as f:
+            f.write(f"\n{'='*80}\n")
+            f.write(f"{timezone.now().strftime('%Y-%m-%d %H:%M:%S')} - CommerceML запрос получен!\n")
+            f.write(f"  URL: {request.path}\n")
+            f.write(f"  Full URL: {request.build_absolute_uri()}\n")
+            f.write(f"  Method: {request.method}\n")
+            f.write(f"  GET params: {dict(request.GET)}\n")
+            f.write(f"  Type: {exchange_type}\n")
+            f.write(f"  Mode: {mode}\n")
+            f.write(f"  Filename: {filename}\n")
+            f.write(f"  IP: {client_ip}\n")
+            f.write(f"  User-Agent: {request.META.get('HTTP_USER_AGENT', 'None')}\n")
+            f.write(f"  Authorization header: {bool(request.META.get('HTTP_AUTHORIZATION'))}\n")
+            f.write(f"{'='*80}\n")
+    except Exception as e:
+        logger.error(f"Ошибка записи в файл логов: {e}")
+    
     # Логируем ВСЕ запросы, даже если они не к CommerceML
     # Используем print для гарантированного вывода (временное решение)
     print("=" * 80)

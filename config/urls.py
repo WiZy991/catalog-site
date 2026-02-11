@@ -6,6 +6,7 @@ from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib.sitemaps.views import sitemap
+from django.http import HttpResponse
 from catalog.sitemaps import ProductSitemap, CategorySitemap, StaticViewSitemap
 from catalog.admin_views import (
     bulk_image_upload, 
@@ -26,6 +27,9 @@ sitemaps = {
 }
 
 urlpatterns = [
+    # Тестовый endpoint для проверки доступности (ДО всех остальных!)
+    path('cml/test/', lambda r: HttpResponse('OK - CommerceML endpoint доступен', content_type='text/plain; charset=utf-8'), name='commerceml_test'),
+    
     # Стандартный протокол CommerceML 2 обмена с 1С (ОБЯЗАТЕЛЬНО ПЕРВЫМ!)
     # ВАЖНО: Эти пути должны быть в самом начале списка для правильной работы
     path('cml/exchange/', commerceml_views.commerceml_exchange, name='commerceml_exchange'),
