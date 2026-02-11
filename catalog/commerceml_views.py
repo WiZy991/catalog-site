@@ -429,6 +429,16 @@ def process_commerceml_file(file_path, filename, request=None):
         
         logger.info(f"Найдено элементов товаров: {len(products_elements)}")
         
+        # Если товары не найдены, выводим структуру XML для отладки
+        if not products_elements:
+            logger.error("Товары не найдены в XML! Выводим структуру для отладки:")
+            logger.error(f"Корневой элемент: {root.tag}")
+            logger.error(f"Атрибуты корня: {root.attrib}")
+            for child in root:
+                logger.error(f"  Дочерний элемент: {child.tag}, атрибуты: {child.attrib}")
+                for grandchild in child:
+                    logger.error(f"    Внук: {grandchild.tag}, атрибуты: {grandchild.attrib}")
+        
         for idx, product_elem in enumerate(products_elements):
             product_data = parse_commerceml_product(product_elem, namespaces)
             if product_data:
@@ -437,11 +447,19 @@ def process_commerceml_file(file_path, filename, request=None):
                     logger.info(f"Товар #{idx+1}: sku={product_data.get('sku')}, name={product_data.get('name')[:50] if product_data.get('name') else 'N/A'}")
             else:
                 logger.warning(f"Товар #{idx+1}: не удалось распарсить (нет обязательных полей)")
+                # Выводим структуру элемента для отладки
+                if idx < 3:
+                    logger.warning(f"  Структура элемента: tag={product_elem.tag}, атрибуты={product_elem.attrib}")
+                    for child in product_elem:
+                        logger.warning(f"    Дочерний: {child.tag} = {child.text[:50] if child.text else 'None'}")
         
         logger.info(f"Всего распарсено товаров: {len(products_data)}")
         
         if not products_data:
             logger.warning("Товары не найдены в файле после парсинга")
+            # Сохраняем информацию о файле для отладки
+            logger.warning(f"Размер файла: {file_size} байт")
+            logger.warning(f"Корневой элемент XML: {root.tag}")
             return {'status': 'success', 'message': 'Товары не найдены в файле'}
         
         # Обрабатываем товары в транзакции
@@ -455,25 +473,33 @@ def process_commerceml_file(file_path, filename, request=None):
         with transaction.atomic():
             for idx, product_data in enumerate(products_data):
                 try:
+                    # Логируем данные товара перед обработкой (для первых 3)
+                    if idx < 3:
+                        logger.info(f"Обработка товара #{idx+1}: sku={product_data.get('sku')}, name={product_data.get('name')[:50] if product_data.get('name') else 'N/A'}")
+                    
                     product, error, was_created = process_product_from_commerceml(product_data)
                     if product:
                         processed_count += 1
                         if was_created:
                             created_count += 1
-                            logger.info(f"Создан товар: {product.article} - {product.name}")
+                            logger.info(f"✓ Создан товар: {product.article} - {product.name[:50]}")
                         else:
                             updated_count += 1
-                            logger.debug(f"Обновлен товар: {product.article} - {product.name}")
+                            if idx < 10:  # Логируем первые 10 обновлений
+                                logger.info(f"✓ Обновлен товар: {product.article} - {product.name[:50]}")
                     elif error:
                         error_info = {
                             'sku': product_data.get('sku', 'unknown'),
                             'error': error
                         }
                         errors.append(error_info)
-                        logger.warning(f"Ошибка обработки товара {product_data.get('sku', 'unknown')}: {error}")
+                        logger.warning(f"✗ Ошибка обработки товара {product_data.get('sku', 'unknown')}: {error}")
+                        # Выводим данные товара при ошибке
+                        if idx < 5:
+                            logger.warning(f"  Данные товара: {product_data}")
                 except Exception as e:
                     error_msg = str(e)
-                    logger.error(f"Исключение при обработке товара {product_data.get('sku', 'unknown')}: {error_msg}", exc_info=True)
+                    logger.error(f"✗ Исключение при обработке товара {product_data.get('sku', 'unknown')}: {error_msg}", exc_info=True)
                     errors.append({
                         'sku': product_data.get('sku', 'unknown'),
                         'error': error_msg
@@ -531,6 +557,11 @@ def parse_commerceml_product(product_elem, namespaces):
     if id_elem is not None and id_elem.text:
         product_data['sku'] = id_elem.text.strip()
         product_data['external_id'] = id_elem.text.strip()
+    else:
+        # Пробуем найти Ид в атрибутах
+        if 'Ид' in product_elem.attrib:
+            product_data['sku'] = product_elem.attrib['Ид'].strip()
+            product_data['external_id'] = product_elem.attrib['Ид'].strip()
     
     # Артикул
     article_elem = product_elem.find('catalog:Артикул', namespaces) or product_elem.find('Артикул')
