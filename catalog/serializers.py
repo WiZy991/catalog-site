@@ -2,12 +2,11 @@
 Serializers для валидации данных от 1С (без DRF).
 """
 from decimal import Decimal, InvalidOperation
-from django.core.exceptions import ValidationError
 from .models import Product, ProductCharacteristic, Category
 
 
-class ValidationError(Exception):
-    """Кастомное исключение для валидации."""
+class SerializerValidationError(Exception):
+    """Кастомное исключение для валидации сериализатора."""
     def __init__(self, message, errors=None):
         self.message = message
         self.errors = errors or {}
@@ -29,7 +28,7 @@ def validate_product_characteristic(data):
         errors['value'] = 'Значение характеристики не должно превышать 500 символов'
     
     if errors:
-        raise ValidationError('Ошибка валидации характеристики', errors)
+        raise SerializerValidationError('Ошибка валидации характеристики', errors)
     
     return {
         'name': str(data['name']).strip()[:200],
@@ -121,7 +120,7 @@ def validate_product(data):
                 try:
                     validated_char = validate_product_characteristic(char_data)
                     validated['characteristics'].append(validated_char)
-                except ValidationError as e:
+                except SerializerValidationError as e:
                     errors.setdefault('characteristics', []).append(e.errors)
         else:
             errors['characteristics'] = 'Характеристики должны быть списком'
@@ -138,7 +137,7 @@ def validate_product(data):
         validated['is_active'] = True
     
     if errors:
-        raise ValidationError('Ошибка валидации товара', errors)
+        raise SerializerValidationError('Ошибка валидации товара', errors)
     
     return validated
 
@@ -174,13 +173,13 @@ def validate_sync_request(data):
             try:
                 validated_product = validate_product(product_data)
                 validated['products'].append(validated_product)
-            except ValidationError as e:
+            except SerializerValidationError as e:
                 errors.setdefault('products', []).append({
                     'index': idx,
                     'errors': e.errors
                 })
     
     if errors:
-        raise ValidationError('Ошибка валидации запроса', errors)
+        raise SerializerValidationError('Ошибка валидации запроса', errors)
     
     return validated

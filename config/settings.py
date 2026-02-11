@@ -134,7 +134,7 @@ PRODUCTS_PER_PAGE = 24
 STATIC_VERSION = '2.7'
 
 # API для 1С
-ONE_C_API_KEY = 'ваш-секретный-токен'
+ONE_C_API_KEY = '1XV8XYzbGBNVsMKhV8jYZ6823o9Aw7JZjpuvSYQiAhdhsS2V6M2tyBCUAGvtwHZxrn1u2sDjzU6FQ9lECSnzvHgEeE1ZRuLcTwVlHPcM5pEwr6tZ9M04ptPLE1vZK81r'
 
 # Site info (for SEO and templates)
 SITE_NAME = 'Onesimus'
