@@ -72,20 +72,28 @@ def commerceml_exchange(request):
     mode = request.GET.get('mode', '')
     filename = request.GET.get('filename', '')
     
+    logger.info(f"commerceml_exchange: type={exchange_type}, mode={mode}, filename={filename}, method={request.method}, IP={get_client_ip(request)}")
+    
     # Проверяем тип обмена
     if exchange_type != 'catalog':
+        logger.warning(f"Неподдерживаемый тип обмена: {exchange_type}")
         return HttpResponse('failure\nНеподдерживаемый тип обмена', status=400)
     
     # Обрабатываем режимы
     if mode == 'checkauth':
+        logger.info("Обработка режима: checkauth")
         return handle_checkauth(request)
     elif mode == 'init':
+        logger.info("Обработка режима: init")
         return handle_init(request)
     elif mode == 'file':
+        logger.info(f"Обработка режима: file, filename={filename}")
         return handle_file(request, filename)
     elif mode == 'import':
+        logger.info(f"Обработка режима: import, filename={filename}")
         return handle_import(request, filename)
     else:
+        logger.warning(f"Неизвестный режим обмена: {mode}")
         return HttpResponse('failure\nНеизвестный режим обмена', status=400)
 
 
@@ -152,32 +160,52 @@ def handle_file(request, filename):
     Принимает файл через POST и сохраняет его.
     Возвращает 'success' при успешной записи.
     """
+    logger.info(f"handle_file вызван: filename={filename}, method={request.method}")
+    
     if not check_session_cookie(request):
+        logger.warning("Сессия недействительна в handle_file")
         return HttpResponse('failure\nСессия недействительна', status=401)
     
     if request.method != 'POST':
+        logger.warning(f"Неправильный метод в handle_file: {request.method}")
         return HttpResponse('failure\nТребуется POST запрос', status=405)
     
     if not filename:
+        logger.warning("Не указано имя файла в handle_file")
         return HttpResponse('failure\nНе указано имя файла', status=400)
     
     try:
         # Получаем содержимое файла
         file_content = request.body
+        logger.info(f"Получен файл {filename}, размер: {len(file_content)} байт")
         
         if len(file_content) > FILE_LIMIT:
+            logger.error(f"Файл {filename} превышает лимит: {len(file_content)} > {FILE_LIMIT}")
             return HttpResponse('failure\nФайл превышает лимит размера', status=413)
+        
+        # Проверяем, что директория существует
+        os.makedirs(EXCHANGE_DIR, exist_ok=True)
+        logger.info(f"Директория обмена: {EXCHANGE_DIR}")
         
         # Сохраняем файл
         file_path = os.path.join(EXCHANGE_DIR, filename)
+        logger.info(f"Сохраняем файл в: {file_path}")
+        
         with open(file_path, 'wb') as f:
             f.write(file_content)
         
-        logger.info(f"Файл сохранен: {filename}, размер: {len(file_content)} байт")
+        # Проверяем, что файл действительно сохранен
+        if os.path.exists(file_path):
+            actual_size = os.path.getsize(file_path)
+            logger.info(f"Файл успешно сохранен: {filename}, размер: {actual_size} байт")
+        else:
+            logger.error(f"Файл не найден после сохранения: {file_path}")
+            return HttpResponse('failure\nОшибка сохранения файла', status=500)
+        
         return HttpResponse('success')
         
     except Exception as e:
-        logger.error(f"Ошибка сохранения файла {filename}: {e}")
+        logger.error(f"Ошибка сохранения файла {filename}: {e}", exc_info=True)
         return HttpResponse(f'failure\nОшибка сохранения файла: {str(e)}', status=500)
 
 
@@ -192,19 +220,32 @@ def handle_import(request, filename):
     - success - при успешном завершении
     - failure - при ошибке
     """
+    logger.info(f"handle_import вызван: filename={filename}")
+    
     if not check_session_cookie(request):
+        logger.warning("Сессия недействительна в handle_import")
         return HttpResponse('failure\nСессия недействительна', status=401)
     
     if not filename:
+        logger.warning("Не указано имя файла в handle_import")
         return HttpResponse('failure\nНе указано имя файла', status=400)
     
     file_path = os.path.join(EXCHANGE_DIR, filename)
+    logger.info(f"Ищем файл: {file_path}")
+    logger.info(f"Директория существует: {os.path.exists(EXCHANGE_DIR)}")
+    logger.info(f"Файл существует: {os.path.exists(file_path)}")
     
     if not os.path.exists(file_path):
-        logger.error(f"Файл не найден: {file_path}")
+        # Проверим, какие файлы есть в директории
+        if os.path.exists(EXCHANGE_DIR):
+            existing_files = os.listdir(EXCHANGE_DIR)
+            logger.error(f"Файл не найден: {file_path}")
+            logger.error(f"Существующие файлы в директории: {existing_files}")
+        else:
+            logger.error(f"Директория обмена не существует: {EXCHANGE_DIR}")
         return HttpResponse('failure\nФайл не найден', status=404)
     
-    logger.info(f"Начало обработки файла: {filename}")
+    logger.info(f"Начало обработки файла: {filename}, размер: {os.path.getsize(file_path)} байт")
     
     try:
         # Парсим и обрабатываем файл CommerceML 2
