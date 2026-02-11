@@ -68,11 +68,24 @@ def commerceml_exchange(request):
     - mode: checkauth, init, file, import (режим обмена)
     - filename: имя файла (для режимов file и import)
     """
+    # Явное логирование ВСЕХ запросов
     exchange_type = request.GET.get('type', '')
     mode = request.GET.get('mode', '')
     filename = request.GET.get('filename', '')
+    client_ip = get_client_ip(request)
     
-    logger.info(f"commerceml_exchange: type={exchange_type}, mode={mode}, filename={filename}, method={request.method}, IP={get_client_ip(request)}")
+    # Логируем ВСЕ запросы, даже если они не к CommerceML
+    logger.info("=" * 80)
+    logger.info(f"CommerceML запрос получен!")
+    logger.info(f"  URL: {request.path}")
+    logger.info(f"  Method: {request.method}")
+    logger.info(f"  GET params: {dict(request.GET)}")
+    logger.info(f"  Type: {exchange_type}")
+    logger.info(f"  Mode: {mode}")
+    logger.info(f"  Filename: {filename}")
+    logger.info(f"  IP: {client_ip}")
+    logger.info(f"  Headers: Authorization={bool(request.META.get('HTTP_AUTHORIZATION'))}")
+    logger.info("=" * 80)
     
     # Проверяем тип обмена
     if exchange_type != 'catalog':
