@@ -201,11 +201,16 @@ def handle_import(request, filename):
     file_path = os.path.join(EXCHANGE_DIR, filename)
     
     if not os.path.exists(file_path):
+        logger.error(f"Файл не найден: {file_path}")
         return HttpResponse('failure\nФайл не найден', status=404)
+    
+    logger.info(f"Начало обработки файла: {filename}")
     
     try:
         # Парсим и обрабатываем файл CommerceML 2
         result = process_commerceml_file(file_path, filename, request)
+        
+        logger.info(f"Результат обработки файла {filename}: статус={result.get('status')}, обработано={result.get('processed', 0)}")
         
         if result['status'] == 'success':
             return HttpResponse('success')
@@ -214,10 +219,11 @@ def handle_import(request, filename):
             return HttpResponse(f'progress\n{progress_info}')
         else:
             error_msg = result.get('error', 'Неизвестная ошибка')
+            logger.error(f"Ошибка обработки файла {filename}: {error_msg}")
             return HttpResponse(f'failure\n{error_msg}', status=500)
             
     except Exception as e:
-        logger.error(f"Ошибка обработки файла {filename}: {e}", exc_info=True)
+        logger.error(f"Исключение при обработке файла {filename}: {e}", exc_info=True)
         return HttpResponse(f'failure\nОшибка обработки: {str(e)}', status=500)
 
 
@@ -229,10 +235,18 @@ def process_commerceml_file(file_path, filename, request=None):
     """
     start_time = timezone.now()
     
+    logger.info(f"Начало обработки файла CommerceML: {filename}")
+    
     try:
+        # Проверяем размер файла
+        file_size = os.path.getsize(file_path)
+        logger.info(f"Размер файла: {file_size} байт")
+        
         # Парсим XML
         tree = ET.parse(file_path)
         root = tree.getroot()
+        
+        logger.info(f"Корневой элемент XML: {root.tag}")
         
         # Определяем namespace CommerceML
         namespaces = {
@@ -244,7 +258,15 @@ def process_commerceml_file(file_path, filename, request=None):
         catalog = root.find('.//catalog', namespaces) or root.find('.//Каталог', namespaces)
         
         if catalog is None:
-            return {'status': 'failure', 'error': 'Каталог не найден в файле'}
+            # Попробуем найти без namespace
+            catalog = root.find('.//catalog') or root.find('.//Каталог')
+            if catalog is None:
+                logger.error(f"Каталог не найден в файле. Корневой элемент: {root.tag}")
+                # Выведем все дочерние элементы для отладки
+                logger.error(f"Дочерние элементы корня: {[child.tag for child in root]}")
+                return {'status': 'failure', 'error': 'Каталог не найден в файле'}
+        
+        logger.info(f"Каталог найден: {catalog.tag}")
         
         # Извлекаем товары
         products_data = []
@@ -257,12 +279,21 @@ def process_commerceml_file(file_path, filename, request=None):
             catalog.findall('.//Товар')
         )
         
-        for product_elem in products_elements:
+        logger.info(f"Найдено элементов товаров: {len(products_elements)}")
+        
+        for idx, product_elem in enumerate(products_elements):
             product_data = parse_commerceml_product(product_elem, namespaces)
             if product_data:
                 products_data.append(product_data)
+                if idx < 3:  # Логируем первые 3 товара для отладки
+                    logger.info(f"Товар #{idx+1}: sku={product_data.get('sku')}, name={product_data.get('name')[:50] if product_data.get('name') else 'N/A'}")
+            else:
+                logger.warning(f"Товар #{idx+1}: не удалось распарсить (нет обязательных полей)")
+        
+        logger.info(f"Всего распарсено товаров: {len(products_data)}")
         
         if not products_data:
+            logger.warning("Товары не найдены в файле после парсинга")
             return {'status': 'success', 'message': 'Товары не найдены в файле'}
         
         # Обрабатываем товары в транзакции
@@ -271,27 +302,36 @@ def process_commerceml_file(file_path, filename, request=None):
         updated_count = 0
         errors = []
         
+        logger.info(f"Начало обработки {len(products_data)} товаров в транзакции")
+        
         with transaction.atomic():
-            for product_data in products_data:
+            for idx, product_data in enumerate(products_data):
                 try:
                     product, error, was_created = process_product_from_commerceml(product_data)
                     if product:
                         processed_count += 1
                         if was_created:
                             created_count += 1
+                            logger.info(f"Создан товар: {product.article} - {product.name}")
                         else:
                             updated_count += 1
+                            logger.debug(f"Обновлен товар: {product.article} - {product.name}")
                     elif error:
-                        errors.append({
+                        error_info = {
                             'sku': product_data.get('sku', 'unknown'),
                             'error': error
-                        })
+                        }
+                        errors.append(error_info)
+                        logger.warning(f"Ошибка обработки товара {product_data.get('sku', 'unknown')}: {error}")
                 except Exception as e:
-                    logger.error(f"Ошибка обработки товара: {e}", exc_info=True)
+                    error_msg = str(e)
+                    logger.error(f"Исключение при обработке товара {product_data.get('sku', 'unknown')}: {error_msg}", exc_info=True)
                     errors.append({
                         'sku': product_data.get('sku', 'unknown'),
-                        'error': str(e)
+                        'error': error_msg
                     })
+        
+        logger.info(f"Обработка завершена: обработано={processed_count}, создано={created_count}, обновлено={updated_count}, ошибок={len(errors)}")
         
         # Создаем лог синхронизации
         processing_time = (timezone.now() - start_time).total_seconds()
@@ -412,6 +452,111 @@ def parse_commerceml_product(product_elem, namespaces):
     product_data['is_active'] = True
     
     return product_data if product_data.get('sku') and product_data.get('name') else None
+
+
+def process_offers_file(root, namespaces, filename, request=None):
+    """
+    Обрабатывает файл предложений (offers.xml) - обновляет цены и остатки.
+    """
+    logger.info("Обработка файла предложений (offers.xml)")
+    
+    start_time = timezone.now()
+    processed_count = 0
+    updated_count = 0
+    errors = []
+    
+    # Ищем предложения
+    offers = (
+        root.findall('.//Предложение', namespaces) or
+        root.findall('.//catalog:Предложение', namespaces) or
+        root.findall('.//Предложение')
+    )
+    
+    logger.info(f"Найдено предложений: {len(offers)}")
+    
+    if not offers:
+        return {'status': 'success', 'message': 'Предложения не найдены в файле'}
+    
+    with transaction.atomic():
+        for offer_elem in offers:
+            try:
+                # Ищем Ид товара
+                product_id_elem = offer_elem.find('.//Ид', namespaces) or offer_elem.find('.//Ид')
+                if product_id_elem is None or not product_id_elem.text:
+                    continue
+                
+                product_id = product_id_elem.text.strip()
+                
+                # Ищем товар по external_id
+                product = Product.objects.filter(external_id=product_id).first()
+                if not product:
+                    # Пробуем по артикулу
+                    product = Product.objects.filter(article=product_id).first()
+                
+                if not product:
+                    logger.warning(f"Товар с Ид {product_id} не найден в базе")
+                    continue
+                
+                # Обновляем цену
+                price_elem = offer_elem.find('.//ЦенаЗаЕдиницу', namespaces) or offer_elem.find('.//ЦенаЗаЕдиницу')
+                if price_elem is not None and price_elem.text:
+                    try:
+                        price = float(price_elem.text.strip().replace(',', '.'))
+                        product.price = price
+                    except (ValueError, AttributeError):
+                        pass
+                
+                # Обновляем остаток
+                quantity_elem = offer_elem.find('.//Количество', namespaces) or offer_elem.find('.//Количество')
+                if quantity_elem is not None and quantity_elem.text:
+                    try:
+                        quantity = int(float(quantity_elem.text.strip().replace(',', '.')))
+                        product.quantity = quantity
+                        if quantity > 0:
+                            product.availability = 'in_stock'
+                        else:
+                            product.availability = 'out_of_stock'
+                    except (ValueError, AttributeError):
+                        pass
+                
+                product.save()
+                processed_count += 1
+                updated_count += 1
+                
+            except Exception as e:
+                logger.error(f"Ошибка обработки предложения: {e}", exc_info=True)
+                errors.append({
+                    'offer_id': product_id if 'product_id' in locals() else 'unknown',
+                    'error': str(e)
+                })
+    
+    processing_time = (timezone.now() - start_time).total_seconds()
+    request_ip = get_client_ip(request) if request else None
+    
+    sync_log = SyncLog.objects.create(
+        operation_type='file_upload',
+        status='success' if not errors else 'partial',
+        message=f'Обработано предложений из файла {filename}',
+        processed_count=processed_count,
+        created_count=0,
+        updated_count=updated_count,
+        errors_count=len(errors),
+        errors=errors,
+        request_ip=request_ip,
+        request_format='CommerceML 2 (offers)',
+        filename=filename,
+        processing_time=processing_time
+    )
+    
+    logger.info(f"Обработка предложений завершена: обработано {processed_count}, обновлено {updated_count}, ошибок {len(errors)}")
+    
+    return {
+        'status': 'success',
+        'processed': processed_count,
+        'created': 0,
+        'updated': updated_count,
+        'errors': len(errors)
+    }
 
 
 def process_product_from_commerceml(product_data):
