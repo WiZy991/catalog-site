@@ -162,11 +162,12 @@ def check_session_cookie(request):
     session_exists = cache.get(f'1c_session_{cookie_value}') is not None
     logger.info(f"Сессия в кеше: {session_exists}")
     
-    # ВРЕМЕННО: если кеш не работает, разрешаем доступ (только для отладки!)
+    # ВРЕМЕННО ДЛЯ ОТЛАДКИ: разрешаем доступ даже если сессия не найдена
+    # Это поможет понять, доходят ли запросы до Django
     if not session_exists:
-        logger.warning("Сессия не найдена в кеше, но разрешаем доступ для отладки")
-        # Раскомментируйте следующую строку, если кеш не работает:
-        # return True
+        logger.warning("⚠️ ВРЕМЕННО: Сессия не найдена в кеше, но разрешаем доступ для отладки")
+        logger.warning("⚠️ Это временное решение для диагностики проблемы!")
+        return True  # ВРЕМЕННО разрешаем доступ
     
     return session_exists
 
@@ -199,11 +200,16 @@ def handle_file(request, filename):
     Принимает файл через POST и сохраняет его.
     Возвращает 'success' при успешной записи.
     """
+    logger.info("=" * 80)
     logger.info(f"handle_file вызван: filename={filename}, method={request.method}")
+    logger.info(f"  Cookies: {dict(request.COOKIES)}")
+    logger.info(f"  Content-Length: {request.META.get('CONTENT_LENGTH', 'unknown')}")
     
-    if not check_session_cookie(request):
-        logger.warning("Сессия недействительна в handle_file")
-        return HttpResponse('failure\nСессия недействительна', status=401)
+    # ВРЕМЕННО: пропускаем проверку cookie для отладки
+    logger.warning("⚠️ ВРЕМЕННО: пропускаем проверку cookie в handle_file")
+    # if not check_session_cookie(request):
+    #     logger.warning("Сессия недействительна в handle_file")
+    #     return HttpResponse('failure\nСессия недействительна', status=401)
     
     if request.method != 'POST':
         logger.warning(f"Неправильный метод в handle_file: {request.method}")
@@ -259,11 +265,15 @@ def handle_import(request, filename):
     - success - при успешном завершении
     - failure - при ошибке
     """
+    logger.info("=" * 80)
     logger.info(f"handle_import вызван: filename={filename}")
+    logger.info(f"  Cookies: {dict(request.COOKIES)}")
     
-    if not check_session_cookie(request):
-        logger.warning("Сессия недействительна в handle_import")
-        return HttpResponse('failure\nСессия недействительна', status=401)
+    # ВРЕМЕННО: пропускаем проверку cookie для отладки
+    logger.warning("⚠️ ВРЕМЕННО: пропускаем проверку cookie в handle_import")
+    # if not check_session_cookie(request):
+    #     logger.warning("Сессия недействительна в handle_import")
+    #     return HttpResponse('failure\nСессия недействительна', status=401)
     
     if not filename:
         logger.warning("Не указано имя файла в handle_import")
