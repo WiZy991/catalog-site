@@ -664,21 +664,27 @@ def parse_commerceml_product(product_elem, namespaces):
     # Функция для поиска элемента с разными вариантами
     def find_elem(tag_name):
         """Ищет элемент с разными вариантами namespace."""
-        # Вариант 1: С префиксом catalog:
-        elem = product_elem.find(f'catalog:{tag_name}', namespaces)
-        if elem is not None:
-            return elem
-        
-        # Вариант 2: С namespace напрямую
+        # Вариант 1: С namespace напрямую (приоритет, если namespace есть)
         if namespace:
             elem = product_elem.find(f'{{{namespace}}}{tag_name}')
             if elem is not None:
                 return elem
         
-        # Вариант 3: Без namespace
+        # Вариант 2: Без namespace (если элементы без namespace)
         elem = product_elem.find(tag_name)
         if elem is not None:
             return elem
+        
+        # Вариант 3: С префиксом catalog: (только если префикс определен в namespaces)
+        # Проверяем, что префикс 'catalog' действительно есть в словаре
+        if 'catalog' in namespaces:
+            try:
+                elem = product_elem.find(f'catalog:{tag_name}', namespaces)
+                if elem is not None:
+                    return elem
+            except (KeyError, ValueError):
+                # Если префикс не найден, просто пропускаем
+                pass
         
         return None
     
@@ -716,7 +722,13 @@ def parse_commerceml_product(product_elem, namespaces):
     if namespace:
         price_elem = product_elem.find(f'.//{{{namespace}}}ЦенаЗаЕдиницу')
     if price_elem is None:
-        price_elem = product_elem.find('.//catalog:ЦенаЗаЕдиницу', namespaces) or product_elem.find('.//ЦенаЗаЕдиницу')
+        price_elem = product_elem.find('.//ЦенаЗаЕдиницу')
+    # Пробуем с префиксом catalog: только если он определен
+    if price_elem is None and 'catalog' in namespaces:
+        try:
+            price_elem = product_elem.find('.//catalog:ЦенаЗаЕдиницу', namespaces)
+        except (KeyError, ValueError):
+            pass
     if price_elem is not None and price_elem.text:
         try:
             product_data['price'] = float(price_elem.text.strip().replace(',', '.'))
@@ -728,7 +740,13 @@ def parse_commerceml_product(product_elem, namespaces):
     if namespace:
         quantity_elem = product_elem.find(f'.//{{{namespace}}}Количество')
     if quantity_elem is None:
-        quantity_elem = product_elem.find('.//catalog:Количество', namespaces) or product_elem.find('.//Количество')
+        quantity_elem = product_elem.find('.//Количество')
+    # Пробуем с префиксом catalog: только если он определен
+    if quantity_elem is None and 'catalog' in namespaces:
+        try:
+            quantity_elem = product_elem.find('.//catalog:Количество', namespaces)
+        except (KeyError, ValueError):
+            pass
     if quantity_elem is not None and quantity_elem.text:
         try:
             product_data['stock'] = int(float(quantity_elem.text.strip().replace(',', '.')))
@@ -740,7 +758,13 @@ def parse_commerceml_product(product_elem, namespaces):
     if namespace:
         group_elem = product_elem.find(f'{{{namespace}}}Группы/{{{namespace}}}Ид')
     if group_elem is None:
-        group_elem = product_elem.find('catalog:Группы/catalog:Ид', namespaces) or product_elem.find('Группы/Ид')
+        group_elem = product_elem.find('Группы/Ид')
+    # Пробуем с префиксом catalog: только если он определен
+    if group_elem is None and 'catalog' in namespaces:
+        try:
+            group_elem = product_elem.find('catalog:Группы/catalog:Ид', namespaces)
+        except (KeyError, ValueError):
+            pass
     if group_elem is not None and group_elem.text:
         product_data['category_id'] = group_elem.text.strip()
         # Пробуем найти название группы в родительских элементах
@@ -750,8 +774,13 @@ def parse_commerceml_product(product_elem, namespaces):
         if namespace:
             group_name_elem = root.find(f".//{{{namespace}}}Группа[@Ид='{product_data['category_id']}']/{{{namespace}}}Наименование")
         if group_name_elem is None:
-            group_name_elem = root.find(f".//catalog:Группа[@Ид='{product_data['category_id']}']/catalog:Наименование", namespaces) or \
-                              root.find(f".//Группа[@Ид='{product_data['category_id']}']/Наименование")
+            group_name_elem = root.find(f".//Группа[@Ид='{product_data['category_id']}']/Наименование")
+        # Пробуем с префиксом catalog: только если он определен
+        if group_name_elem is None and 'catalog' in namespaces:
+            try:
+                group_name_elem = root.find(f".//catalog:Группа[@Ид='{product_data['category_id']}']/catalog:Наименование", namespaces)
+            except (KeyError, ValueError):
+                pass
         if group_name_elem is not None and group_name_elem.text:
             product_data['category_name'] = group_name_elem.text.strip()
     
@@ -763,7 +792,13 @@ def parse_commerceml_product(product_elem, namespaces):
     if namespace:
         char_elem = product_elem.find(f'{{{namespace}}}ХарактеристикиТовара')
     if char_elem is None:
-        char_elem = product_elem.find('catalog:ХарактеристикиТовара', namespaces) or product_elem.find('ХарактеристикиТовара')
+        char_elem = product_elem.find('ХарактеристикиТовара')
+    # Пробуем с префиксом catalog: только если он определен
+    if char_elem is None and 'catalog' in namespaces:
+        try:
+            char_elem = product_elem.find('catalog:ХарактеристикиТовара', namespaces)
+        except (KeyError, ValueError):
+            pass
     
     if char_elem is not None:
         # Ищем все ХарактеристикаТовара
@@ -771,7 +806,13 @@ def parse_commerceml_product(product_elem, namespaces):
         if namespace:
             char_items = char_elem.findall(f'{{{namespace}}}ХарактеристикаТовара')
         if not char_items:
-            char_items = char_elem.findall('catalog:ХарактеристикаТовара', namespaces) or char_elem.findall('ХарактеристикаТовара')
+            char_items = char_elem.findall('ХарактеристикаТовара')
+        # Пробуем с префиксом catalog: только если он определен
+        if not char_items and 'catalog' in namespaces:
+            try:
+                char_items = char_elem.findall('catalog:ХарактеристикаТовара', namespaces)
+            except (KeyError, ValueError):
+                pass
         
         for char_item in char_items:
             # Ищем Наименование
@@ -779,14 +820,26 @@ def parse_commerceml_product(product_elem, namespaces):
             if namespace:
                 char_name_elem = char_item.find(f'{{{namespace}}}Наименование')
             if char_name_elem is None:
-                char_name_elem = char_item.find('catalog:Наименование', namespaces) or char_item.find('Наименование')
+                char_name_elem = char_item.find('Наименование')
+            # Пробуем с префиксом catalog: только если он определен
+            if char_name_elem is None and 'catalog' in namespaces:
+                try:
+                    char_name_elem = char_item.find('catalog:Наименование', namespaces)
+                except (KeyError, ValueError):
+                    pass
             
             # Ищем Значение
             char_value_elem = None
             if namespace:
                 char_value_elem = char_item.find(f'{{{namespace}}}Значение')
             if char_value_elem is None:
-                char_value_elem = char_item.find('catalog:Значение', namespaces) or char_item.find('Значение')
+                char_value_elem = char_item.find('Значение')
+            # Пробуем с префиксом catalog: только если он определен
+            if char_value_elem is None and 'catalog' in namespaces:
+                try:
+                    char_value_elem = char_item.find('catalog:Значение', namespaces)
+                except (KeyError, ValueError):
+                    pass
             
             if char_name_elem is not None and char_value_elem is not None:
                 char_name = char_name_elem.text.strip() if char_name_elem.text else ''
@@ -807,21 +860,51 @@ def parse_commerceml_product(product_elem, namespaces):
         if namespace:
             props_elem = product_elem.find(f'{{{namespace}}}ЗначенияСвойств')
         if props_elem is None:
-            props_elem = product_elem.find('catalog:ЗначенияСвойств', namespaces) or product_elem.find('ЗначенияСвойств')
+            props_elem = product_elem.find('ЗначенияСвойств')
+        # Пробуем с префиксом catalog: только если он определен
+        if props_elem is None and 'catalog' in namespaces:
+            try:
+                props_elem = product_elem.find('catalog:ЗначенияСвойств', namespaces)
+            except (KeyError, ValueError):
+                pass
         
         if props_elem is not None:
-            for prop_elem in props_elem.findall(f'{{{namespace}}}ЗначенияСвойства' if namespace else 'ЗначенияСвойства'):
+            prop_items = []
+            if namespace:
+                prop_items = props_elem.findall(f'{{{namespace}}}ЗначенияСвойства')
+            if not prop_items:
+                prop_items = props_elem.findall('ЗначенияСвойства')
+            # Пробуем с префиксом catalog: только если он определен
+            if not prop_items and 'catalog' in namespaces:
+                try:
+                    prop_items = props_elem.findall('catalog:ЗначенияСвойства', namespaces)
+                except (KeyError, ValueError):
+                    pass
+            
+            for prop_elem in prop_items:
                 prop_id = None
                 if namespace:
                     prop_id = prop_elem.find(f'{{{namespace}}}Ид')
                 if prop_id is None:
-                    prop_id = prop_elem.find('catalog:Ид', namespaces) or prop_elem.find('Ид')
+                    prop_id = prop_elem.find('Ид')
+                # Пробуем с префиксом catalog: только если он определен
+                if prop_id is None and 'catalog' in namespaces:
+                    try:
+                        prop_id = prop_elem.find('catalog:Ид', namespaces)
+                    except (KeyError, ValueError):
+                        pass
                 
                 prop_value = None
                 if namespace:
                     prop_value = prop_elem.find(f'{{{namespace}}}Значение')
                 if prop_value is None:
-                    prop_value = prop_elem.find('catalog:Значение', namespaces) or prop_elem.find('Значение')
+                    prop_value = prop_elem.find('Значение')
+                # Пробуем с префиксом catalog: только если он определен
+                if prop_value is None and 'catalog' in namespaces:
+                    try:
+                        prop_value = prop_elem.find('catalog:Значение', namespaces)
+                    except (KeyError, ValueError):
+                        pass
                 
                 if prop_id is not None and prop_value is not None:
                     # Нужно найти название свойства по Ид
