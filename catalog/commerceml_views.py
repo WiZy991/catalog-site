@@ -347,6 +347,23 @@ def handle_file(request, filename):
         if os.path.exists(file_path):
             actual_size = os.path.getsize(file_path)
             logger.info(f"Файл успешно сохранен: {filename}, размер: {actual_size} байт")
+            
+            # Если это ZIP, распаковываем сразу
+            if filename.lower().endswith('.zip'):
+                logger.info("Обнаружен ZIP архив, распаковываем...")
+                import zipfile
+                try:
+                    with zipfile.ZipFile(file_path, 'r') as zip_ref:
+                        zip_ref.extractall(EXCHANGE_DIR)
+                        extracted_files = zip_ref.namelist()
+                        logger.info(f"Распаковано файлов: {len(extracted_files)}")
+                        for ext_file in extracted_files[:5]:  # Логируем первые 5
+                            logger.info(f"  - {ext_file}")
+                except zipfile.BadZipFile:
+                    logger.warning("Файл не является ZIP архивом, оставляем как есть")
+                except Exception as e:
+                    logger.error(f"Ошибка распаковки ZIP: {e}", exc_info=True)
+                    # Не возвращаем ошибку, файл сохранен, можно попробовать обработать
         else:
             logger.error(f"Файл не найден после сохранения: {file_path}")
             return HttpResponse('failure\nОшибка сохранения файла', status=500, content_type='text/plain; charset=utf-8')
@@ -427,6 +444,7 @@ def process_commerceml_file(file_path, filename, request=None):
     Обработка файла CommerceML 2.
     
     Парсит XML в формате CommerceML 2 и импортирует товары в базу данных.
+    Поддерживает ZIP архивы (распаковывает автоматически).
     """
     start_time = timezone.now()
     
@@ -437,8 +455,31 @@ def process_commerceml_file(file_path, filename, request=None):
         file_size = os.path.getsize(file_path)
         logger.info(f"Размер файла: {file_size} байт")
         
+        # Проверяем, не ZIP ли это
+        xml_file_path = file_path
+        if filename.lower().endswith('.zip'):
+            logger.info("Обнаружен ZIP архив, распаковываем...")
+            import zipfile
+            try:
+                with zipfile.ZipFile(file_path, 'r') as zip_ref:
+                    # Распаковываем в ту же директорию
+                    zip_ref.extractall(EXCHANGE_DIR)
+                    # Ищем XML файлы в архиве
+                    xml_files = [f for f in zip_ref.namelist() if f.lower().endswith('.xml')]
+                    if xml_files:
+                        xml_file_path = os.path.join(EXCHANGE_DIR, xml_files[0])
+                        logger.info(f"Распакован XML файл: {xml_files[0]}")
+                    else:
+                        logger.error("В ZIP архиве не найдено XML файлов")
+                        return {'status': 'failure', 'error': 'В ZIP архиве не найдено XML файлов'}
+            except zipfile.BadZipFile:
+                logger.warning("Файл не является ZIP архивом, обрабатываем как XML")
+            except Exception as e:
+                logger.error(f"Ошибка распаковки ZIP: {e}", exc_info=True)
+                return {'status': 'failure', 'error': f'Ошибка распаковки ZIP: {str(e)}'}
+        
         # Парсим XML
-        tree = ET.parse(file_path)
+        tree = ET.parse(xml_file_path)
         root = tree.getroot()
         
         logger.info(f"Корневой элемент XML: {root.tag}")
@@ -662,12 +703,17 @@ def parse_commerceml_product(product_elem, namespaces):
         except (ValueError, AttributeError):
             pass
     
-    # Категория (группа)
+    # Категория (группа) - ищем название группы
     group_elem = product_elem.find('catalog:Группы/catalog:Ид', namespaces) or product_elem.find('Группы/Ид')
     if group_elem is not None and group_elem.text:
-        # Нужно найти название группы по Ид
-        # Пока просто сохраняем Ид, название найдем позже
         product_data['category_id'] = group_elem.text.strip()
+        # Пробуем найти название группы в родительских элементах
+        # Ищем в корне документа группы товаров
+        root = product_elem.getroottree().getroot()
+        group_name_elem = root.find(f".//catalog:Группа[@Ид='{product_data['category_id']}']/catalog:Наименование", namespaces) or \
+                          root.find(f".//Группа[@Ид='{product_data['category_id']}']/Наименование")
+        if group_name_elem is not None and group_name_elem.text:
+            product_data['category_name'] = group_name_elem.text.strip()
     
     # Характеристики
     characteristics = []
@@ -806,28 +852,138 @@ def process_offers_file(root, namespaces, filename, request=None):
 def process_product_from_commerceml(product_data):
     """
     Обрабатывает товар из CommerceML формата.
-    Использует ту же логику, что и process_product из one_c_views.py.
+    Использует логику из process_bulk_import для правильной обработки товаров.
     """
-    from .one_c_views import process_product
+    from .services import parse_product_name, get_category_for_product
+    from .models import Product, ProductCharacteristic
     
-    # Преобразуем данные в формат, ожидаемый process_product
-    # process_product ожидает sku, name, price, stock, category, characteristics, is_active
-    
-    # Если есть external_id, используем его как sku
-    if 'external_id' in product_data and product_data['external_id']:
-        product_data['sku'] = product_data['external_id']
-    elif 'article' in product_data and product_data['article']:
-        if 'sku' not in product_data or not product_data['sku']:
-            product_data['sku'] = product_data['article']
-    
-    # Убеждаемся, что есть sku
-    if 'sku' not in product_data or not product_data['sku']:
-        return None, "Отсутствует идентификатор товара (Ид или Артикул)", False
-    
-    # Обрабатываем категорию
-    if 'category_id' in product_data:
-        # Пока не обрабатываем категорию по Ид, можно добавить позже
-        pass
-    
-    # Вызываем стандартную функцию обработки
-    return process_product(product_data, sync_log=None)
+    try:
+        # Получаем основные данные
+        external_id = product_data.get('external_id') or product_data.get('sku', '')
+        name = product_data.get('name', '').strip()
+        article = product_data.get('article', '').strip()
+        
+        if not name:
+            return None, "Отсутствует название товара", False
+        
+        if not external_id and not article:
+            return None, "Отсутствует идентификатор товара (Ид или Артикул)", False
+        
+        # Парсим название для извлечения бренда, артикула и т.д.
+        parsed = parse_product_name(name)
+        
+        # Используем артикул из данных или из парсинга
+        if not article and parsed.get('article'):
+            article = parsed['article']
+        if not article and external_id:
+            article = external_id
+        
+        # Определяем бренд
+        brand = product_data.get('brand', '').strip() or parsed.get('brand', '')
+        
+        # Определяем категорию
+        category_name = product_data.get('category_name', '').strip()
+        if category_name:
+            category = get_category_for_product(category_name)
+        else:
+            category = get_category_for_product(name)
+        
+        # Обрабатываем цену
+        price = 0
+        if 'price' in product_data:
+            try:
+                price = float(str(product_data['price']).replace(',', '.'))
+            except (ValueError, TypeError):
+                price = 0
+        
+        # Обрабатываем остаток
+        quantity = 0
+        if 'stock' in product_data:
+            try:
+                quantity = int(float(str(product_data['stock']).replace(',', '.')))
+            except (ValueError, TypeError):
+                quantity = 0
+        
+        # Определяем наличие
+        availability = 'in_stock' if quantity > 0 else 'out_of_stock'
+        
+        # Ищем товар по external_id (приоритет) или по артикулу
+        product = None
+        if external_id:
+            product = Product.objects.filter(external_id=external_id, catalog_type='retail').first()
+        
+        if not product and article:
+            product = Product.objects.filter(article=article, catalog_type='retail').first()
+        
+        was_created = product is None
+        
+        if was_created:
+            # Создаем новый товар
+            product = Product(
+                external_id=external_id or article,
+                article=article,
+                name=name,
+                brand=brand,
+                price=price,
+                quantity=quantity,
+                availability=availability,
+                category=category,
+                catalog_type='retail',
+                is_active=True
+            )
+        else:
+            # Обновляем существующий товар
+            if external_id and not product.external_id:
+                product.external_id = external_id
+            if article and not product.article:
+                product.article = article
+            product.name = name
+            product.brand = brand
+            product.price = price
+            product.quantity = quantity
+            product.availability = availability
+            if category:
+                product.category = category
+            product.is_active = True
+        
+        # Описание
+        if product_data.get('description'):
+            product.description = product_data.get('description')
+        
+        # Применимость
+        if product_data.get('applicability'):
+            product.applicability = product_data.get('applicability')
+        elif parsed.get('applicability'):
+            product.applicability = parsed.get('applicability')
+        
+        # Кросс-номера
+        if product_data.get('cross_numbers'):
+            product.cross_numbers = product_data.get('cross_numbers')
+        elif parsed.get('oem_number'):
+            product.cross_numbers = parsed.get('oem_number')
+        
+        product.save()
+        
+        # Обрабатываем характеристики
+        if product_data.get('characteristics'):
+            # Удаляем старые характеристики
+            ProductCharacteristic.objects.filter(product=product).delete()
+            
+            # Создаем новые
+            characteristics = product_data.get('characteristics', [])
+            if isinstance(characteristics, list):
+                for idx, char_data in enumerate(characteristics):
+                    if isinstance(char_data, dict):
+                        ProductCharacteristic.objects.create(
+                            product=product,
+                            name=char_data.get('name', ''),
+                            value=char_data.get('value', ''),
+                            order=idx
+                        )
+        
+        return product, None, was_created
+        
+    except Exception as e:
+        error_msg = f"Ошибка обработки товара: {str(e)}"
+        logger.error(error_msg, exc_info=True)
+        return None, error_msg, False
