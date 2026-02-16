@@ -86,7 +86,110 @@ def bulk_product_import(request):
             filename = file.name.lower()
             
             try:
-                if filename.endswith('.csv'):
+                if filename.endswith('.xml'):
+                    # XML файл (CommerceML 2 формат)
+                    import xml.etree.ElementTree as ET
+                    from .commerceml_views import parse_commerceml_product, process_product_from_commerceml
+                    
+                    file.seek(0)  # Сбрасываем позицию файла
+                    content = file.read()
+                    
+                    # Парсим XML
+                    try:
+                        root = ET.fromstring(content)
+                    except ET.ParseError as e:
+                        raise Exception(f'Ошибка парсинга XML: {str(e)}')
+                    
+                    # Определяем namespace CommerceML
+                    namespaces = {
+                        'cml': 'http://v8.1c.ru/8.3/commerceml',
+                        '': 'http://v8.1c.ru/8.3/commerceml'
+                    }
+                    
+                    # Ищем каталог товаров
+                    catalog = (
+                        root.find('.//catalog', namespaces) or 
+                        root.find('.//Каталог', namespaces) or
+                        root.find('.//catalog') or 
+                        root.find('.//Каталог')
+                    )
+                    
+                    if catalog is None:
+                        raise Exception('Каталог не найден в XML файле. Убедитесь, что файл в формате CommerceML 2.')
+                    
+                    # Извлекаем товары
+                    products_elements = (
+                        catalog.findall('.//catalog:Товары/catalog:Товар', namespaces) or
+                        catalog.findall('.//Товары/Товар') or
+                        catalog.findall('.//catalog:Товар', namespaces) or
+                        catalog.findall('.//Товар')
+                    )
+                    
+                    if not products_elements:
+                        raise Exception('Товары не найдены в XML файле.')
+                    
+                    # Преобразуем товары в формат для process_bulk_import
+                    for product_elem in products_elements:
+                        product_data = parse_commerceml_product(product_elem, namespaces)
+                        if product_data and product_data.get('name'):
+                            # Преобразуем в формат, ожидаемый process_bulk_import
+                            row = {
+                                'name': product_data.get('name', ''),
+                                'article': product_data.get('article', '') or product_data.get('sku', ''),
+                            }
+                            
+                            # External ID для поиска/обновления товаров
+                            if product_data.get('external_id'):
+                                row['external_id'] = product_data.get('external_id')
+                            
+                            # Бренд
+                            if product_data.get('brand'):
+                                row['brand'] = product_data.get('brand')
+                            
+                            # Категория
+                            if product_data.get('category_name'):
+                                row['category_name'] = product_data.get('category_name')
+                            
+                            # Цена
+                            if product_data.get('price'):
+                                price_val = product_data.get('price')
+                                row['price'] = str(price_val).replace('.', ',')
+                                row['price_num'] = float(price_val)
+                            
+                            # Остаток
+                            if 'stock' in product_data:
+                                qty_val = product_data.get('stock', 0)
+                                row['quantity'] = str(qty_val)
+                                row['quantity_num'] = int(qty_val)
+                                row['остаток_num'] = int(qty_val)
+                            
+                            # Описание
+                            if product_data.get('description'):
+                                row['description'] = product_data.get('description')
+                            
+                            # Применимость
+                            if product_data.get('applicability'):
+                                row['applicability'] = product_data.get('applicability')
+                            
+                            # Кросс-номера
+                            if product_data.get('cross_numbers'):
+                                row['cross_numbers'] = product_data.get('cross_numbers')
+                            
+                            # Обрабатываем характеристики
+                            if product_data.get('characteristics'):
+                                char_parts = []
+                                for char in product_data['characteristics']:
+                                    if isinstance(char, dict):
+                                        char_parts.append(f"{char.get('name', '')}: {char.get('value', '')}")
+                                if char_parts:
+                                    row['characteristics'] = '\n'.join(char_parts)
+                            
+                            data_rows.append(row)
+                    
+                    if not data_rows:
+                        raise Exception('Не удалось извлечь товары из XML файла.')
+                        
+                elif filename.endswith('.csv'):
                     # CSV файл
                     content = file.read().decode('utf-8-sig')
                     reader = csv.DictReader(io.StringIO(content), delimiter=';')

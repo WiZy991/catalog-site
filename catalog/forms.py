@@ -53,12 +53,12 @@ class BulkProductImportForm(forms.Form):
     """Форма массового импорта товаров."""
     file = forms.FileField(
         label='Файл данных',
-        validators=[FileExtensionValidator(allowed_extensions=['csv', 'xls', 'xlsx'])],
+        validators=[FileExtensionValidator(allowed_extensions=['csv', 'xls', 'xlsx', 'xml'])],
         widget=forms.FileInput(attrs={
-            'accept': '.csv,.xls,.xlsx',
+            'accept': '.csv,.xls,.xlsx,.xml',
             'class': 'form-control',
         }),
-        help_text='Загрузите CSV или Excel файл с товарами'
+        help_text='Загрузите CSV, Excel или XML файл с товарами (поддерживается CommerceML 2 формат)'
     )
     auto_category = forms.BooleanField(
         label='Автоматически определять категории',

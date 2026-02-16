@@ -916,9 +916,18 @@ def process_bulk_import(data_rows, auto_category=True, auto_brand=True):
                         except (ValueError, TypeError):
                             quantity_value = 0
                 
-                # Проверяем существует ли товар ТОЛЬКО в основном каталоге (по артикулу или названию)
+                # Проверяем существует ли товар ТОЛЬКО в основном каталоге
+                # Приоритет: external_id > article > name
                 product = None
-                if article:
+                external_id = str(row.get('external_id', '')).strip()
+                
+                if external_id:
+                    product = Product.objects.filter(
+                        external_id=external_id,
+                        catalog_type='retail'  # ТОЛЬКО основной каталог!
+                    ).first()
+                
+                if not product and article:
                     product = Product.objects.filter(
                         article=article,
                         catalog_type='retail'  # ТОЛЬКО основной каталог!
@@ -1018,6 +1027,9 @@ def process_bulk_import(data_rows, auto_category=True, auto_brand=True):
                         product.name = name
                         if article:
                             product.article = article
+                        # Обновляем external_id если он есть
+                        if external_id:
+                            product.external_id = external_id
                         if brand:
                             product.brand = brand
                         if category:
@@ -1048,6 +1060,7 @@ def process_bulk_import(data_rows, auto_category=True, auto_brand=True):
                     product = Product.objects.create(
                         name=name,
                         article=article,
+                        external_id=external_id if external_id else None,
                         brand=brand,
                         category=category,
                         price=price_value,
