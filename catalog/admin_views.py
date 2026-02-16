@@ -100,33 +100,77 @@ def bulk_product_import(request):
                     except ET.ParseError as e:
                         raise Exception(f'Ошибка парсинга XML: {str(e)}')
                     
-                    # Определяем namespace CommerceML
-                    namespaces = {
-                        'cml': 'http://v8.1c.ru/8.3/commerceml',
-                        '': 'http://v8.1c.ru/8.3/commerceml'
-                    }
+                    # Автоматически определяем namespace из корневого элемента
+                    # Формат: {namespace}ИмяЭлемента
+                    root_tag = root.tag
+                    if root_tag.startswith('{'):
+                        # Извлекаем namespace из тега
+                        namespace = root_tag[1:root_tag.index('}')]
+                        root_tag_name = root_tag[root_tag.index('}')+1:]
+                    else:
+                        namespace = None
+                        root_tag_name = root_tag
                     
-                    # Ищем каталог товаров
-                    catalog = (
-                        root.find('.//catalog', namespaces) or 
-                        root.find('.//Каталог', namespaces) or
-                        root.find('.//catalog') or 
-                        root.find('.//Каталог')
-                    )
+                    # Определяем namespace CommerceML (поддерживаем разные варианты)
+                    namespaces = {}
+                    if namespace:
+                        # Используем найденный namespace
+                        namespaces['cml'] = namespace
+                        namespaces[''] = namespace
+                    else:
+                        # Стандартные namespace CommerceML
+                        namespaces['cml'] = 'http://v8.1c.ru/8.3/commerceml'
+                        namespaces[''] = 'http://v8.1c.ru/8.3/commerceml'
+                    
+                    # Также добавляем альтернативный namespace (urn:1C.ru:commerceml_2)
+                    namespaces['cml2'] = 'urn:1C.ru:commerceml_2'
+                    
+                    # Ищем каталог товаров (пробуем разные варианты)
+                    catalog = None
+                    
+                    # Вариант 1: С namespace
+                    if namespace:
+                        catalog = root.find(f'.//{{{namespace}}}Каталог') or root.find(f'.//{{{namespace}}}catalog')
+                    
+                    # Вариант 2: Стандартные варианты
+                    if catalog is None:
+                        catalog = (
+                            root.find('.//catalog', namespaces) or 
+                            root.find('.//Каталог', namespaces) or
+                            root.find('.//catalog') or 
+                            root.find('.//Каталог')
+                        )
                     
                     if catalog is None:
-                        raise Exception('Каталог не найден в XML файле. Убедитесь, что файл в формате CommerceML 2.')
+                        # Выводим структуру для диагностики
+                        error_msg = f'Каталог не найден в XML файле. '
+                        error_msg += f'Корневой элемент: {root_tag_name}, namespace: {namespace or "нет"}. '
+                        error_msg += f'Дочерние элементы: {[child.tag for child in root[:5]]}'
+                        raise Exception(error_msg)
                     
-                    # Извлекаем товары
-                    products_elements = (
-                        catalog.findall('.//catalog:Товары/catalog:Товар', namespaces) or
-                        catalog.findall('.//Товары/Товар') or
-                        catalog.findall('.//catalog:Товар', namespaces) or
-                        catalog.findall('.//Товар')
-                    )
+                    # Извлекаем товары (пробуем разные варианты)
+                    products_elements = []
+                    
+                    # Вариант 1: С namespace
+                    if namespace:
+                        products_elements = (
+                            catalog.findall(f'.//{{{namespace}}}Товары/{{{namespace}}}Товар') or
+                            catalog.findall(f'.//{{{namespace}}}Товар')
+                        )
+                    
+                    # Вариант 2: Стандартные варианты
+                    if not products_elements:
+                        products_elements = (
+                            catalog.findall('.//catalog:Товары/catalog:Товар', namespaces) or
+                            catalog.findall('.//Товары/Товар') or
+                            catalog.findall('.//catalog:Товар', namespaces) or
+                            catalog.findall('.//Товар')
+                        )
                     
                     if not products_elements:
-                        raise Exception('Товары не найдены в XML файле.')
+                        error_msg = 'Товары не найдены в XML файле. '
+                        error_msg += f'Найдены элементы в каталоге: {[child.tag for child in catalog[:5]]}'
+                        raise Exception(error_msg)
                     
                     # Преобразуем товары в формат для process_bulk_import
                     for product_elem in products_elements:

@@ -658,8 +658,32 @@ def parse_commerceml_product(product_elem, namespaces):
     """
     product_data = {}
     
+    # Получаем namespace из словаря (если есть)
+    namespace = namespaces.get('', namespaces.get('cml', None))
+    
+    # Функция для поиска элемента с разными вариантами
+    def find_elem(tag_name):
+        """Ищет элемент с разными вариантами namespace."""
+        # Вариант 1: С префиксом catalog:
+        elem = product_elem.find(f'catalog:{tag_name}', namespaces)
+        if elem is not None:
+            return elem
+        
+        # Вариант 2: С namespace напрямую
+        if namespace:
+            elem = product_elem.find(f'{{{namespace}}}{tag_name}')
+            if elem is not None:
+                return elem
+        
+        # Вариант 3: Без namespace
+        elem = product_elem.find(tag_name)
+        if elem is not None:
+            return elem
+        
+        return None
+    
     # Идентификатор товара (Ид)
-    id_elem = product_elem.find('catalog:Ид', namespaces) or product_elem.find('Ид')
+    id_elem = find_elem('Ид')
     if id_elem is not None and id_elem.text:
         product_data['sku'] = id_elem.text.strip()
         product_data['external_id'] = id_elem.text.strip()
@@ -670,25 +694,29 @@ def parse_commerceml_product(product_elem, namespaces):
             product_data['external_id'] = product_elem.attrib['Ид'].strip()
     
     # Артикул
-    article_elem = product_elem.find('catalog:Артикул', namespaces) or product_elem.find('Артикул')
+    article_elem = find_elem('Артикул')
     if article_elem is not None and article_elem.text:
         product_data['article'] = article_elem.text.strip()
         if 'sku' not in product_data:
             product_data['sku'] = article_elem.text.strip()
     
     # Наименование
-    name_elem = product_elem.find('catalog:Наименование', namespaces) or product_elem.find('Наименование')
+    name_elem = find_elem('Наименование')
     if name_elem is not None and name_elem.text:
         product_data['name'] = name_elem.text.strip()
     
     # Описание
-    description_elem = product_elem.find('catalog:Описание', namespaces) or product_elem.find('Описание')
+    description_elem = find_elem('Описание')
     if description_elem is not None and description_elem.text:
         product_data['description'] = description_elem.text.strip()
     
     # Цены (ищем в предложениях)
     # В CommerceML цены обычно в отдельном файле предложений, но могут быть и здесь
-    price_elem = product_elem.find('.//catalog:ЦенаЗаЕдиницу', namespaces) or product_elem.find('.//ЦенаЗаЕдиницу')
+    price_elem = None
+    if namespace:
+        price_elem = product_elem.find(f'.//{{{namespace}}}ЦенаЗаЕдиницу')
+    if price_elem is None:
+        price_elem = product_elem.find('.//catalog:ЦенаЗаЕдиницу', namespaces) or product_elem.find('.//ЦенаЗаЕдиницу')
     if price_elem is not None and price_elem.text:
         try:
             product_data['price'] = float(price_elem.text.strip().replace(',', '.'))
@@ -696,7 +724,11 @@ def parse_commerceml_product(product_elem, namespaces):
             pass
     
     # Остатки (ищем в предложениях)
-    quantity_elem = product_elem.find('.//catalog:Количество', namespaces) or product_elem.find('.//Количество')
+    quantity_elem = None
+    if namespace:
+        quantity_elem = product_elem.find(f'.//{{{namespace}}}Количество')
+    if quantity_elem is None:
+        quantity_elem = product_elem.find('.//catalog:Количество', namespaces) or product_elem.find('.//Количество')
     if quantity_elem is not None and quantity_elem.text:
         try:
             product_data['stock'] = int(float(quantity_elem.text.strip().replace(',', '.')))
@@ -704,36 +736,104 @@ def parse_commerceml_product(product_elem, namespaces):
             pass
     
     # Категория (группа) - ищем название группы
-    group_elem = product_elem.find('catalog:Группы/catalog:Ид', namespaces) or product_elem.find('Группы/Ид')
+    group_elem = None
+    if namespace:
+        group_elem = product_elem.find(f'{{{namespace}}}Группы/{{{namespace}}}Ид')
+    if group_elem is None:
+        group_elem = product_elem.find('catalog:Группы/catalog:Ид', namespaces) or product_elem.find('Группы/Ид')
     if group_elem is not None and group_elem.text:
         product_data['category_id'] = group_elem.text.strip()
         # Пробуем найти название группы в родительских элементах
         # Ищем в корне документа группы товаров
         root = product_elem.getroottree().getroot()
-        group_name_elem = root.find(f".//catalog:Группа[@Ид='{product_data['category_id']}']/catalog:Наименование", namespaces) or \
-                          root.find(f".//Группа[@Ид='{product_data['category_id']}']/Наименование")
+        group_name_elem = None
+        if namespace:
+            group_name_elem = root.find(f".//{{{namespace}}}Группа[@Ид='{product_data['category_id']}']/{{{namespace}}}Наименование")
+        if group_name_elem is None:
+            group_name_elem = root.find(f".//catalog:Группа[@Ид='{product_data['category_id']}']/catalog:Наименование", namespaces) or \
+                              root.find(f".//Группа[@Ид='{product_data['category_id']}']/Наименование")
         if group_name_elem is not None and group_name_elem.text:
             product_data['category_name'] = group_name_elem.text.strip()
     
-    # Характеристики
+    # Характеристики товара (ХарактеристикиТовара) - используется в некоторых версиях CommerceML
     characteristics = []
-    props_elem = product_elem.find('catalog:ЗначенияСвойств', namespaces) or product_elem.find('ЗначенияСвойств')
-    if props_elem is not None:
-        for prop_elem in props_elem.findall('catalog:ЗначенияСвойства', namespaces) or props_elem.findall('ЗначенияСвойства'):
-            prop_id = prop_elem.find('catalog:Ид', namespaces) or prop_elem.find('Ид')
-            prop_value = prop_elem.find('catalog:Значение', namespaces) or prop_elem.find('Значение')
+    
+    # Вариант 1: ХарактеристикиТовара (как в вашем XML)
+    char_elem = None
+    if namespace:
+        char_elem = product_elem.find(f'{{{namespace}}}ХарактеристикиТовара')
+    if char_elem is None:
+        char_elem = product_elem.find('catalog:ХарактеристикиТовара', namespaces) or product_elem.find('ХарактеристикиТовара')
+    
+    if char_elem is not None:
+        # Ищем все ХарактеристикаТовара
+        char_items = []
+        if namespace:
+            char_items = char_elem.findall(f'{{{namespace}}}ХарактеристикаТовара')
+        if not char_items:
+            char_items = char_elem.findall('catalog:ХарактеристикаТовара', namespaces) or char_elem.findall('ХарактеристикаТовара')
+        
+        for char_item in char_items:
+            # Ищем Наименование
+            char_name_elem = None
+            if namespace:
+                char_name_elem = char_item.find(f'{{{namespace}}}Наименование')
+            if char_name_elem is None:
+                char_name_elem = char_item.find('catalog:Наименование', namespaces) or char_item.find('Наименование')
             
-            if prop_id is not None and prop_value is not None:
-                # Нужно найти название свойства по Ид
-                # Пока используем Ид как название
-                prop_name = prop_id.text.strip() if prop_id.text else 'Свойство'
-                prop_val = prop_value.text.strip() if prop_value.text else ''
+            # Ищем Значение
+            char_value_elem = None
+            if namespace:
+                char_value_elem = char_item.find(f'{{{namespace}}}Значение')
+            if char_value_elem is None:
+                char_value_elem = char_item.find('catalog:Значение', namespaces) or char_item.find('Значение')
+            
+            if char_name_elem is not None and char_value_elem is not None:
+                char_name = char_name_elem.text.strip() if char_name_elem.text else ''
+                char_value = char_value_elem.text.strip() if char_value_elem.text else ''
                 
-                if prop_name and prop_val:
+                if char_name and char_value:
                     characteristics.append({
-                        'name': prop_name,
-                        'value': prop_val
+                        'name': char_name,
+                        'value': char_value
                     })
+                    # Если это марка (бренд), сохраняем отдельно
+                    if char_name.lower() in ['марка', 'brand', 'бренд']:
+                        product_data['brand'] = char_value
+    
+    # Вариант 2: ЗначенияСвойств (старый формат)
+    if not characteristics:
+        props_elem = None
+        if namespace:
+            props_elem = product_elem.find(f'{{{namespace}}}ЗначенияСвойств')
+        if props_elem is None:
+            props_elem = product_elem.find('catalog:ЗначенияСвойств', namespaces) or product_elem.find('ЗначенияСвойств')
+        
+        if props_elem is not None:
+            for prop_elem in props_elem.findall(f'{{{namespace}}}ЗначенияСвойства' if namespace else 'ЗначенияСвойства'):
+                prop_id = None
+                if namespace:
+                    prop_id = prop_elem.find(f'{{{namespace}}}Ид')
+                if prop_id is None:
+                    prop_id = prop_elem.find('catalog:Ид', namespaces) or prop_elem.find('Ид')
+                
+                prop_value = None
+                if namespace:
+                    prop_value = prop_elem.find(f'{{{namespace}}}Значение')
+                if prop_value is None:
+                    prop_value = prop_elem.find('catalog:Значение', namespaces) or prop_elem.find('Значение')
+                
+                if prop_id is not None and prop_value is not None:
+                    # Нужно найти название свойства по Ид
+                    # Пока используем Ид как название
+                    prop_name = prop_id.text.strip() if prop_id.text else 'Свойство'
+                    prop_val = prop_value.text.strip() if prop_value.text else ''
+                    
+                    if prop_name and prop_val:
+                        characteristics.append({
+                            'name': prop_name,
+                            'value': prop_val
+                        })
     
     if characteristics:
         product_data['characteristics'] = characteristics
