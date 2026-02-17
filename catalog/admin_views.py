@@ -174,7 +174,7 @@ def bulk_product_import(request):
                     
                     # Преобразуем товары в формат для process_bulk_import
                     for product_elem in products_elements:
-                        product_data = parse_commerceml_product(product_elem, namespaces)
+                        product_data = parse_commerceml_product(product_elem, namespaces, root)
                         if product_data and product_data.get('name'):
                             # Преобразуем в формат, ожидаемый process_bulk_import
                             row = {

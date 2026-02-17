@@ -484,11 +484,31 @@ def process_commerceml_file(file_path, filename, request=None):
         
         logger.info(f"Корневой элемент XML: {root.tag}")
         
-        # Определяем namespace CommerceML
-        namespaces = {
-            'cml': 'http://v8.1c.ru/8.3/commerceml',
-            '': 'http://v8.1c.ru/8.3/commerceml'
-        }
+        # Автоматически определяем namespace из корневого элемента
+        root_tag = root.tag
+        if root_tag.startswith('{'):
+            # Извлекаем namespace из тега
+            namespace = root_tag[1:root_tag.index('}')]
+            root_tag_name = root_tag[root_tag.index('}')+1:]
+        else:
+            namespace = None
+            root_tag_name = root_tag
+        
+        # Определяем namespace CommerceML (поддерживаем разные варианты)
+        namespaces = {}
+        if namespace:
+            # Используем найденный namespace
+            namespaces['cml'] = namespace
+            namespaces[''] = namespace
+        else:
+            # Стандартные namespace CommerceML
+            namespaces['cml'] = 'http://v8.1c.ru/8.3/commerceml'
+            namespaces[''] = 'http://v8.1c.ru/8.3/commerceml'
+        
+        # Также добавляем альтернативный namespace (urn:1C.ru:commerceml_2)
+        namespaces['cml2'] = 'urn:1C.ru:commerceml_2'
+        
+        logger.info(f"Определен namespace: {namespace or 'стандартный'}")
         
         # Ищем каталог товаров или предложения
         # В CommerceML может быть два типа файлов:
@@ -496,28 +516,37 @@ def process_commerceml_file(file_path, filename, request=None):
         # 2. offers.xml - предложения (цены, остатки)
         
         # Сначала проверяем, не файл ли это предложений
-        package = (
-            root.find('.//ПакетПредложений', namespaces) or 
-            root.find('.//ПакетПредложений') or
-            root.find('.//catalog:ПакетПредложений', namespaces)
-        )
+        package = None
+        if namespace:
+            package = root.find(f'.//{{{namespace}}}ПакетПредложений')
+        if package is None:
+            package = root.find('.//ПакетПредложений')
+        if package is None and 'catalog' in namespaces:
+            try:
+                package = root.find('.//catalog:ПакетПредложений', namespaces)
+            except (KeyError, ValueError):
+                pass
         
         if package is not None:
             logger.info("Обнаружен файл предложений (offers.xml) - обрабатываем цены и остатки")
             return process_offers_file(root, namespaces, filename, request)
         
         # Ищем каталог товаров
-        catalog = (
-            root.find('.//catalog', namespaces) or 
-            root.find('.//Каталог', namespaces) or
-            root.find('.//catalog') or 
-            root.find('.//Каталог')
-        )
+        catalog = None
+        if namespace:
+            catalog = root.find(f'.//{{{namespace}}}Каталог') or root.find(f'.//{{{namespace}}}catalog')
+        if catalog is None:
+            catalog = (
+                root.find('.//catalog', namespaces) or 
+                root.find('.//Каталог', namespaces) or
+                root.find('.//catalog') or 
+                root.find('.//Каталог')
+            )
         
         if catalog is None:
-            logger.error(f"Каталог не найден в файле. Корневой элемент: {root.tag}")
+            logger.error(f"Каталог не найден в файле. Корневой элемент: {root.tag}, namespace: {namespace or 'нет'}")
             # Выведем все дочерние элементы для отладки
-            logger.error(f"Дочерние элементы корня: {[child.tag for child in root]}")
+            logger.error(f"Дочерние элементы корня: {[child.tag for child in root[:5]]}")
             return {'status': 'failure', 'error': 'Каталог не найден в файле'}
         
         logger.info(f"Каталог найден: {catalog.tag}")
@@ -526,12 +555,19 @@ def process_commerceml_file(file_path, filename, request=None):
         products_data = []
         
         # Ищем товары в разных возможных местах
-        products_elements = (
-            catalog.findall('.//catalog:Товары/catalog:Товар', namespaces) or
-            catalog.findall('.//Товары/Товар') or
-            catalog.findall('.//catalog:Товар', namespaces) or
-            catalog.findall('.//Товар')
-        )
+        products_elements = []
+        if namespace:
+            products_elements = (
+                catalog.findall(f'.//{{{namespace}}}Товары/{{{namespace}}}Товар') or
+                catalog.findall(f'.//{{{namespace}}}Товар')
+            )
+        if not products_elements:
+            products_elements = (
+                catalog.findall('.//catalog:Товары/catalog:Товар', namespaces) or
+                catalog.findall('.//Товары/Товар') or
+                catalog.findall('.//catalog:Товар', namespaces) or
+                catalog.findall('.//Товар')
+            )
         
         logger.info(f"Найдено элементов товаров: {len(products_elements)}")
         
@@ -546,7 +582,7 @@ def process_commerceml_file(file_path, filename, request=None):
                     logger.error(f"    Внук: {grandchild.tag}, атрибуты: {grandchild.attrib}")
         
         for idx, product_elem in enumerate(products_elements):
-            product_data = parse_commerceml_product(product_elem, namespaces)
+            product_data = parse_commerceml_product(product_elem, namespaces, root)
             if product_data:
                 products_data.append(product_data)
                 if idx < 3:  # Логируем первые 3 товара для отладки
@@ -650,11 +686,16 @@ def process_commerceml_file(file_path, filename, request=None):
         return {'status': 'failure', 'error': str(e)}
 
 
-def parse_commerceml_product(product_elem, namespaces):
+def parse_commerceml_product(product_elem, namespaces, root_elem=None):
     """
     Парсит элемент товара из CommerceML 2 XML.
     
     Возвращает словарь с данными товара в формате, совместимом с validate_product.
+    
+    Args:
+        product_elem: Элемент товара из XML
+        namespaces: Словарь с namespace
+        root_elem: Корневой элемент XML (опционально, для поиска групп)
     """
     product_data = {}
     
@@ -767,22 +808,34 @@ def parse_commerceml_product(product_elem, namespaces):
             pass
     if group_elem is not None and group_elem.text:
         product_data['category_id'] = group_elem.text.strip()
-        # Пробуем найти название группы в родительских элементах
-        # Ищем в корне документа группы товаров
-        root = product_elem.getroottree().getroot()
-        group_name_elem = None
-        if namespace:
-            group_name_elem = root.find(f".//{{{namespace}}}Группа[@Ид='{product_data['category_id']}']/{{{namespace}}}Наименование")
-        if group_name_elem is None:
-            group_name_elem = root.find(f".//Группа[@Ид='{product_data['category_id']}']/Наименование")
-        # Пробуем с префиксом catalog: только если он определен
-        if group_name_elem is None and 'catalog' in namespaces:
+        # Пробуем найти название группы в корне документа
+        # Используем переданный root_elem
+        root = root_elem
+        if root is None:
+            # Если root не передан, пробуем найти его через итерацию
+            # Ищем элемент с namespace КоммерческаяИнформация
             try:
-                group_name_elem = root.find(f".//catalog:Группа[@Ид='{product_data['category_id']}']/catalog:Наименование", namespaces)
-            except (KeyError, ValueError):
+                # Ищем корневой элемент через iter() - он должен быть предком product_elem
+                # В ElementTree можно использовать iter() для поиска всех элементов
+                # Но проще всего - передавать root из вызывающего кода
+                pass  # Если root не передан, просто пропускаем поиск группы
+            except:
                 pass
-        if group_name_elem is not None and group_name_elem.text:
-            product_data['category_name'] = group_name_elem.text.strip()
+        
+        if root is not None:
+            group_name_elem = None
+            if namespace:
+                group_name_elem = root.find(f".//{{{namespace}}}Группа[@Ид='{product_data['category_id']}']/{{{namespace}}}Наименование")
+            if group_name_elem is None:
+                group_name_elem = root.find(f".//Группа[@Ид='{product_data['category_id']}']/Наименование")
+            # Пробуем с префиксом catalog: только если он определен
+            if group_name_elem is None and 'catalog' in namespaces:
+                try:
+                    group_name_elem = root.find(f".//catalog:Группа[@Ид='{product_data['category_id']}']/catalog:Наименование", namespaces)
+                except (KeyError, ValueError):
+                    pass
+            if group_name_elem is not None and group_name_elem.text:
+                product_data['category_name'] = group_name_elem.text.strip()
     
     # Характеристики товара (ХарактеристикиТовара) - используется в некоторых версиях CommerceML
     characteristics = []
