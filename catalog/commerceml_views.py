@@ -1126,6 +1126,7 @@ def process_product_from_commerceml(product_data):
     """
     from .services import parse_product_name, get_category_for_product
     from .models import Product, ProductCharacteristic
+    import re
     
     try:
         # Получаем основные данные
@@ -1151,12 +1152,49 @@ def process_product_from_commerceml(product_data):
         # Определяем бренд
         brand = product_data.get('brand', '').strip() or parsed.get('brand', '')
         
+        # Формируем чистое название товара на основе парсинга
+        # Сначала убираем лишние запятые, скобки и пробелы из исходного названия
+        clean_name = name
+        
+        # Убираем множественные запятые и пробелы
+        clean_name = re.sub(r',+', ',', clean_name)  # Множественные запятые -> одна
+        clean_name = re.sub(r'\s+', ' ', clean_name)  # Множественные пробелы -> один
+        clean_name = re.sub(r'\(\s*,', '(', clean_name)  # Пробелы и запятые после открывающей скобки
+        clean_name = re.sub(r',\s*\)', ')', clean_name)  # Пробелы и запятые перед закрывающей скобкой
+        clean_name = re.sub(r'\(\s*\)', '', clean_name)  # Пустые скобки
+        clean_name = re.sub(r',\s*,', ',', clean_name)  # Запятые подряд
+        clean_name = clean_name.strip(' ,()')  # Убираем запятые и скобки в начале/конце
+        
+        # Если название начинается с категории и содержит скобки, убираем скобки и лишние запятые
+        # Пример: "Датчик кислородный (TOYOTA,, 89467-71020,,,, 2UZFE/1GRFE,,,...)"
+        # Должно стать: "Датчик кислородный, TOYOTA 89467-71020 2UZFE/1GRFE"
+        if '(' in clean_name and ')' in clean_name:
+            # Извлекаем содержимое скобок
+            bracket_content = re.search(r'\(([^)]+)\)', clean_name)
+            if bracket_content:
+                content = bracket_content.group(1)
+                # Убираем лишние запятые и пробелы из содержимого
+                content = re.sub(r',+', ' ', content)
+                content = re.sub(r'\s+', ' ', content).strip()
+                # Заменяем скобки на запятую и содержимое
+                category_part = clean_name[:bracket_content.start()].strip()
+                clean_name = f"{category_part}, {content}".strip()
+        
+        # Убираем оставшиеся лишние запятые и пробелы
+        clean_name = re.sub(r',\s*,', ',', clean_name)
+        clean_name = re.sub(r'\s+', ' ', clean_name).strip()
+        
+        # Финальная очистка: убираем запятые в начале и конце, множественные запятые
+        clean_name = re.sub(r'^,+|,+$', '', clean_name)  # Запятые в начале/конце
+        clean_name = re.sub(r',\s*,', ',', clean_name)  # Множественные запятые
+        clean_name = clean_name.strip()
+        
         # Определяем категорию
         category_name = product_data.get('category_name', '').strip()
         if category_name:
             category = get_category_for_product(category_name)
         else:
-            category = get_category_for_product(name)
+            category = get_category_for_product(clean_name)
         
         # Обрабатываем цену
         price = 0
@@ -1192,7 +1230,7 @@ def process_product_from_commerceml(product_data):
             product = Product(
                 external_id=external_id or article,
                 article=article,
-                name=name,
+                name=clean_name,  # Используем чистое название
                 brand=brand,
                 price=price,
                 quantity=quantity,
@@ -1207,7 +1245,7 @@ def process_product_from_commerceml(product_data):
                 product.external_id = external_id
             if article and not product.article:
                 product.article = article
-            product.name = name
+            product.name = clean_name  # Используем чистое название
             product.brand = brand
             product.price = price
             product.quantity = quantity
@@ -1220,34 +1258,74 @@ def process_product_from_commerceml(product_data):
         if product_data.get('description'):
             product.description = product_data.get('description')
         
-        # Применимость
+        # Применимость - используем из парсинга или из данных
+        applicability = None
         if product_data.get('applicability'):
-            product.applicability = product_data.get('applicability')
+            applicability = product_data.get('applicability')
         elif parsed.get('applicability'):
-            product.applicability = parsed.get('applicability')
+            applicability = parsed.get('applicability')
         
-        # Кросс-номера
+        if applicability:
+            product.applicability = applicability
+        
+        # Кросс-номера - объединяем из разных источников
+        cross_numbers_parts = []
         if product_data.get('cross_numbers'):
-            product.cross_numbers = product_data.get('cross_numbers')
-        elif parsed.get('oem_number'):
-            product.cross_numbers = parsed.get('oem_number')
+            cross_numbers_parts.append(product_data.get('cross_numbers'))
+        if parsed.get('oem_number'):
+            cross_numbers_parts.append(parsed.get('oem_number'))
+        
+        if cross_numbers_parts:
+            product.cross_numbers = ', '.join([p for p in cross_numbers_parts if p])
+        
+        # Характеристики - объединяем из парсинга названия и из XML
+        characteristics_parts = []
+        
+        # Сначала добавляем характеристики из парсинга названия (это более надежно)
+        if parsed.get('characteristics'):
+            # parsed['characteristics'] - это строка с разделителями \n
+            parsed_chars = parsed.get('characteristics').split('\n')
+            for char_line in parsed_chars:
+                char_line = char_line.strip()
+                if char_line:
+                    characteristics_parts.append(char_line)
+        
+        # Затем добавляем характеристики из XML (как список словарей)
+        if product_data.get('characteristics'):
+            char_list = product_data.get('characteristics', [])
+            if isinstance(char_list, list):
+                for char_data in char_list:
+                    if isinstance(char_data, dict):
+                        char_name = char_data.get('name', '').strip()
+                        char_value = char_data.get('value', '').strip()
+                        if char_name and char_value:
+                            char_str = f"{char_name}: {char_value}"
+                            # Проверяем, нет ли уже такой характеристики
+                            if not any(char_str in existing for existing in characteristics_parts):
+                                characteristics_parts.append(char_str)
+        
+        # Объединяем все характеристики
+        if characteristics_parts:
+            product.characteristics = '\n'.join(characteristics_parts)
         
         product.save()
         
-        # Обрабатываем характеристики
-        if product_data.get('characteristics'):
-            # Удаляем старые характеристики
+        # Обрабатываем характеристики для ProductCharacteristic (если нужно)
+        # Но основное поле characteristics уже заполнено выше
+        if product_data.get('characteristics') and isinstance(product_data.get('characteristics'), list):
+            # Удаляем старые ProductCharacteristic
             ProductCharacteristic.objects.filter(product=product).delete()
             
-            # Создаем новые
-            characteristics = product_data.get('characteristics', [])
-            if isinstance(characteristics, list):
-                for idx, char_data in enumerate(characteristics):
-                    if isinstance(char_data, dict):
+            # Создаем новые ProductCharacteristic
+            for idx, char_data in enumerate(product_data.get('characteristics', [])):
+                if isinstance(char_data, dict):
+                    char_name = char_data.get('name', '').strip()
+                    char_value = char_data.get('value', '').strip()
+                    if char_name and char_value:
                         ProductCharacteristic.objects.create(
                             product=product,
-                            name=char_data.get('name', ''),
-                            value=char_data.get('value', ''),
+                            name=char_name,
+                            value=char_value,
                             order=idx
                         )
         
