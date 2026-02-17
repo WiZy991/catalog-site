@@ -359,11 +359,45 @@ def handle_file(request, filename):
                         logger.info(f"Распаковано файлов: {len(extracted_files)}")
                         for ext_file in extracted_files[:5]:  # Логируем первые 5
                             logger.info(f"  - {ext_file}")
+                        
+                        # Обрабатываем распакованные XML файлы автоматически
+                        for ext_file in extracted_files:
+                            if ext_file.lower().endswith('.xml'):
+                                ext_file_path = os.path.join(EXCHANGE_DIR, ext_file)
+                                if os.path.exists(ext_file_path):
+                                    logger.info(f"Автоматическая обработка распакованного файла: {ext_file}")
+                                    try:
+                                        result = process_commerceml_file(ext_file_path, ext_file, request)
+                                        logger.info(f"Результат обработки {ext_file}: {result.get('status')}")
+                                    except Exception as e:
+                                        logger.error(f"Ошибка автоматической обработки {ext_file}: {e}", exc_info=True)
                 except zipfile.BadZipFile:
                     logger.warning("Файл не является ZIP архивом, оставляем как есть")
                 except Exception as e:
                     logger.error(f"Ошибка распаковки ZIP: {e}", exc_info=True)
                     # Не возвращаем ошибку, файл сохранен, можно попробовать обработать
+            
+            # Если это XML файл, обрабатываем автоматически
+            elif filename.lower().endswith('.xml'):
+                logger.info(f"Обнаружен XML файл, запускаем автоматическую обработку...")
+                try:
+                    # Запускаем обработку в фоне (не блокируем ответ 1С)
+                    import threading
+                    def process_in_background():
+                        try:
+                            logger.info(f"Начало фоновой обработки файла: {filename}")
+                            result = process_commerceml_file(file_path, filename, request)
+                            logger.info(f"Завершена обработка файла {filename}: статус={result.get('status')}, обработано={result.get('processed', 0)}")
+                        except Exception as e:
+                            logger.error(f"Ошибка фоновой обработки файла {filename}: {e}", exc_info=True)
+                    
+                    # Запускаем в отдельном потоке
+                    thread = threading.Thread(target=process_in_background, daemon=True)
+                    thread.start()
+                    logger.info("Фоновая обработка файла запущена")
+                except Exception as e:
+                    logger.error(f"Ошибка запуска фоновой обработки: {e}", exc_info=True)
+                    # Не возвращаем ошибку, файл сохранен
         else:
             logger.error(f"Файл не найден после сохранения: {file_path}")
             return HttpResponse('failure\nОшибка сохранения файла', status=500, content_type='text/plain; charset=utf-8')
