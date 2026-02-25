@@ -61,10 +61,11 @@ class WholesaleView(TemplateView):
         context['partner_settings'] = PartnerSettings.get_settings()
         context['is_partner'] = self.is_partner()
         
-        # Несколько товаров для превью (ТОЛЬКО из партнёрского каталога!)
+        # Несколько товаров для превью (ТОЛЬКО из партнёрского каталога с остатком!)
         context['preview_products'] = Product.objects.filter(
             is_active=True,
-            catalog_type='wholesale'
+            catalog_type='wholesale',
+            quantity__gt=0  # Только товары с остатком
         ).select_related('category').prefetch_related('images')[:6]
         
         return context
@@ -196,10 +197,11 @@ class PartnerProductView(PartnerRequiredMixin, DetailView):
     slug_url_kwarg = 'slug'
     
     def get_queryset(self):
-        # ТОЛЬКО товары из партнёрского каталога!
+        # ТОЛЬКО товары из партнёрского каталога с остатком!
         return Product.objects.filter(
             is_active=True,
-            catalog_type='wholesale'
+            catalog_type='wholesale',
+            quantity__gt=0  # Только товары с остатком
         ).select_related('category').prefetch_related('images')
     
     def get_context_data(self, **kwargs):
@@ -337,10 +339,11 @@ class PublicPartnerCatalogView(ListView):
     paginate_by = 24
     
     def get_queryset(self):
-        # ТОЛЬКО товары из партнёрского каталога!
+        # ТОЛЬКО товары из партнёрского каталога с остатком!
         queryset = Product.objects.filter(
             is_active=True,
-            catalog_type='wholesale'
+            catalog_type='wholesale',
+            quantity__gt=0  # Только товары с остатком
         ).select_related('category').prefetch_related('images')
         
         # Фильтр по категории
@@ -482,10 +485,11 @@ class PartnerCatalogView(PartnerRequiredMixin, ListView):
     paginate_by = 24
     
     def get_queryset(self):
-        # ТОЛЬКО товары из партнёрского каталога!
+        # ТОЛЬКО товары из партнёрского каталога с остатком!
         queryset = Product.objects.filter(
             is_active=True,
-            catalog_type='wholesale'
+            catalog_type='wholesale',
+            quantity__gt=0  # Только товары с остатком
         ).select_related('category').prefetch_related('images')
         
         # Фильтр по категории

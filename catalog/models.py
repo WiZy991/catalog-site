@@ -108,7 +108,11 @@ class Category(MPTTModel):
     def product_count(self):
         """Количество товаров в категории и её подкатегориях."""
         descendants = self.get_descendants(include_self=True)
-        return Product.objects.filter(category__in=descendants, is_active=True).count()
+        return Product.objects.filter(
+            category__in=descendants, 
+            is_active=True,
+            quantity__gt=0  # Только товары с остатком
+        ).count()
 
 
 class Product(models.Model):
@@ -540,8 +544,15 @@ class OneCExchangeLog(models.Model):
 
 class FarpostAPISettings(models.Model):
     """Настройки API Farpost для синхронизации товаров."""
-    login = models.CharField('Логин', max_length=255, help_text='Логин для входа на Farpost')
-    password = models.CharField('Пароль', max_length=255, help_text='Пароль (хранится в зашифрованном виде)')
+    login = models.CharField('Логин', max_length=255, blank=True, help_text='Логин для входа на Farpost (необязательно, если используется ключ)')
+    password = models.CharField('Пароль', max_length=255, blank=True, help_text='Пароль (хранится в зашифрованном виде, необязательно если используется ключ)')
+    api_key = models.CharField(
+        'Ключ API', 
+        max_length=255, 
+        blank=True,
+        help_text='Ключ для аутентификации в API Farpost. Предоставляется Farpost по запросу. '
+                  'Используется для расчета auth (SHA512 от ключа). Если указан, имеет приоритет над login:password.'
+    )
     packet_id = models.CharField(
         'ID пакет-объявления', 
         max_length=50, 
@@ -549,6 +560,25 @@ class FarpostAPISettings(models.Model):
                   'Можно создать несколько настроек с разными packet_id для разделения товаров по пакетам. '
                   'ID можно найти в URL пакета: https://www.farpost.ru/personal/goods/packet/{id}/recurrent-update'
     )
+    
+    # Настройки автоматического обновления
+    auto_update_enabled = models.BooleanField(
+        'Автоматическое обновление', 
+        default=False,
+        help_text='Включить периодическое автоматическое обновление прайс-листа по ссылке'
+    )
+    auto_update_url = models.URLField(
+        'Ссылка на прайс-лист', 
+        blank=True,
+        help_text='URL для автоматического обновления прайс-листа. Например: http://site.ru/import-price/new-price.csv'
+    )
+    auto_update_interval = models.PositiveIntegerField(
+        'Интервал обновления (часы)', 
+        default=24,
+        help_text='Как часто обновлять прайс-лист (в часах). Минимум: 1 час.'
+    )
+    last_auto_update = models.DateTimeField('Последнее автоматическое обновление', null=True, blank=True)
+    
     is_active = models.BooleanField('Активен', default=True, help_text='Использовать эти настройки для синхронизации')
     last_sync = models.DateTimeField('Последняя синхронизация', null=True, blank=True)
     last_sync_status = models.CharField('Статус последней синхронизации', max_length=50, blank=True)
@@ -567,6 +597,8 @@ class FarpostAPISettings(models.Model):
     
     def get_decrypted_password(self):
         """Получить расшифрованный пароль."""
+        if not self.password:
+            return ''
         from django.core.signing import Signer
         from django.conf import settings
         try:
@@ -577,10 +609,55 @@ class FarpostAPISettings(models.Model):
     
     def set_encrypted_password(self, password):
         """Сохранить пароль в зашифрованном виде."""
+        if not password:
+            self.password = ''
+            return
         from django.core.signing import Signer
         from django.conf import settings
         signer = Signer(key=settings.SECRET_KEY)
         self.password = signer.sign(password)
+    
+    def get_decrypted_api_key(self):
+        """Получить расшифрованный ключ API."""
+        if not self.api_key:
+            return ''
+        from django.core.signing import Signer
+        from django.conf import settings
+        try:
+            signer = Signer(key=settings.SECRET_KEY)
+            return signer.unsign(self.api_key)
+        except Exception:
+            return self.api_key
+    
+    def set_encrypted_api_key(self, api_key):
+        """Сохранить ключ API в зашифрованном виде."""
+        if not api_key:
+            self.api_key = ''
+            return
+        from django.core.signing import Signer
+        from django.conf import settings
+        signer = Signer(key=settings.SECRET_KEY)
+        self.api_key = signer.sign(api_key)
+    
+    def get_auth_hash(self):
+        """
+        Получить хеш для аутентификации в API Farpost.
+        Согласно инструкции: auth = hash('sha512', X), где X - строка с ключом.
+        Если ключ указан, используем его. Иначе используем login:password (для обратной совместимости).
+        """
+        import hashlib
+        api_key = self.get_decrypted_api_key()
+        if api_key:
+            # Используем ключ API (предпочтительный способ согласно инструкции)
+            auth_string = api_key
+        elif self.login and self.password:
+            # Обратная совместимость: используем login:password
+            password = self.get_decrypted_password()
+            auth_string = f'{self.login}:{password}'
+        else:
+            raise ValueError('Не указан ключ API или логин/пароль для аутентификации')
+        
+        return hashlib.sha512(auth_string.encode('utf-8')).hexdigest()
 
 
 class Promotion(models.Model):

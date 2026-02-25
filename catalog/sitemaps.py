@@ -9,7 +9,10 @@ class ProductSitemap(Sitemap):
     priority = 0.8
 
     def items(self):
-        return Product.objects.filter(is_active=True).select_related('category')
+        return Product.objects.filter(
+            is_active=True,
+            quantity__gt=0  # Только товары с остатком
+        ).select_related('category')
 
     def lastmod(self, obj):
         return obj.updated_at

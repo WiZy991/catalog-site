@@ -834,7 +834,8 @@ document.addEventListener('DOMContentLoaded', function() {
                         } else if (data.cart_count > 0) {
                             // Создаем форму с кнопкой "ЗАКАЗАТЬ"
                             const form = document.createElement('form');
-                            form.action = '{% url "partners:order_create" %}';
+                            const orderCreateUrl = partnerHeaderActions.getAttribute('data-order-create-url') || '/partners/orders/create/';
+                            form.action = orderCreateUrl;
                             form.method = 'post';
                             form.style.display = 'inline';
                             
@@ -909,7 +910,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     } else {
                         // Создаем форму с кнопкой "ЗАКАЗАТЬ"
                         const form = document.createElement('form');
-                        form.action = '{% url "partners:order_create" %}';
+                        const orderCreateUrl = partnerHeaderActions.getAttribute('data-order-create-url') || '/partners/orders/create/';
+                        form.action = orderCreateUrl;
                         form.method = 'post';
                         form.style.display = 'inline';
                         
@@ -930,6 +932,24 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             }
         });
+    
+    // Обработчик для кнопки "Заказать" - убеждаемся что форма отправляется
+    document.addEventListener('DOMContentLoaded', function() {
+        const orderForms = document.querySelectorAll('form[action*="order_create"]');
+        orderForms.forEach(form => {
+            const submitBtn = form.querySelector('button[type="submit"]');
+            if (submitBtn) {
+                submitBtn.addEventListener('click', function(e) {
+                    // Убеждаемся что форма отправляется
+                    if (!form.checkValidity()) {
+                        e.preventDefault();
+                        form.reportValidity();
+                        return false;
+                    }
+                });
+            }
+        });
+    });
 });
 </script>
 {% endblock %}
@@ -952,7 +972,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     </span>
                 </div>
             </div>
-            <div class="partner-header__actions">
+            <div class="partner-header__actions" data-order-create-url="{% url 'partners:order_create' %}">
                 {% if cart_count > 0 %}
                 <form action="{% url 'partners:order_create' %}" method="post" style="display: inline;">
                     {% csrf_token %}

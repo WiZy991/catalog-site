@@ -1,0 +1,35 @@
+{% extends "admin/base_site.html" %}
+{% load i18n l10n %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+<a href="{% url 'admin:index' %}">{% trans 'Home' %}</a>
+&rsaquo; <a href="{% url 'admin:catalog_product_changelist' %}">{{ opts.verbose_name_plural|capfirst }}</a>
+&rsaquo; {% trans 'Delete' %}
+</div>
+{% endblock %}
+
+{% block content %}
+<h1>{% trans 'Вы уверены?' %}</h1>
+<p>{% trans 'Вы уверены, что хотите удалить выбранные' %} {{ objects_name }}? {% trans 'Все следующие объекты и связанные элементы будут удалены:' %}</p>
+
+<h2>{% trans 'Объекты' %}:</h2>
+<ul>
+{% for obj in objects %}
+    <li>{{ obj }}</li>
+{% endfor %}
+</ul>
+
+<form method="post">
+    {% csrf_token %}
+    <div>
+        <input type="hidden" name="post" value="yes">
+        <input type="hidden" name="action" value="delete_selected">
+        {% for obj in objects %}
+            <input type="hidden" name="{{ action_checkbox_name }}" value="{{ obj.pk|unlocalize }}">
+        {% endfor %}
+        <input type="submit" value="{% trans 'Да, я уверен' %}" class="default">
+        <a href="{% url 'admin:catalog_product_changelist' %}" class="button cancel-link">{% trans "Нет, отменить" %}</a>
+    </div>
+</form>
+{% endblock %}

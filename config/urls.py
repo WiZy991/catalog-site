@@ -2,7 +2,7 @@
 URL configuration for the catalog project.
 """
 from django.contrib import admin
-from django.urls import path, include
+from django.urls import path, include, re_path
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib.sitemaps.views import sitemap
@@ -19,6 +19,7 @@ from partners.admin_views import (
     download_wholesale_template,
 )
 from catalog import commerceml_views
+from catalog import farpost_views
 
 sitemaps = {
     'products': ProductSitemap,
@@ -38,6 +39,10 @@ urlpatterns = [
     
     # API для 1С
     path('api/1c/', include('catalog.api_urls')),
+    
+    # Прайс-лист для Farpost (автоматическое обновление)
+    # Farpost загружает этот файл периодически по указанной ссылке
+    re_path(r'^farpost/price-list\.(csv|xls|xml)$', farpost_views.farpost_price_list, name='farpost_price_list'),
     
     # Кастомные админ-страницы (до admin/)
     path('admin/catalog/bulk-images/', bulk_image_upload, name='admin_bulk_image_upload'),

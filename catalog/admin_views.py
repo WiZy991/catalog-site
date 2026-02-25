@@ -419,6 +419,9 @@ def bulk_product_import(request):
                                             # Также сохраняем оригинальное значение для числовых полей
                                             if 'цена' in header_key or 'price' in header_key:
                                                 row_data[header_key + '_num'] = value
+                                                # Если это оптовая цена, сохраняем отдельно
+                                                if 'опт' in header_key or 'wholesale' in header_key:
+                                                    row_data['wholesale_price_num'] = value
                                             elif 'остаток' in header_key or 'quantity' in header_key or 'склад' in header_key:
                                                 row_data[header_key + '_num'] = int(value) if isinstance(value, float) and value.is_integer() else int(value)
                                             continue

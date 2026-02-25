@@ -15,7 +15,8 @@ class HomeView(TemplateView):
         context = super().get_context_data(**kwargs)
         context['featured_products'] = Product.objects.filter(
             is_active=True, 
-            is_featured=True
+            is_featured=True,
+            quantity__gt=0  # Только товары с остатком
         ).select_related('category').prefetch_related('images')[:8]
         context['categories'] = Category.objects.filter(
             parent=None, 

@@ -830,6 +830,8 @@ def process_bulk_import(data_rows, auto_category=True, auto_brand=True):
         'updated': 0,
         'errors': 0,
         'error_details': [],
+        'wholesale_created': 0,
+        'wholesale_updated': 0,
     }
     
     with transaction.atomic():
@@ -869,7 +871,7 @@ def process_bulk_import(data_rows, auto_category=True, auto_brand=True):
                 else:
                     category = get_category_for_product(name)
                 
-                # Обрабатываем цену
+                # Обрабатываем розничную цену
                 # Формат может быть: "2 000,00" (пробел - тысячи, запятая - десятичные) или просто число
                 price_value = 0
                 # Сначала проверяем числовое значение (если было сохранено)
@@ -889,6 +891,25 @@ def process_bulk_import(data_rows, auto_category=True, auto_brand=True):
                             price_value = float(price_str)
                         except (ValueError, TypeError):
                             price_value = 0
+                
+                # Обрабатываем оптовую цену (если есть в данных)
+                wholesale_price_value = 0
+                if row.get('wholesale_price_num') is not None:
+                    try:
+                        wholesale_price_value = float(row['wholesale_price_num'])
+                    except (ValueError, TypeError):
+                        wholesale_price_value = 0
+                elif row.get('wholesale_price'):
+                    wholesale_price_str = str(row['wholesale_price']).strip()
+                    if wholesale_price_str and wholesale_price_str.lower() not in ['none', 'null', '']:
+                        # Убираем все пробелы и неразрывные пробелы (разделители тысяч)
+                        wholesale_price_str = wholesale_price_str.replace(' ', '').replace('\xa0', '').replace('\u00A0', '').replace('\u2009', '').replace('\u202F', '')
+                        # Заменяем запятую на точку для десятичного разделителя
+                        wholesale_price_str = wholesale_price_str.replace(',', '.')
+                        try:
+                            wholesale_price_value = float(wholesale_price_str)
+                        except (ValueError, TypeError):
+                            wholesale_price_value = 0
                 
                 # Обрабатываем остаток на складе
                 # Формат: "4,000" или "4 000" (запятая/пробел как разделитель тысяч) - это целое число
@@ -1053,8 +1074,78 @@ def process_bulk_import(data_rows, auto_category=True, auto_brand=True):
                         product.condition = condition
                         product.availability = availability
                         product.catalog_type = 'retail'  # Гарантируем, что остаётся в основном каталоге
+                        # Если есть оптовая цена, сохраняем её
+                        if wholesale_price_value > 0:
+                            product.wholesale_price = wholesale_price_value
                         product.save()
                         stats['updated'] += 1
+                        
+                        # Синхронизируем с оптовым каталогом
+                        if article:
+                            wholesale_product = Product.objects.filter(
+                                article=article,
+                                catalog_type='wholesale'
+                            ).first()
+                        else:
+                            wholesale_product = Product.objects.filter(
+                                name=name,
+                                catalog_type='wholesale'
+                            ).first()
+                        
+                        if not wholesale_product:
+                            # Создаём товар в оптовом каталоге
+                            Product.objects.create(
+                                name=name,
+                                article=article,
+                                external_id=external_id if external_id else None,
+                                brand=brand,
+                                category=category,
+                                price=price_value,  # Розничная цена (для совместимости)
+                                wholesale_price=wholesale_price_value if wholesale_price_value > 0 else price_value,  # Оптовая цена
+                                description=row.get('description', '') or product.description,
+                                short_description=row.get('short_description', '') or product.short_description,
+                                applicability=applicability or product.applicability,
+                                cross_numbers=cross_numbers or product.cross_numbers,
+                                characteristics=characteristics or product.characteristics,
+                                farpost_url=row.get('farpost_url', '') or product.farpost_url,
+                                condition=condition,
+                                availability=availability,
+                                quantity=quantity_value if quantity_value >= 0 else product.quantity,
+                                catalog_type='wholesale',
+                                is_active=True,
+                            )
+                            stats['wholesale_created'] = stats.get('wholesale_created', 0) + 1
+                        else:
+                            # Обновляем существующий товар в оптовом каталоге
+                            wholesale_product.name = name
+                            if brand:
+                                wholesale_product.brand = brand
+                            if category:
+                                wholesale_product.category = category
+                            # Обновляем оптовую цену (приоритет - оптовая цена из данных)
+                            if wholesale_price_value > 0:
+                                wholesale_product.wholesale_price = wholesale_price_value
+                            elif price_value > 0:
+                                # Если оптовая цена не указана, но есть розничная, используем её
+                                if not wholesale_product.wholesale_price or wholesale_product.wholesale_price == 0:
+                                    wholesale_product.wholesale_price = price_value
+                            # Обновляем остальные поля
+                            if row.get('description'):
+                                wholesale_product.description = row['description']
+                            if row.get('short_description'):
+                                wholesale_product.short_description = row['short_description']
+                            if applicability:
+                                wholesale_product.applicability = applicability
+                            if cross_numbers:
+                                wholesale_product.cross_numbers = cross_numbers
+                            if characteristics:
+                                wholesale_product.characteristics = characteristics
+                            if quantity_value >= 0:
+                                wholesale_product.quantity = quantity_value
+                            wholesale_product.availability = availability
+                            wholesale_product.is_active = True
+                            wholesale_product.save()
+                            stats['wholesale_updated'] = stats.get('wholesale_updated', 0) + 1
                 else:
                     # Создаём новый товар в ОСНОВНОМ каталоге
                     product = Product.objects.create(
@@ -1064,6 +1155,7 @@ def process_bulk_import(data_rows, auto_category=True, auto_brand=True):
                         brand=brand,
                         category=category,
                         price=price_value,
+                        wholesale_price=wholesale_price_value if wholesale_price_value > 0 else 0,  # Оптовая цена
                         description=row.get('description', ''),
                         short_description=row.get('short_description', ''),
                         applicability=applicability,
@@ -1077,6 +1169,73 @@ def process_bulk_import(data_rows, auto_category=True, auto_brand=True):
                         is_active=True,
                     )
                     stats['created'] += 1
+                    
+                    # Создаём товар в оптовом каталоге
+                    if article:
+                        wholesale_product = Product.objects.filter(
+                            article=article,
+                            catalog_type='wholesale'
+                        ).first()
+                    else:
+                        wholesale_product = Product.objects.filter(
+                            name=name,
+                            catalog_type='wholesale'
+                        ).first()
+                    
+                    if not wholesale_product:
+                        # Создаём товар в оптовом каталоге
+                        Product.objects.create(
+                            name=name,
+                            article=article,
+                            external_id=external_id if external_id else None,
+                            brand=brand,
+                            category=category,
+                            price=price_value,  # Розничная цена (для совместимости)
+                            wholesale_price=wholesale_price_value if wholesale_price_value > 0 else price_value,  # Оптовая цена
+                            description=row.get('description', ''),
+                            short_description=row.get('short_description', ''),
+                            applicability=applicability,
+                            cross_numbers=cross_numbers,
+                            characteristics=characteristics,
+                            farpost_url=row.get('farpost_url', ''),
+                            condition=condition,
+                            availability=availability,
+                            quantity=quantity_value,
+                            catalog_type='wholesale',  # ОПТОВЫЙ КАТАЛОГ!
+                            is_active=True,
+                        )
+                        stats['wholesale_created'] = stats.get('wholesale_created', 0) + 1
+                    else:
+                        # Обновляем существующий товар в оптовом каталоге
+                        wholesale_product.name = name
+                        if brand:
+                            wholesale_product.brand = brand
+                        if category:
+                            wholesale_product.category = category
+                        # Обновляем оптовую цену (приоритет - оптовая цена из данных)
+                        if wholesale_price_value > 0:
+                            wholesale_product.wholesale_price = wholesale_price_value
+                        elif price_value > 0:
+                            # Если оптовая цена не указана, но есть розничная, используем её
+                            if not wholesale_product.wholesale_price or wholesale_product.wholesale_price == 0:
+                                wholesale_product.wholesale_price = price_value
+                        # Обновляем остальные поля
+                        if row.get('description'):
+                            wholesale_product.description = row['description']
+                        if row.get('short_description'):
+                            wholesale_product.short_description = row['short_description']
+                        if applicability:
+                            wholesale_product.applicability = applicability
+                        if cross_numbers:
+                            wholesale_product.cross_numbers = cross_numbers
+                        if characteristics:
+                            wholesale_product.characteristics = characteristics
+                        if quantity_value >= 0:
+                            wholesale_product.quantity = quantity_value
+                        wholesale_product.availability = availability
+                        wholesale_product.is_active = True
+                        wholesale_product.save()
+                        stats['wholesale_updated'] = stats.get('wholesale_updated', 0) + 1
                     
             except Exception as e:
                 stats['errors'] += 1
@@ -1253,65 +1412,20 @@ def generate_farpost_title(product):
 
 def generate_farpost_description(product, site_url=''):
     """
-    Генерирует полное описание для Farpost согласно ТЗ.
-    Включает все необходимые данные.
+    Генерирует описание для Farpost.
+    Только текстовое описание товара — бренд, артикул, характеристики и т.д.
+    уже находятся в отдельных колонках CSV и не дублируются здесь.
     """
-    from django.urls import reverse
-    
     lines = []
     
-    # Основное описание
+    # Основное описание товара
     if product.short_description:
         lines.append(product.short_description)
     elif product.description:
-        # Берем первые 200 символов описания
-        desc = product.description[:200].strip()
-        if len(product.description) > 200:
+        desc = product.description[:500].strip()
+        if len(product.description) > 500:
             desc += '...'
         lines.append(desc)
-    
-    lines.append('')
-    
-    # Структурированные данные
-    if product.brand:
-        lines.append(f'Бренд: {product.brand}')
-    
-    if product.article:
-        lines.append(f'Артикул: {product.article}')
-    
-    # Характеристики
-    if product.characteristics:
-        lines.append('')
-        lines.append('Характеристики:')
-        char_list = product.get_characteristics_list()
-        for key, value in char_list:
-            lines.append(f'{key}: {value}')
-    
-    # Применимость
-    if product.applicability:
-        lines.append('')
-        lines.append('Применимость:')
-        applicability_list = product.get_applicability_list()
-        for item in applicability_list:
-            lines.append(f'- {item}')
-    
-    # Кросс-номера
-    if product.cross_numbers:
-        lines.append('')
-        lines.append('Кросс-номера (аналоги):')
-        cross_list = product.get_cross_numbers_list()
-        lines.append(', '.join(cross_list))
-    
-    # Ссылка на сайт
-    if site_url:
-        lines.append('')
-        lines.append(f'Подробнее на сайте: {site_url}')
-    
-    lines.append('')
-    lines.append(f'Цена: {product.price} руб.')
-    lines.append(f'Наличие: {product.get_availability_display()}')
-    if product.condition:
-        lines.append(f'Состояние: {product.get_condition_display()}')
     
     return '\n'.join(lines)
 
@@ -1357,7 +1471,7 @@ def generate_farpost_api_file(products, file_format='xls', request=None):
         # Заголовки (адаптируйте под формат Farpost)
         writer.writerow([
             'Название', 'Цена', 'Описание', 'Артикул', 'Бренд',
-            'Состояние', 'Наличие', 'Характеристики', 'Применимость',
+            'Состояние', 'Наличие', 'Количество', 'Характеристики', 'Применимость',
             'Кросс-номера', 'Фото1', 'Фото2', 'Фото3', 'Фото4', 'Фото5',
             'Ссылка на сайт', 'Категория'
         ])
@@ -1377,6 +1491,9 @@ def generate_farpost_api_file(products, file_format='xls', request=None):
                 char_list = product.get_characteristics_list()
                 characteristics = '\n'.join([f'{k}: {v}' for k, v in char_list])
             
+            # Количество: если товар неактивен или снят с продажи — отправляем 0 (сигнал для удаления на Farpost)
+            quantity = product.quantity if product.is_active else 0
+            
             writer.writerow([
                 title,
                 str(product.price),
@@ -1385,6 +1502,7 @@ def generate_farpost_api_file(products, file_format='xls', request=None):
                 product.brand or '',
                 product.get_condition_display(),
                 product.get_availability_display(),
+                quantity,
                 characteristics,
                 product.applicability or '',
                 product.cross_numbers or '',
@@ -1413,7 +1531,7 @@ def generate_farpost_api_file(products, file_format='xls', request=None):
         # Заголовки
         headers = [
             'Название', 'Цена', 'Описание', 'Артикул', 'Бренд',
-            'Состояние', 'Наличие', 'Характеристики', 'Применимость',
+            'Состояние', 'Наличие', 'Количество', 'Характеристики', 'Применимость',
             'Кросс-номера', 'Фото1', 'Фото2', 'Фото3', 'Фото4', 'Фото5',
             'Ссылка на сайт', 'Категория'
         ]
@@ -1435,6 +1553,9 @@ def generate_farpost_api_file(products, file_format='xls', request=None):
                 char_list = product.get_characteristics_list()
                 characteristics = '\n'.join([f'{k}: {v}' for k, v in char_list])
             
+            # Количество: если товар неактивен — отправляем 0 (сигнал для удаления на Farpost)
+            quantity = product.quantity if product.is_active else 0
+            
             ws.append([
                 title,
                 float(product.price),
@@ -1443,6 +1564,7 @@ def generate_farpost_api_file(products, file_format='xls', request=None):
                 product.brand or '',
                 product.get_condition_display(),
                 product.get_availability_display(),
+                quantity,
                 characteristics,
                 product.applicability or '',
                 product.cross_numbers or '',
@@ -1464,50 +1586,58 @@ def generate_farpost_api_file(products, file_format='xls', request=None):
         return content, filename, content_type
     
     elif file_format == 'xml':
-        # XML формат
+        # XML формат, совместимый с Farpost (формат offers/offer)
         from xml.etree.ElementTree import Element, SubElement, tostring
         from xml.dom import minidom
         
-        root = Element('products')
+        root = Element('offers')
         
         for product in products:
-            product_elem = SubElement(root, 'product')
+            # Количество: 0 = снять с публикации, >0 = в наличии
+            quantity = product.quantity if product.is_active else 0
+            available = 'true' if quantity > 0 else 'false'
+            
+            offer_elem = SubElement(root, 'offer')
+            offer_elem.set('available', available)
+            if product.article:
+                offer_elem.set('id', product.article)
             
             title = generate_farpost_title(product)
             site_url = request.build_absolute_uri(product.get_absolute_url()) if request else ''
             description = generate_farpost_description(product, site_url)
             photo_urls = generate_farpost_images(product, request)
             
-            SubElement(product_elem, 'title').text = title
-            SubElement(product_elem, 'price').text = str(product.price)
-            SubElement(product_elem, 'description').text = description
-            SubElement(product_elem, 'article').text = product.article or ''
-            SubElement(product_elem, 'brand').text = product.brand or ''
-            SubElement(product_elem, 'condition').text = product.get_condition_display()
-            SubElement(product_elem, 'availability').text = product.get_availability_display()
+            SubElement(offer_elem, 'name').text = title
+            SubElement(offer_elem, 'price').text = str(product.price)
+            SubElement(offer_elem, 'currencyId').text = 'RUR'
+            SubElement(offer_elem, 'quantity').text = str(quantity)
             
-            if product.characteristics:
-                char_elem = SubElement(product_elem, 'characteristics')
-                char_list = product.get_characteristics_list()
-                for key, value in char_list:
-                    char_item = SubElement(char_elem, 'item')
-                    SubElement(char_item, 'key').text = key
-                    SubElement(char_item, 'value').text = value
+            desc_text = description
+            SubElement(offer_elem, 'description').text = desc_text
+            
+            SubElement(offer_elem, 'ordercode').text = product.article or ''
+            
+            if product.brand:
+                SubElement(offer_elem, 'manufacturer').text = product.brand
+            
+            SubElement(offer_elem, 'condition').text = product.get_condition_display()
             
             if product.applicability:
-                SubElement(product_elem, 'applicability').text = product.applicability
+                SubElement(offer_elem, 'applicability').text = product.applicability
             
             if product.cross_numbers:
-                SubElement(product_elem, 'cross_numbers').text = product.cross_numbers
+                SubElement(offer_elem, 'analog_numbers').text = product.cross_numbers
             
-            photos_elem = SubElement(product_elem, 'photos')
+            if product.category:
+                SubElement(offer_elem, 'category').text = product.category.name
+            
+            # Фотографии (до 5)
             for url in photo_urls[:5]:
                 if url:
-                    SubElement(photos_elem, 'photo').text = url
+                    SubElement(offer_elem, 'picture').text = url
             
-            SubElement(product_elem, 'site_url').text = site_url
-            if product.category:
-                SubElement(product_elem, 'category').text = product.category.name
+            if site_url:
+                SubElement(offer_elem, 'url').text = site_url
         
         # Форматируем XML
         rough_string = tostring(root, encoding='utf-8')
@@ -1753,12 +1883,9 @@ def sync_to_farpost_api(products, api_settings, file_format='xls', request=None)
             products, file_format=file_format, request=request
         )
         
-        # Получаем пароль
-        password = api_settings.get_decrypted_password()
-        
-        # Создаем хеш sha512 от логина и пароля
-        auth_string = f'{api_settings.login}:{password}'
-        auth_hash = hashlib.sha512(auth_string.encode('utf-8')).hexdigest()
+        # Получаем хеш для аутентификации
+        # Использует ключ API (если указан) или login:password (для обратной совместимости)
+        auth_hash = api_settings.get_auth_hash()
         
         # Подготавливаем данные для отправки
         files = {

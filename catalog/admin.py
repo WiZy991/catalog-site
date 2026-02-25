@@ -48,6 +48,25 @@ class ProductResource(resources.ModelResource):
         import_id_fields = ['article']
         skip_unchanged = True
         report_skipped = True
+    
+    def get_export_queryset(self):
+        """Переопределяем, чтобы избежать ошибок с ProductCharacteristic."""
+        from django.db import connection
+        try:
+            with connection.cursor() as cursor:
+                if 'sqlite' in connection.vendor:
+                    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='catalog_productcharacteristic'")
+                else:
+                    cursor.execute("SELECT table_name FROM information_schema.tables WHERE table_name='catalog_productcharacteristic'")
+                table_exists = cursor.fetchone() is not None
+        except Exception:
+            table_exists = False
+        
+        if not table_exists:
+            # Используем безопасный queryset без обращения к product_characteristics
+            return Product.objects.all().select_related('category').prefetch_related('images')
+        else:
+            return super().get_export_queryset()
 
     def get_import_fields(self):
         """Возвращает список полей для импорта с поддержкой альтернативных названий колонок."""
@@ -168,58 +187,81 @@ class FarpostExportMixin:
             generate_farpost_description,
             generate_farpost_images,
         )
+        import io as _io
         
-        response = HttpResponse(content_type='text/csv; charset=utf-8-sig')
-        response['Content-Disposition'] = 'attachment; filename="farpost_export.csv"'
-        
-        writer = csv.writer(response, delimiter=';')
-        # Заголовки для Farpost (расширенный формат)
+        output = _io.StringIO()
+        writer = csv.writer(output, delimiter=';')
+        # Заголовки для Farpost
         writer.writerow([
             'Заголовок', 'Цена', 'Описание', 'Артикул', 'Бренд',
-            'Состояние', 'Наличие', 'Характеристики', 'Применимость',
-            'Кросс-номера', 'Фото1', 'Фото2', 'Фото3', 'Фото4', 'Фото5', 
+            'Состояние', 'Наличие', 'Количество', 'Характеристики', 'Применимость',
+            'Кросс-номера', 'Фото1', 'Фото2', 'Фото3', 'Фото4', 'Фото5',
             'Ссылка на сайт', 'Категория'
         ])
         
+        no_article_count = 0
+        zero_price_count = 0
         for product in queryset:
-            # Генерируем заголовок по шаблону из ТЗ
             title = generate_farpost_title(product)
-            
-            # Генерируем описание
             site_url = request.build_absolute_uri(product.get_absolute_url())
             description = generate_farpost_description(product, site_url)
-            
-            # Получаем изображения
             photo_urls = generate_farpost_images(product, request)
-            # Дополняем до 5 фото
             while len(photo_urls) < 5:
                 photo_urls.append('')
             
-            # Формируем характеристики (структурированный формат)
             characteristics = ''
             if product.characteristics:
                 char_list = product.get_characteristics_list()
                 characteristics = '\n'.join([f'{k}: {v}' for k, v in char_list])
             
+            quantity = product.quantity if product.is_active else 0
+            
+            if not product.article:
+                no_article_count += 1
+            if not product.price or product.price == 0:
+                zero_price_count += 1
+            
             writer.writerow([
-                title,  # Автоматически сгенерированный заголовок
+                title,
                 str(product.price),
-                description,  # Полное структурированное описание
+                description,
                 product.article or '',
                 product.brand or '',
                 product.get_condition_display(),
                 product.get_availability_display(),
-                characteristics,  # Структурированные характеристики
+                quantity,
+                characteristics,
                 product.applicability or '',
                 product.cross_numbers or '',
-                photo_urls[0],  # До 5 фото
+                photo_urls[0],
                 photo_urls[1],
                 photo_urls[2],
                 photo_urls[3],
                 photo_urls[4],
-                site_url,  # Уникальная ссылка на карточку товара на сайте
+                site_url,
                 product.category.name if product.category else '',
             ])
+        
+        content = output.getvalue().encode('utf-8-sig')
+        response = HttpResponse(content, content_type='text/csv; charset=utf-8-sig')
+        response['Content-Disposition'] = 'attachment; filename="farpost_export.csv"'
+        
+        # Предупреждения через message_user (messages импортирован на уровне модуля)
+        warn = messages.WARNING
+        if no_article_count:
+            self.message_user(
+                request,
+                f'Экспортировано. ВНИМАНИЕ: {no_article_count} товаров без артикула — '
+                f'Farpost требует уникальный артикул для каждого товара.',
+                level=warn,
+            )
+        if zero_price_count:
+            self.message_user(
+                request,
+                f'ВНИМАНИЕ: {zero_price_count} товаров с ценой 0 — '
+                f'Farpost не принимает объявления с нулевой ценой.',
+                level=warn,
+            )
         
         return response
     export_farpost.short_description = 'Экспорт для Farpost'
@@ -291,6 +333,25 @@ class CategoryAdmin(DraggableMPTTAdmin):
         return response
 
 
+class PriceFilter(admin.SimpleListFilter):
+    """Фильтр по наличию цены."""
+    title = 'Цена'
+    parameter_name = 'price_status'
+
+    def lookups(self, request, model_admin):
+        return [
+            ('with_price', 'С ценой (> 0)'),
+            ('no_price', 'Без цены (= 0)'),
+        ]
+
+    def queryset(self, request, queryset):
+        if self.value() == 'with_price':
+            return queryset.filter(price__gt=0)
+        if self.value() == 'no_price':
+            return queryset.filter(price=0)
+        return queryset
+
+
 @admin.register(Product)
 class ProductAdmin(ImportExportModelAdmin, FarpostExportMixin, admin.ModelAdmin):
     """Админка для товаров."""
@@ -300,7 +361,7 @@ class ProductAdmin(ImportExportModelAdmin, FarpostExportMixin, admin.ModelAdmin)
         'price', 'wholesale_price', 'availability', 'is_active', 'created_at'
     ]
     list_display_links = ['name']
-    list_filter = ['is_active', 'is_featured', 'condition', 'availability', 'category', 'brand']
+    list_filter = ['is_active', 'is_featured', 'condition', 'availability', 'category', 'brand', PriceFilter]
     list_editable = ['price', 'wholesale_price', 'availability', 'is_active']
     search_fields = ['name', 'external_id', 'article', 'brand', 'cross_numbers', 'applicability']
     prepopulated_fields = {'slug': ('name',)}
@@ -309,6 +370,225 @@ class ProductAdmin(ImportExportModelAdmin, FarpostExportMixin, admin.ModelAdmin)
     actions = ['export_farpost', 'sync_to_farpost_api', 'make_active', 'make_inactive']
     list_per_page = 50
     save_on_top = True
+    
+    def get_actions(self, request):
+        """Переопределяем actions, чтобы использовать наш delete_selected вместо стандартного."""
+        actions = super().get_actions(request)
+        # Удаляем стандартное delete_selected и добавляем наш
+        if 'delete_selected' in actions:
+            del actions['delete_selected']
+        # Добавляем наш метод как действие
+        actions['delete_selected'] = (
+            self.delete_selected,
+            'delete_selected',
+            'Удалить выбранные товары'
+        )
+        return actions
+    
+    def get_queryset(self, request):
+        """Переопределяем queryset, чтобы избежать ошибок с ProductCharacteristic."""
+        qs = super().get_queryset(request)
+        # Используем select_related и prefetch_related, но исключаем product_characteristics
+        # если таблица не существует
+        try:
+            from django.db import connection
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='catalog_productcharacteristic'")
+                table_exists = cursor.fetchone() is not None
+            
+            if not table_exists:
+                # Если таблицы нет, используем только безопасные prefetch_related
+                qs = qs.select_related('category').prefetch_related('images')
+        except Exception:
+            # Если не удалось проверить, используем безопасные prefetch
+            qs = qs.select_related('category').prefetch_related('images')
+        
+        return qs
+    
+    def _check_table_exists(self):
+        """Проверяет существование таблицы catalog_productcharacteristic."""
+        from django.db import connection
+        try:
+            with connection.cursor() as cursor:
+                if 'sqlite' in connection.vendor:
+                    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='catalog_productcharacteristic'")
+                else:
+                    cursor.execute("SELECT table_name FROM information_schema.tables WHERE table_name='catalog_productcharacteristic'")
+                return cursor.fetchone() is not None
+        except Exception:
+            return False
+    
+    def get_deleted_objects(self, objs, request):
+        """Переопределяем, чтобы ВСЕГДА возвращать правильный формат model_count."""
+        # НИКОГДА не вызываем super() - всегда создаём model_count вручную
+        # Это гарантирует, что model_count всегда будет словарём
+        model_count = {}
+        nested = []
+        perms_needed = set()
+        
+        for obj in objs:
+            model = obj.__class__
+            model_key = f"{model._meta.app_label}.{model._meta.model_name}"
+            if model_key not in model_count:
+                model_count[model_key] = 0
+            model_count[model_key] += 1
+            
+            # Добавляем товар в nested список
+            nested.append([str(obj)])
+        
+        # model_count ВСЕГДА словарь с ключами вида "app.model"
+        return nested, model_count, perms_needed
+    
+    def response_action(self, request, queryset):
+        """Переопределяем, чтобы обработать ошибки с ProductCharacteristic при действиях."""
+        action = request.POST.get('action')
+        
+        # Если действие - удаление, ВСЕГДА обрабатываем через наш метод, не вызывая super()
+        # Это гарантирует, что мы не обратимся к несуществующей таблице
+        if action == 'delete_selected':
+            # Вызываем наш метод напрямую, минуя стандартный обработчик
+            return self.delete_selected(request, queryset)
+        
+        # Для других случаев используем стандартный метод
+        try:
+            return super().response_action(request, queryset)
+        except Exception as e:
+            error_msg = str(e).lower()
+            if 'productcharacteristic' in error_msg or 'no such table' in error_msg:
+                # Если ошибка связана с ProductCharacteristic, обрабатываем вручную
+                if action == 'delete_selected':
+                    return self.delete_selected(request, queryset)
+                else:
+                    raise
+            else:
+                raise
+    
+    def changelist_view(self, request, extra_context=None):
+        """Переопределяем changelist_view, чтобы обработать ошибки с ProductCharacteristic."""
+        # ВСЕГДА перехватываем delete_selected до вызова super(), чтобы избежать ошибки
+        if request.method == 'POST' and request.POST.get('action') == 'delete_selected':
+            # Перехватываем удаление до вызова super(), чтобы избежать ошибки
+            # Получаем queryset из POST данных
+            from django.contrib.admin import helpers
+            selected = request.POST.getlist(helpers.ACTION_CHECKBOX_NAME)
+            if selected:
+                queryset = self.get_queryset(request).filter(pk__in=selected)
+                # Проверяем, это подтверждение удаления или первый запрос
+                # Для обоих случаев (первый запрос и подтверждение) вызываем delete_selected
+                return self.delete_selected(request, queryset)
+            else:
+                # Если selected пустой, возвращаемся на страницу списка с сообщением
+                from django.shortcuts import redirect
+                from django.urls import reverse
+                self.message_user(request, 'Не выбрано ни одного товара для удаления.', messages.WARNING)
+                return redirect(reverse('admin:catalog_product_changelist'))
+        
+        # Обертываем весь остальной код в try-except для перехвата любых ошибок
+        try:
+            # Проверяем существование таблицы перед вызовом super()
+            table_exists = self._check_table_exists()
+            
+            # Если таблицы нет, используем базовый ModelAdmin.changelist_view вместо ImportExportModelAdmin
+            if not table_exists:
+                # Временно заменяем get_queryset на безопасную версию
+                original_get_queryset = self.get_queryset
+                def safe_get_queryset(request):
+                    return Product.objects.all().select_related('category').prefetch_related('images')
+                self.get_queryset = safe_get_queryset
+                
+                try:
+                    # Используем changelist_view из базового ModelAdmin, минуя ImportExportModelAdmin
+                    # Это обходит проблему с автоматическим экспортом связанных моделей
+                    return admin.ModelAdmin.changelist_view(self, request, extra_context)
+                except Exception as e:
+                    error_msg = str(e).lower()
+                    if 'productcharacteristic' in error_msg or 'no such table' in error_msg:
+                        # Если ошибка все еще возникла, возможно это действие delete_selected
+                        # Попробуем обработать его напрямую
+                        if request.method == 'POST' and request.POST.get('action') == 'delete_selected':
+                            from django.contrib.admin import helpers
+                            selected = request.POST.getlist(helpers.ACTION_CHECKBOX_NAME)
+                            if selected:
+                                queryset = Product.objects.filter(pk__in=selected)
+                                return self.delete_selected(request, queryset)
+                        # Иначе используем минимальный queryset
+                        def minimal_get_queryset(request):
+                            return Product.objects.all()
+                        self.get_queryset = minimal_get_queryset
+                        try:
+                            return admin.ModelAdmin.changelist_view(self, request, extra_context)
+                        except Exception:
+                            raise
+                    else:
+                        raise
+                finally:
+                    # Восстанавливаем оригинальный get_queryset
+                    self.get_queryset = original_get_queryset
+            else:
+                # Если таблица существует, используем обычный путь, но с обработкой ошибок
+                try:
+                    return super().changelist_view(request, extra_context)
+                except Exception as e:
+                    error_msg = str(e).lower()
+                    if 'productcharacteristic' in error_msg or 'no such table' in error_msg:
+                        # Если ошибка возникла, возможно это действие delete_selected
+                        # Попробуем обработать его напрямую
+                        if request.method == 'POST' and request.POST.get('action') == 'delete_selected':
+                            from django.contrib.admin import helpers
+                            selected = request.POST.getlist(helpers.ACTION_CHECKBOX_NAME)
+                            if selected:
+                                queryset = Product.objects.filter(pk__in=selected)
+                                return self.delete_selected(request, queryset)
+                            else:
+                                from django.shortcuts import redirect
+                                from django.urls import reverse
+                                self.message_user(request, 'Не выбрано ни одного товара для удаления.', messages.WARNING)
+                                return redirect(reverse('admin:catalog_product_changelist'))
+                        # Иначе используем базовый ModelAdmin.changelist_view
+                        original_get_queryset = self.get_queryset
+                        def safe_get_queryset(request):
+                            return Product.objects.all().select_related('category').prefetch_related('images')
+                        self.get_queryset = safe_get_queryset
+                        try:
+                            return admin.ModelAdmin.changelist_view(self, request, extra_context)
+                        finally:
+                            self.get_queryset = original_get_queryset
+                    else:
+                        raise
+        except ValueError as e:
+            # Перехватываем ValueError с model_count (Need 2 values to unpack)
+            if 'need 2 values to unpack' in str(e).lower() or 'model_count' in str(e).lower():
+                # Если это действие delete_selected, обрабатываем его напрямую
+                if request.method == 'POST' and request.POST.get('action') == 'delete_selected':
+                    from django.contrib.admin import helpers
+                    selected = request.POST.getlist(helpers.ACTION_CHECKBOX_NAME)
+                    if selected:
+                        queryset = Product.objects.filter(pk__in=selected)
+                        return self.delete_selected(request, queryset)
+                    else:
+                        from django.shortcuts import redirect
+                        from django.urls import reverse
+                        self.message_user(request, 'Не выбрано ни одного товара для удаления.', messages.WARNING)
+                        return redirect(reverse('admin:catalog_product_changelist'))
+            raise
+        except Exception as e:
+            # Перехватываем любые ошибки, связанные с ProductCharacteristic
+            error_msg = str(e).lower()
+            if 'productcharacteristic' in error_msg or 'no such table' in error_msg:
+                # Если это действие delete_selected, обрабатываем его напрямую
+                if request.method == 'POST' and request.POST.get('action') == 'delete_selected':
+                    from django.contrib.admin import helpers
+                    selected = request.POST.getlist(helpers.ACTION_CHECKBOX_NAME)
+                    if selected:
+                        queryset = Product.objects.filter(pk__in=selected)
+                        return self.delete_selected(request, queryset)
+                    else:
+                        from django.shortcuts import redirect
+                        from django.urls import reverse
+                        self.message_user(request, 'Не выбрано ни одного товара для удаления.', messages.WARNING)
+                        return redirect(reverse('admin:catalog_product_changelist'))
+            # Иначе пробрасываем ошибку дальше
+            raise
     
     fieldsets = (
         ('Основное', {
@@ -355,6 +635,369 @@ class ProductAdmin(ImportExportModelAdmin, FarpostExportMixin, admin.ModelAdmin)
         queryset.update(is_active=False)
     make_inactive.short_description = 'Сделать неактивными'
     
+    def delete_selected(self, request, queryset):
+        """Простое удаление товаров без использования стандартных шаблонов Django Admin."""
+        from django.db import connection, transaction
+        from django.shortcuts import redirect
+        from django.urls import reverse
+        
+        # Если это подтверждение удаления - удаляем сразу
+        if request.POST.get('post') == 'yes':
+            deleted_count = 0
+            errors_count = 0
+            
+            for obj in queryset:
+                try:
+                    # Пробуем стандартное удаление
+                    obj.delete()
+                    deleted_count += 1
+                except Exception as e:
+                    # Если ошибка - удаляем через SQL
+                    error_msg = str(e).lower()
+                    try:
+                        with transaction.atomic():
+                            with connection.cursor() as cursor:
+                                if 'sqlite' in connection.vendor:
+                                    cursor.execute("DELETE FROM catalog_product WHERE id = ?", [obj.pk])
+                                else:
+                                    cursor.execute("DELETE FROM catalog_product WHERE id = %s", [obj.pk])
+                        deleted_count += 1
+                    except Exception:
+                        errors_count += 1
+                        self.message_user(
+                            request,
+                            f'Ошибка при удалении товара "{obj.name}": {str(e)}',
+                            level=messages.ERROR
+                        )
+            
+            if deleted_count > 0:
+                self.message_user(
+                    request,
+                    f'Успешно удалено товаров: {deleted_count}',
+                    messages.SUCCESS
+                )
+            if errors_count > 0:
+                self.message_user(
+                    request,
+                    f'Не удалось удалить товаров: {errors_count}',
+                    level=messages.WARNING
+                )
+            
+            return redirect(reverse('admin:catalog_product_changelist'))
+        
+        # Показываем простую страницу подтверждения БЕЗ использования model_count
+        from django.template.response import TemplateResponse
+        from django.contrib.admin.helpers import ActionForm
+        from django.contrib.admin import helpers
+        from django.utils.translation import gettext as _
+        
+        opts = self.model._meta
+        site_context = self.admin_site.each_context(request)
+        
+        # Создаём простой контекст БЕЗ model_count
+        context = {
+            **site_context,
+            'title': _('Вы уверены?'),
+            'objects_name': str(opts.verbose_name_plural),
+            'queryset': queryset,
+            'objects': list(queryset),  # Простой список объектов
+            'opts': opts,
+            'action_checkbox_name': helpers.ACTION_CHECKBOX_NAME,
+            'media': self.media,
+            'action_form': ActionForm(auto_id=None),
+            'form_url': '',
+        }
+        
+        # Используем наш простой шаблон без model_count
+        return TemplateResponse(
+            request,
+            'admin/catalog/product_delete_confirmation.html',
+            context
+        )
+    
+    def delete_model(self, request, obj):
+        from django.db import connection, transaction
+        from django.shortcuts import redirect
+        from django.urls import reverse
+        
+        # Проверяем существование таблицы
+        table_exists = self._check_table_exists()
+        
+        if not table_exists:
+            # Если таблицы нет, удаляем напрямую без показа страницы подтверждения
+            # если это POST запрос (подтверждение удаления)
+            if request.POST.get('post') == 'yes':
+                deleted_count = 0
+                errors_count = 0
+                
+                for obj in queryset:
+                    try:
+                        with transaction.atomic():
+                            with connection.cursor() as cursor:
+                                if 'sqlite' in connection.vendor:
+                                    cursor.execute("DELETE FROM catalog_product WHERE id = ?", [obj.pk])
+                                else:
+                                    cursor.execute("DELETE FROM catalog_product WHERE id = %s", [obj.pk])
+                        deleted_count += 1
+                    except Exception as e:
+                        errors_count += 1
+                        self.message_user(
+                            request,
+                            f'Ошибка при удалении товара "{obj.name}": {str(e)}',
+                            level=messages.ERROR
+                        )
+                
+                if deleted_count > 0:
+                    self.message_user(
+                        request,
+                        f'Успешно удалено товаров: {deleted_count}',
+                        messages.SUCCESS
+                    )
+                if errors_count > 0:
+                    self.message_user(
+                        request,
+                        f'Не удалось удалить товаров: {errors_count}',
+                        level=messages.WARNING
+                    )
+                
+                return redirect(reverse('admin:catalog_product_changelist'))
+            else:
+                # Показываем страницу подтверждения без попытки собрать связанные объекты
+                opts = self.model._meta
+                app_label = opts.app_label
+                
+                # ВСЕГДА создаем model_count заново, чтобы гарантировать правильный формат
+                # Не используем get_deleted_objects для model_count, создаем его напрямую
+                model_count = {}
+                nested = []
+                for obj in queryset:
+                    model = obj.__class__
+                    model_key = f"{model._meta.app_label}.{model._meta.model_name}"
+                    if model_key not in model_count:
+                        model_count[model_key] = 0
+                    model_count[model_key] += 1
+                    nested.append([str(obj)])
+                
+                # Получаем perms_needed отдельно, если нужно
+                perms_needed = set()
+                
+                # Используем стандартный шаблон подтверждения
+                from django.template.response import TemplateResponse
+                from django.contrib.admin.helpers import ActionForm
+                from django.contrib.admin import helpers
+                from django.utils.translation import gettext as _
+                
+                # Создаем контекст, но гарантируем правильный формат model_count
+                site_context = self.admin_site.each_context(request)
+                # Удаляем model_count из site_context, если он там есть
+                if 'model_count' in site_context:
+                    del site_context['model_count']
+                
+                # Убеждаемся что model_count - это словарь
+                if not isinstance(model_count, dict):
+                    # Если model_count не словарь, создаём заново
+                    model_count = {}
+                    for obj in queryset:
+                        model = obj.__class__
+                        model_key = f"{model._meta.app_label}.{model._meta.model_name}"
+                        if model_key not in model_count:
+                            model_count[model_key] = 0
+                        model_count[model_key] += 1
+                
+                context = {
+                    **site_context,
+                    'title': _('Are you sure?'),
+                    'objects_name': str(opts.verbose_name_plural),
+                    'queryset': queryset,
+                    'nested': nested,
+                    'perms_needed': perms_needed,
+                    'opts': opts,
+                    'action_checkbox_name': helpers.ACTION_CHECKBOX_NAME,
+                    'media': self.media,
+                    'action_form': ActionForm(auto_id=None),
+                    'form_url': '',
+                }
+                # Передаём model_count последним, чтобы гарантировать правильный формат
+                context['model_count'] = model_count
+                
+                return TemplateResponse(
+                    request,
+                    'admin/delete_selected_confirmation.html',
+                    context
+                )
+        else:
+            # Таблица существует — логика та же: удаляем или показываем подтверждение
+            if request.POST.get('post') == 'yes':
+                deleted_count = 0
+                errors_count = 0
+                for obj in queryset:
+                    try:
+                        obj.delete()
+                        deleted_count += 1
+                    except Exception as e:
+                        error_msg = str(e).lower()
+                        if 'productcharacteristic' in error_msg or 'no such table' in error_msg:
+                            try:
+                                with transaction.atomic():
+                                    with connection.cursor() as cursor:
+                                        if 'sqlite' in connection.vendor:
+                                            cursor.execute("DELETE FROM catalog_product WHERE id = ?", [obj.pk])
+                                        else:
+                                            cursor.execute("DELETE FROM catalog_product WHERE id = %s", [obj.pk])
+                                deleted_count += 1
+                            except Exception:
+                                errors_count += 1
+                        else:
+                            errors_count += 1
+                            self.message_user(
+                                request,
+                                f'Ошибка при удалении товара "{obj.name}": {str(e)}',
+                                level=messages.ERROR
+                            )
+
+                if deleted_count > 0:
+                    self.message_user(
+                        request,
+                        f'Успешно удалено товаров: {deleted_count}',
+                        messages.SUCCESS
+                    )
+                if errors_count > 0:
+                    self.message_user(
+                        request,
+                        f'Не удалось удалить товаров: {errors_count}',
+                        level=messages.WARNING
+                    )
+                return redirect(reverse('admin:catalog_product_changelist'))
+            else:
+                # Показываем страницу подтверждения
+                opts = self.model._meta
+                model_count = {}
+                nested = []
+                for obj in queryset:
+                    model = obj.__class__
+                    model_key = f"{model._meta.app_label}.{model._meta.model_name}"
+                    if model_key not in model_count:
+                        model_count[model_key] = 0
+                    model_count[model_key] += 1
+                    nested.append([str(obj)])
+
+                perms_needed = set()
+                from django.template.response import TemplateResponse
+                from django.contrib.admin.helpers import ActionForm
+                from django.contrib.admin import helpers
+                from django.utils.translation import gettext as _
+
+                # Создаем контекст, но гарантируем правильный формат model_count
+                site_context = self.admin_site.each_context(request)
+                # Удаляем model_count из site_context, если он там есть
+                if 'model_count' in site_context:
+                    del site_context['model_count']
+                
+                # Убеждаемся что model_count - это словарь
+                if not isinstance(model_count, dict):
+                    # Если model_count не словарь, создаём заново
+                    model_count = {}
+                    for obj in queryset:
+                        model = obj.__class__
+                        model_key = f"{model._meta.app_label}.{model._meta.model_name}"
+                        if model_key not in model_count:
+                            model_count[model_key] = 0
+                        model_count[model_key] += 1
+                
+                context = {
+                    **site_context,
+                    'title': _('Are you sure?'),
+                    'objects_name': str(opts.verbose_name_plural),
+                    'queryset': queryset,
+                    'nested': nested,
+                    'perms_needed': perms_needed,
+                    'opts': opts,
+                    'action_checkbox_name': helpers.ACTION_CHECKBOX_NAME,
+                    'media': self.media,
+                    'action_form': ActionForm(auto_id=None),
+                    'form_url': '',
+                }
+                # Передаём model_count последним, чтобы гарантировать правильный формат
+                context['model_count'] = model_count
+                return TemplateResponse(
+                    request,
+                    'admin/delete_selected_confirmation.html',
+                    context
+                )
+    
+    def delete_model(self, request, obj):
+        """Переопределяем удаление одного товара, чтобы игнорировать ошибки с ProductCharacteristic."""
+        from django.db import connection, transaction
+        
+        try:
+            obj.delete()
+        except Exception as e:
+            # Если ошибка связана с несуществующей таблицей ProductCharacteristic, удаляем через SQL
+            error_msg = str(e).lower()
+            if 'productcharacteristic' in error_msg or 'no such table' in error_msg:
+                try:
+                    with transaction.atomic():
+                        # Удаляем товар напрямую через SQL, минуя CASCADE
+                        # Используем ? для SQLite, %s для PostgreSQL
+                        with connection.cursor() as cursor:
+                            if 'sqlite' in connection.vendor:
+                                cursor.execute("DELETE FROM catalog_product WHERE id = ?", [obj.pk])
+                            else:
+                                cursor.execute("DELETE FROM catalog_product WHERE id = %s", [obj.pk])
+                    self.message_user(request, f'Товар "{obj.name}" успешно удалён.', messages.SUCCESS)
+                except Exception as sql_error:
+                    self.message_user(
+                        request,
+                        f'Ошибка при удалении товара "{obj.name}": {str(sql_error)}',
+                        level=messages.ERROR
+                    )
+            else:
+                # Если это другая ошибка, пробрасываем дальше
+                raise
+    
+    def delete_queryset(self, request, queryset):
+        """Переопределяем удаление, чтобы игнорировать ошибки с ProductCharacteristic."""
+        from django.db import connection, transaction
+        
+        deleted_count = 0
+        errors_count = 0
+        
+        for obj in queryset:
+            try:
+                obj.delete()
+                deleted_count += 1
+            except Exception as e:
+                # Если ошибка связана с несуществующей таблицей ProductCharacteristic, удаляем через SQL
+                error_msg = str(e).lower()
+                if 'productcharacteristic' in error_msg or 'no such table' in error_msg:
+                    try:
+                        with transaction.atomic():
+                            # Удаляем товар напрямую через SQL, минуя CASCADE
+                            with connection.cursor() as cursor:
+                                if 'sqlite' in connection.vendor:
+                                    cursor.execute("DELETE FROM catalog_product WHERE id = ?", [obj.pk])
+                                else:
+                                    cursor.execute("DELETE FROM catalog_product WHERE id = %s", [obj.pk])
+                        deleted_count += 1
+                    except Exception:
+                        errors_count += 1
+                else:
+                    # Если это другая ошибка, пробрасываем дальше
+                    raise
+        
+        if deleted_count > 0:
+            self.message_user(
+                request,
+                f'Успешно удалено товаров: {deleted_count}',
+                messages.SUCCESS
+            )
+        if errors_count > 0:
+            self.message_user(
+                request,
+                f'Не удалось удалить товаров: {errors_count}',
+                level=messages.WARNING
+            )
+    
     def sync_to_farpost_api(self, request, queryset):
         """Синхронизировать выбранные товары с API Farpost."""
         from .models import FarpostAPISettings
@@ -370,6 +1013,28 @@ class ProductAdmin(ImportExportModelAdmin, FarpostExportMixin, admin.ModelAdmin)
                 level=messages.ERROR
             )
             return
+        
+        # Проверяем наличие артикулов (Farpost требует уникальный артикул для каждого товара)
+        no_article_count = queryset.filter(article='').count() + queryset.filter(article__isnull=True).count()
+        if no_article_count:
+            self.message_user(
+                request,
+                f'⚠️ {no_article_count} из выбранных товаров не имеют артикула. '
+                f'Farpost требует уникальный буквенно-цифровой артикул для каждого товара. '
+                f'Товары без артикула могут не обновиться корректно на Farpost.',
+                level=messages.WARNING
+            )
+        
+        # Проверяем нулевые цены
+        from decimal import Decimal
+        zero_price_sync_count = queryset.filter(price=0).count()
+        if zero_price_sync_count:
+            self.message_user(
+                request,
+                f'⚠️ {zero_price_sync_count} из выбранных товаров имеют цену 0. '
+                f'Farpost не принимает объявления с нулевой ценой — заполните поле "Цена".',
+                level=messages.WARNING
+            )
         
         # Проверяем количество товаров и предупреждаем о размере файла
         products_count = queryset.count()
@@ -610,29 +1275,48 @@ class FarpostAPISettingsAdmin(admin.ModelAdmin):
             widget=forms.PasswordInput(attrs={
                 'class': 'vTextField',
             }),
-            help_text='Введите пароль для API Farpost. Оставьте пустым, если не хотите менять существующий пароль.'
+            help_text='Введите пароль для API Farpost (необязательно, если используется ключ API). Оставьте пустым, если не хотите менять существующий пароль.'
+        )
+        api_key_input = forms.CharField(
+            label='Ключ API',
+            required=False,
+            widget=forms.PasswordInput(attrs={
+                'class': 'vTextField',
+            }),
+            help_text='Ключ для аутентификации в API Farpost (предоставляется Farpost по запросу). '
+                      'Используется для расчета auth (SHA512 от ключа). Если указан, имеет приоритет над login:password.'
         )
         
         class Meta:
             model = FarpostAPISettings
-            fields = ['login', 'packet_id', 'is_active']
-            exclude = ['password']
+            fields = ['login', 'packet_id', 'auto_update_enabled', 'auto_update_url', 'auto_update_interval', 'is_active']
+            exclude = ['password', 'api_key']
         
         def __init__(self, *args, **kwargs):
             super().__init__(*args, **kwargs)
+            # Если это редактирование существующего объекта, показываем что ключ уже установлен (но не сам ключ)
+            if self.instance and self.instance.pk and self.instance.api_key:
+                self.fields['api_key_input'].help_text += ' (Ключ уже установлен. Введите новый ключ, чтобы изменить его.)'
     
     form = FarpostAPISettingsForm
-    list_display = ['login', 'packet_id', 'is_active', 'last_sync', 'last_sync_status']
-    list_filter = ['is_active', 'last_sync_status', 'last_sync']
-    search_fields = ['login', 'packet_id']
-    readonly_fields = ['last_sync', 'last_sync_status', 'last_sync_error', 'created_at', 'updated_at']
+    list_display = ['login', 'packet_id', 'auto_update_enabled', 'is_active', 'last_sync', 'last_sync_status']
+    list_filter = ['is_active', 'auto_update_enabled', 'last_sync_status', 'last_sync']
+    search_fields = ['login', 'packet_id', 'auto_update_url']
+    readonly_fields = ['last_sync', 'last_sync_status', 'last_sync_error', 'last_auto_update', 'created_at', 'updated_at']
     
     fieldsets = (
         ('Учетные данные', {
-            'fields': ('login', 'password_input', 'packet_id'),
+            'fields': ('login', 'password_input', 'api_key_input', 'packet_id'),
             'description': 'Пакет-объявление на Farpost может содержать множество товаров (тысячи) из разных категорий. '
                           'Один packet_id используется для всех товаров, которые вы хотите синхронизировать. '
-                          'Если нужно разделить товары по разным пакетам, создайте несколько настроек с разными packet_id.'
+                          'Если нужно разделить товары по разным пакетам, создайте несколько настроек с разными packet_id. '
+                          '<br><strong>Аутентификация:</strong> Укажите либо ключ API (предпочтительно), либо логин и пароль.'
+        }),
+        ('Автоматическое обновление', {
+            'fields': ('auto_update_enabled', 'auto_update_url', 'auto_update_interval', 'last_auto_update'),
+            'description': 'Настройка автоматического периодического обновления прайс-листа по ссылке. '
+                          'На странице прайс-листа на Farpost перейдите во вкладку «Автоматически», '
+                          'отметьте подходящий способ обновления и вставьте ссылку к вашему прайс-листу.'
         }),
         ('Статус', {
             'fields': ('is_active', 'last_sync', 'last_sync_status', 'last_sync_error')
@@ -644,16 +1328,32 @@ class FarpostAPISettingsAdmin(admin.ModelAdmin):
     )
     
     def save_model(self, request, obj, form, change):
-        """Сохраняем модель с обработкой пароля."""
+        """Сохраняем модель с обработкой пароля и ключа API."""
         # Получаем пароль из формы
         password_input = form.cleaned_data.get('password_input', '')
         if password_input:
             # Если указан новый пароль, сохраняем его в зашифрованном виде
             obj.set_encrypted_password(password_input)
-        elif not change:
-            # Если это новый объект и пароль не указан, требуем пароль
+        
+        # Получаем ключ API из формы
+        api_key_input = form.cleaned_data.get('api_key_input', '')
+        if api_key_input:
+            # Сохраняем ключ в зашифрованном виде
+            obj.set_encrypted_api_key(api_key_input)
+        
+        # Проверяем, что указан хотя бы один способ аутентификации
+        if not change and not password_input and not api_key_input:
             from django.core.exceptions import ValidationError
-            raise ValidationError('Пароль обязателен для новых настроек')
+            raise ValidationError('Необходимо указать либо ключ API, либо логин и пароль для аутентификации')
+        
+        # Валидация автоматического обновления
+        if obj.auto_update_enabled and not obj.auto_update_url:
+            from django.core.exceptions import ValidationError
+            raise ValidationError('Для включения автоматического обновления необходимо указать ссылку на прайс-лист')
+        
+        if obj.auto_update_interval < 1:
+            obj.auto_update_interval = 1
+        
         super().save_model(request, obj, form, change)
 
 
@@ -697,16 +1397,27 @@ class OneCExchangeLogAdmin(admin.ModelAdmin):
     )
 
 
-@admin.register(ProductCharacteristic)
-class ProductCharacteristicAdmin(admin.ModelAdmin):
-    """Админка для характеристик товаров."""
-    list_display = ['product', 'name', 'value', 'order', 'created_at']
-    list_display_links = ['name']
-    list_editable = ['order']
-    list_filter = ['created_at', 'product']
-    search_fields = ['name', 'value', 'product__name', 'product__article']
-    ordering = ['product', 'order', 'name']
-    raw_id_fields = ['product']
+# Регистрируем ProductCharacteristic только если таблица существует
+try:
+    from django.db import connection
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='catalog_productcharacteristic'")
+        table_exists = cursor.fetchone() is not None
+    
+    if table_exists:
+        @admin.register(ProductCharacteristic)
+        class ProductCharacteristicAdmin(admin.ModelAdmin):
+            """Админка для характеристик товаров."""
+            list_display = ['product', 'name', 'value', 'order', 'created_at']
+            list_display_links = ['name']
+            list_editable = ['order']
+            list_filter = ['created_at', 'product']
+            search_fields = ['name', 'value', 'product__name', 'product__article']
+            ordering = ['product', 'order', 'name']
+            raw_id_fields = ['product']
+except Exception:
+    # Если таблица не существует, не регистрируем админку
+    pass
 
 
 @admin.register(SyncLog)

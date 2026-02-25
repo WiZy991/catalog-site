@@ -14,7 +14,7 @@ SECRET_KEY = 'django-insecure-change-this-in-production-abc123xyz789'
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = ['*', 'onesimus.ru', 'www.onesimus.ru', 'onesim8n.beget.tech']
 
 # Application definition
 INSTALLED_APPS = [
@@ -80,6 +80,12 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': BASE_DIR / 'db.sqlite3',
+        'OPTIONS': {
+            'timeout': 30,  # Таймаут ожидания разблокировки базы (30 секунд)
+            'check_same_thread': False,  # Разрешить использование из разных потоков
+        },
+        # Дополнительные настройки для уменьшения блокировок
+        'CONN_MAX_AGE': 0,  # Не использовать постоянные соединения для SQLite
     }
 }
 

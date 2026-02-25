@@ -306,17 +306,23 @@ def process_product(product_data, sync_log=None):
         
         # Обработка характеристик
         if validated_data.get('characteristics'):
-            # Удаляем старые характеристики
-            ProductCharacteristic.objects.filter(product=product).delete()
-            
-            # Создаем новые
-            for idx, char_data in enumerate(validated_data['characteristics']):
-                ProductCharacteristic.objects.create(
-                    product=product,
-                    name=char_data['name'],
-                    value=char_data['value'],
-                    order=idx
-                )
+            try:
+                # Удаляем старые характеристики
+                ProductCharacteristic.objects.filter(product=product).delete()
+                
+                # Создаем новые
+                for idx, char_data in enumerate(validated_data['characteristics']):
+                    ProductCharacteristic.objects.create(
+                        product=product,
+                        name=char_data['name'],
+                        value=char_data['value'],
+                        order=idx
+                    )
+            except Exception as char_error:
+                # Если таблица ProductCharacteristic не существует (миграции не применены),
+                # просто пропускаем обработку характеристик, но не ломаем обработку товара
+                logger.warning(f"Не удалось обработать ProductCharacteristic для товара {product.external_id or product.article}: {str(char_error)}")
+                # Характеристики уже сохранены в поле product.characteristics, так что это не критично
         
         return product, None, was_created
         

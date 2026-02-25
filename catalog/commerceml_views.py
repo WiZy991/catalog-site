@@ -544,6 +544,16 @@ def process_commerceml_file(file_path, filename, request=None):
         
         logger.info(f"Определен namespace: {namespace or 'стандартный'}")
         
+        # Определяем тип каталога (retail или wholesale)
+        # Сначала проверяем по имени файла
+        filename_lower = filename.lower()
+        catalog_type = 'retail'  # По умолчанию розница
+        if any(keyword in filename_lower for keyword in ['wholesale', 'опт', 'opt', 'wholesale_', '_wholesale', 'партнер', 'partner']):
+            catalog_type = 'wholesale'
+            logger.info(f"Определен тип каталога: ОПТОВЫЙ (wholesale) по имени файла: {filename}")
+        else:
+            logger.info(f"Предварительно определен тип каталога: РОЗНИЦА (retail) по имени файла: {filename}")
+        
         # Ищем каталог товаров или предложения
         # В CommerceML может быть два типа файлов:
         # 1. import.xml - каталог товаров (названия, описания)
@@ -562,8 +572,36 @@ def process_commerceml_file(file_path, filename, request=None):
                 pass
         
         if package is not None:
-            logger.info("Обнаружен файл предложений (offers.xml) - обрабатываем цены и остатки")
-            return process_offers_file(root, namespaces, filename, request)
+            # Для файла предложений дополнительно проверяем типы цен
+            if catalog_type == 'retail':
+                # Ищем типы цен в ПакетПредложений
+                price_types_elem = None
+                if namespace:
+                    price_types_elem = package.find(f'.//{{{namespace}}}ТипыЦен')
+                if price_types_elem is None:
+                    price_types_elem = package.find('.//ТипыЦен')
+                if price_types_elem is None and 'catalog' in namespaces:
+                    try:
+                        price_types_elem = package.find('.//catalog:ТипыЦен', namespaces)
+                    except (KeyError, ValueError):
+                        pass
+                
+                if price_types_elem is not None:
+                    for price_type_elem in price_types_elem.findall(f'.//{{{namespace}}}ТипЦены') or \
+                                          price_types_elem.findall('.//ТипЦены') or \
+                                          price_types_elem.findall('.//catalog:ТипЦены', namespaces):
+                        name_elem = price_type_elem.find(f'.//{{{namespace}}}Наименование') or \
+                                   price_type_elem.find('.//Наименование') or \
+                                   price_type_elem.find('.//catalog:Наименование', namespaces)
+                        if name_elem is not None and name_elem.text:
+                            price_type_name = name_elem.text.lower()
+                            if any(keyword in price_type_name for keyword in ['опт', 'opt', 'wholesale', 'оптовая', 'оптовый', 'партнер', 'partner']):
+                                catalog_type = 'wholesale'
+                                logger.info(f"Определен тип каталога: ОПТОВЫЙ (wholesale) по типу цены: {name_elem.text}")
+                                break
+            
+            logger.info(f"Обнаружен файл предложений (offers.xml) - обрабатываем цены и остатки для каталога: {catalog_type}")
+            return process_offers_file(root, namespaces, filename, request, catalog_type=catalog_type)
         
         # Ищем каталог товаров
         catalog = None
@@ -584,6 +622,27 @@ def process_commerceml_file(file_path, filename, request=None):
             return {'status': 'failure', 'error': 'Каталог не найден в файле'}
         
         logger.info(f"Каталог найден: {catalog.tag}")
+        
+        # Дополнительная проверка: если тип еще не определен как опт, проверяем название каталога
+        if catalog_type == 'retail':
+            catalog_name_elem = None
+            if namespace:
+                catalog_name_elem = catalog.find(f'.//{{{namespace}}}Наименование')
+            if catalog_name_elem is None:
+                catalog_name_elem = catalog.find('.//Наименование')
+            if catalog_name_elem is None and 'catalog' in namespaces:
+                try:
+                    catalog_name_elem = catalog.find('.//catalog:Наименование', namespaces)
+                except (KeyError, ValueError):
+                    pass
+            
+            if catalog_name_elem is not None and catalog_name_elem.text:
+                catalog_name = catalog_name_elem.text.lower()
+                if any(keyword in catalog_name for keyword in ['опт', 'opt', 'wholesale', 'оптовый', 'оптовая', 'партнер', 'partner']):
+                    catalog_type = 'wholesale'
+                    logger.info(f"Определен тип каталога: ОПТОВЫЙ (wholesale) по названию каталога: {catalog_name_elem.text}")
+                else:
+                    logger.info(f"Тип каталога подтвержден как РОЗНИЦА (retail) по названию каталога: {catalog_name_elem.text}")
         
         # Извлекаем товары
         products_data = []
@@ -638,22 +697,25 @@ def process_commerceml_file(file_path, filename, request=None):
             logger.warning(f"Корневой элемент XML: {root.tag}")
             return {'status': 'success', 'message': 'Товары не найдены в файле'}
         
-        # Обрабатываем товары в транзакции
+        # Обрабатываем товары - каждый в отдельной транзакции
+        # Это позволяет избежать ситуации, когда ошибка одного товара ломает обработку всех остальных
         processed_count = 0
         created_count = 0
         updated_count = 0
         errors = []
         
-        logger.info(f"Начало обработки {len(products_data)} товаров в транзакции")
+        logger.info(f"Начало обработки {len(products_data)} товаров (каждый в отдельной транзакции)")
         
-        with transaction.atomic():
-            for idx, product_data in enumerate(products_data):
-                try:
+        for idx, product_data in enumerate(products_data):
+            # Каждый товар обрабатывается в отдельной транзакции
+            # Это гарантирует, что ошибка одного товара не повлияет на обработку остальных
+            try:
+                with transaction.atomic():
                     # Логируем данные товара перед обработкой (для первых 3)
                     if idx < 3:
                         logger.info(f"Обработка товара #{idx+1}: sku={product_data.get('sku')}, name={product_data.get('name')[:50] if product_data.get('name') else 'N/A'}")
                     
-                    product, error, was_created = process_product_from_commerceml(product_data)
+                    product, error, was_created = process_product_from_commerceml(product_data, catalog_type=catalog_type)
                     if product:
                         processed_count += 1
                         if was_created:
@@ -664,6 +726,7 @@ def process_commerceml_file(file_path, filename, request=None):
                             if idx < 10:  # Логируем первые 10 обновлений
                                 logger.info(f"✓ Обновлен товар: {product.article} - {product.name[:50]}")
                     elif error:
+                        # Ошибка внутри process_product_from_commerceml
                         error_info = {
                             'sku': product_data.get('sku', 'unknown'),
                             'error': error
@@ -673,15 +736,62 @@ def process_commerceml_file(file_path, filename, request=None):
                         # Выводим данные товара при ошибке
                         if idx < 5:
                             logger.warning(f"  Данные товара: {product_data}")
-                except Exception as e:
-                    error_msg = str(e)
-                    logger.error(f"✗ Исключение при обработке товара {product_data.get('sku', 'unknown')}: {error_msg}", exc_info=True)
-                    errors.append({
-                        'sku': product_data.get('sku', 'unknown'),
-                        'error': error_msg
-                    })
+            except Exception as e:
+                # Исключение при обработке товара - транзакция автоматически откатывается
+                error_msg = str(e)
+                logger.error(f"✗ Исключение при обработке товара {product_data.get('sku', 'unknown')}: {error_msg}", exc_info=True)
+                errors.append({
+                    'sku': product_data.get('sku', 'unknown'),
+                    'error': error_msg
+                })
+                # Транзакция автоматически откатывается при исключении
+                # Продолжаем обработку следующего товара
         
         logger.info(f"Обработка завершена: обработано={processed_count}, создано={created_count}, обновлено={updated_count}, ошибок={len(errors)}")
+        
+        # ВАЖНО: Скрываем товары, которые были импортированы из 1С, но не пришли в текущем обмене
+        # Это означает, что они были удалены в 1С
+        # Собираем все external_id из обработанных товаров (это уникальный идентификатор из 1С)
+        processed_external_ids = set()
+        
+        for product_data in products_data:
+            external_id = product_data.get('external_id') or product_data.get('sku')
+            if external_id:
+                processed_external_ids.add(str(external_id).strip())
+        
+        logger.info(f"Обработано товаров в обмене: {len(processed_external_ids)} с external_id для каталога {catalog_type}")
+        
+        # Находим товары, которые были импортированы из 1С (имеют external_id),
+        # но не пришли в текущем обмене
+        # ВАЖНО: Скрываем только товары из того же типа каталога (retail или wholesale)
+        deleted_count = 0
+        if processed_external_ids:
+            # Ищем товары, которые:
+            # 1. Имеют external_id (были импортированы из 1С)
+            # 2. Принадлежат к текущему типу каталога (retail или wholesale)
+            # 3. Были активны (чтобы не трогать уже скрытые)
+            # 4. Их external_id нет в списке обработанных
+            products_to_hide = Product.objects.filter(
+                catalog_type=catalog_type,  # Только товары из текущего типа каталога
+                is_active=True,
+                external_id__isnull=False,
+                external_id__gt=''  # Не пустой
+            ).exclude(external_id__in=processed_external_ids)
+            
+            deleted_count = products_to_hide.count()
+            if deleted_count > 0:
+                logger.info(f"Найдено {deleted_count} товаров, которые не пришли в обмене - скрываем их (удалены в 1С)")
+                # Логируем первые 5 для отладки
+                for product in products_to_hide[:5]:
+                    logger.info(f"  Скрываем: {product.name[:50]} (external_id={product.external_id}, article={product.article})")
+                
+                # Скрываем товары (не удаляем физически, чтобы сохранить историю)
+                products_to_hide.update(is_active=False, availability='out_of_stock', quantity=0)
+                logger.info(f"✓ Скрыто товаров: {deleted_count}")
+            else:
+                logger.info("Все товары из 1С присутствуют в обмене, скрывать нечего")
+        else:
+            logger.warning("⚠ В обмене нет товаров с external_id - невозможно определить удаленные товары")
         
         # Создаем лог синхронизации
         processing_time = (timezone.now() - start_time).total_seconds()
@@ -703,13 +813,14 @@ def process_commerceml_file(file_path, filename, request=None):
             processing_time=processing_time
         )
         
-        logger.info(f"Импорт завершен: обработано {processed_count}, создано {created_count}, обновлено {updated_count}, ошибок {len(errors)}")
+        logger.info(f"Импорт завершен: обработано {processed_count}, создано {created_count}, обновлено {updated_count}, скрыто {deleted_count}, ошибок {len(errors)}")
         
         return {
             'status': 'success',
             'processed': processed_count,
             'created': created_count,
             'updated': updated_count,
+            'deleted': deleted_count,
             'errors': len(errors)
         }
         
@@ -793,21 +904,39 @@ def parse_commerceml_product(product_elem, namespaces, root_elem=None):
     
     # Цены (ищем в предложениях)
     # В CommerceML цены обычно в отдельном файле предложений, но могут быть и здесь
+    # Ищем цену в разных возможных местах структуры XML
     price_elem = None
     if namespace:
+        # Вариант 1: ЦенаЗаЕдиницу напрямую
         price_elem = product_elem.find(f'.//{{{namespace}}}ЦенаЗаЕдиницу')
+        # Вариант 2: Цены/Цена/ЦенаЗаЕдиницу (полная структура)
+        if price_elem is None:
+            price_elem = product_elem.find(f'.//{{{namespace}}}Цены/{{{namespace}}}Цена/{{{namespace}}}ЦенаЗаЕдиницу')
+        # Вариант 3: Предложения/Предложение/Цены/Цена/ЦенаЗаЕдиницу
+        if price_elem is None:
+            price_elem = product_elem.find(f'.//{{{namespace}}}Предложения/{{{namespace}}}Предложение/{{{namespace}}}Цены/{{{namespace}}}Цена/{{{namespace}}}ЦенаЗаЕдиницу')
     if price_elem is None:
+        # Без namespace
         price_elem = product_elem.find('.//ЦенаЗаЕдиницу')
+        if price_elem is None:
+            price_elem = product_elem.find('.//Цены/Цена/ЦенаЗаЕдиницу')
+        if price_elem is None:
+            price_elem = product_elem.find('.//Предложения/Предложение/Цены/Цена/ЦенаЗаЕдиницу')
     # Пробуем с префиксом catalog: только если он определен
     if price_elem is None and 'catalog' in namespaces:
         try:
             price_elem = product_elem.find('.//catalog:ЦенаЗаЕдиницу', namespaces)
+            if price_elem is None:
+                price_elem = product_elem.find('.//catalog:Цены/catalog:Цена/catalog:ЦенаЗаЕдиницу', namespaces)
         except (KeyError, ValueError):
             pass
+    
     if price_elem is not None and price_elem.text:
         try:
-            product_data['price'] = float(price_elem.text.strip().replace(',', '.'))
-        except (ValueError, AttributeError):
+            price_str = price_elem.text.strip().replace(',', '.').replace(' ', '').replace('\xa0', '')
+            if price_str:
+                product_data['price'] = float(price_str)
+        except (ValueError, AttributeError, TypeError):
             pass
     
     # Остатки (ищем в предложениях)
@@ -933,13 +1062,41 @@ def parse_commerceml_product(product_elem, namespaces, root_elem=None):
                 char_value = char_value_elem.text.strip() if char_value_elem.text else ''
                 
                 if char_name and char_value:
-                    characteristics.append({
-                        'name': char_name,
-                        'value': char_value
-                    })
-                    # Если это марка (бренд), сохраняем отдельно
-                    if char_name.lower() in ['марка', 'brand', 'бренд']:
+                    char_name_lower = char_name.lower()
+                    
+                    # Обрабатываем служебные характеристики - они не должны попадать в characteristics
+                    # Артикул1 → article (кросс-номер)
+                    if char_name_lower in ['артикул1', 'артикул 1', 'article1', 'article 1']:
+                        if not product_data.get('article'):
+                            product_data['article'] = char_value
+                        # Добавляем в кросс-номера, если article уже был заполнен
+                        elif product_data.get('article') != char_value:
+                            if 'cross_numbers' not in product_data:
+                                product_data['cross_numbers'] = []
+                            product_data['cross_numbers'].append(char_value)
+                    
+                    # Артикул2 → cross_numbers (OEM номер)
+                    elif char_name_lower in ['артикул2', 'артикул 2', 'article2', 'article 2', 'oem', 'oem номер']:
+                        if 'cross_numbers' not in product_data:
+                            product_data['cross_numbers'] = []
+                        product_data['cross_numbers'].append(char_value)
+                    
+                    # Марка → brand (бренд)
+                    elif char_name_lower in ['марка', 'brand', 'бренд']:
                         product_data['brand'] = char_value
+                    
+                    # Двигатель → applicability (применимость)
+                    elif char_name_lower in ['двигатель', 'engine', 'мотор']:
+                        if 'applicability' not in product_data:
+                            product_data['applicability'] = []
+                        product_data['applicability'].append(char_value)
+                    
+                    # Все остальные характеристики добавляем в список
+                    else:
+                        characteristics.append({
+                            'name': char_name,
+                            'value': char_value
+                        })
     
     # Вариант 2: ЗначенияСвойств (старый формат)
     if not characteristics:
@@ -1008,87 +1165,261 @@ def parse_commerceml_product(product_elem, namespaces, root_elem=None):
     if characteristics:
         product_data['characteristics'] = characteristics
     
-    # Активность
+    # Активность - по умолчанию товар активен (будет обновлено при обработке остатков)
     product_data['is_active'] = True
     
     return product_data if product_data.get('sku') and product_data.get('name') else None
 
 
-def process_offers_file(root, namespaces, filename, request=None):
+def process_offers_file(root, namespaces, filename, request=None, catalog_type='retail'):
     """
     Обрабатывает файл предложений (offers.xml) - обновляет цены и остатки.
+    
+    Args:
+        root: Корневой элемент XML
+        namespaces: Словарь с namespace
+        filename: Имя файла
+        request: Объект запроса Django
+        catalog_type: Тип каталога ('retail' или 'wholesale')
     """
-    logger.info("Обработка файла предложений (offers.xml)")
+    logger.info(f"Обработка файла предложений (offers.xml) для каталога: {catalog_type}")
     
     start_time = timezone.now()
     processed_count = 0
     updated_count = 0
     errors = []
     
-    # Ищем предложения
-    offers = (
-        root.findall('.//Предложение', namespaces) or
-        root.findall('.//catalog:Предложение', namespaces) or
-        root.findall('.//Предложение')
-    )
+    # Получаем namespace из словаря
+    namespace = namespaces.get('', namespaces.get('cml', namespaces.get('cml2', None)))
+    
+    # Ищем предложения с учетом namespace
+    offers = []
+    if namespace:
+        # Вариант 1: С namespace напрямую
+        offers = root.findall(f'.//{{{namespace}}}Предложение')
+        # Вариант 2: В ПакетПредложений/Предложения/Предложение
+        if not offers:
+            package = root.find(f'.//{{{namespace}}}ПакетПредложений')
+            if package is not None:
+                offers = package.findall(f'.//{{{namespace}}}Предложение')
+    if not offers:
+        # Вариант 3: Без namespace
+        offers = root.findall('.//Предложение')
+        if not offers:
+            package = root.find('.//ПакетПредложений')
+            if package is not None:
+                offers = package.findall('.//Предложение')
+    if not offers and 'catalog' in namespaces:
+        # Вариант 4: С префиксом catalog:
+        try:
+            offers = root.findall('.//catalog:Предложение', namespaces)
+            if not offers:
+                package = root.find('.//catalog:ПакетПредложений', namespaces)
+                if package is not None:
+                    offers = package.findall('.//catalog:Предложение', namespaces)
+        except (KeyError, ValueError):
+            pass
     
     logger.info(f"Найдено предложений: {len(offers)}")
     
     if not offers:
+        logger.warning("Предложения не найдены в файле offers.xml")
         return {'status': 'success', 'message': 'Предложения не найдены в файле'}
     
-    with transaction.atomic():
-        for offer_elem in offers:
-            try:
+    # Обрабатываем каждое предложение в отдельной транзакции
+    # Это позволяет избежать ситуации, когда ошибка одного предложения ломает обработку всех остальных
+    logger.info(f"Начало обработки {len(offers)} предложений (каждое в отдельной транзакции)")
+    
+    for idx, offer_elem in enumerate(offers):
+        # Каждое предложение обрабатывается в отдельной транзакции
+        try:
+            with transaction.atomic():
                 # Ищем Ид товара
-                product_id_elem = offer_elem.find('.//Ид', namespaces) or offer_elem.find('.//Ид')
+                product_id_elem = None
+                if namespace:
+                    product_id_elem = offer_elem.find(f'{{{namespace}}}Ид')
+                if product_id_elem is None:
+                    product_id_elem = offer_elem.find('.//Ид')
+                if product_id_elem is None and 'catalog' in namespaces:
+                    try:
+                        product_id_elem = offer_elem.find('catalog:Ид', namespaces)
+                    except (KeyError, ValueError):
+                        pass
+                
                 if product_id_elem is None or not product_id_elem.text:
+                    if idx < 5:
+                        logger.warning(f"Предложение #{idx+1}: не найден Ид товара")
                     continue
                 
                 product_id = product_id_elem.text.strip()
                 
-                # Ищем товар по external_id
-                product = Product.objects.filter(external_id=product_id).first()
+                # Ищем товар по external_id в нужном типе каталога
+                product = Product.objects.filter(external_id=product_id, catalog_type=catalog_type).first()
                 if not product:
                     # Пробуем по артикулу
-                    product = Product.objects.filter(article=product_id).first()
+                    product = Product.objects.filter(article=product_id, catalog_type=catalog_type).first()
                 
                 if not product:
-                    logger.warning(f"Товар с Ид {product_id} не найден в базе")
+                    if idx < 10:
+                        logger.warning(f"Товар с Ид {product_id} не найден в базе")
                     continue
                 
-                # Обновляем цену
-                price_elem = offer_elem.find('.//ЦенаЗаЕдиницу', namespaces) or offer_elem.find('.//ЦенаЗаЕдиницу')
-                if price_elem is not None and price_elem.text:
+                # Обновляем цену из предложений (приоритет - цены из offers.xml)
+                price_elem = None
+                # Ищем цену с учетом namespace
+                if namespace:
+                    # Вариант 1: Цены/Цена/ЦенаЗаЕдиницу
+                    price_elem = offer_elem.find(f'.//{{{namespace}}}Цены/{{{namespace}}}Цена/{{{namespace}}}ЦенаЗаЕдиницу')
+                    # Вариант 2: ЦенаЗаЕдиницу напрямую
+                    if price_elem is None:
+                        price_elem = offer_elem.find(f'.//{{{namespace}}}ЦенаЗаЕдиницу')
+                
+                if price_elem is None:
+                    # Без namespace
+                    price_elem = offer_elem.find('.//Цены/Цена/ЦенаЗаЕдиницу')
+                    if price_elem is None:
+                        price_elem = offer_elem.find('.//ЦенаЗаЕдиницу')
+                
+                # Пробуем с префиксом catalog: только если он определен
+                if price_elem is None and 'catalog' in namespaces:
                     try:
-                        price = float(price_elem.text.strip().replace(',', '.'))
-                        product.price = price
-                    except (ValueError, AttributeError):
+                        price_elem = offer_elem.find('.//catalog:Цены/catalog:Цена/catalog:ЦенаЗаЕдиницу', namespaces)
+                        if price_elem is None:
+                            price_elem = offer_elem.find('.//catalog:ЦенаЗаЕдиницу', namespaces)
+                    except (KeyError, ValueError):
                         pass
                 
+                if price_elem is not None and price_elem.text:
+                    try:
+                        price_str = price_elem.text.strip().replace(',', '.').replace(' ', '').replace('\xa0', '')
+                        if price_str:
+                            price = float(price_str)
+                            if price > 0:
+                                # Для оптового каталога обновляем wholesale_price, для розничного - price
+                                if catalog_type == 'wholesale':
+                                    product.wholesale_price = price
+                                    if idx < 5:
+                                        logger.info(f"Обновлена оптовая цена для товара {product_id}: {price}")
+                                else:
+                                    product.price = price
+                                    if idx < 5:
+                                        logger.info(f"Обновлена розничная цена для товара {product_id}: {price}")
+                    except (ValueError, AttributeError, TypeError) as e:
+                        if idx < 5:
+                            logger.warning(f"Не удалось распарсить цену для товара {product_id}: {price_elem.text}, ошибка: {e}")
+                
                 # Обновляем остаток
-                quantity_elem = offer_elem.find('.//Количество', namespaces) or offer_elem.find('.//Количество')
+                # Количество может быть в:
+                # 1. <Количество>268</Количество>
+                # 2. <Склад КоличествоНаСкладе="268"/>
+                quantity = None
+                quantity_elem = None
+                
+                # Вариант 1: Ищем элемент <Количество> (используем findall для поиска всех вложенных элементов)
+                quantity_elems = []
+                if namespace:
+                    quantity_elems = offer_elem.findall(f'.//{{{namespace}}}Количество')
+                if not quantity_elems:
+                    quantity_elems = offer_elem.findall('.//Количество')
+                if not quantity_elems and 'catalog' in namespaces:
+                    try:
+                        quantity_elems = offer_elem.findall('.//catalog:Количество', namespaces)
+                    except (KeyError, ValueError):
+                        pass
+                
+                # Берем первый найденный элемент с количеством
+                if quantity_elems:
+                    quantity_elem = quantity_elems[0]
+                
                 if quantity_elem is not None and quantity_elem.text:
                     try:
                         quantity = int(float(quantity_elem.text.strip().replace(',', '.')))
-                        product.quantity = quantity
-                        if quantity > 0:
-                            product.availability = 'in_stock'
-                        else:
-                            product.availability = 'out_of_stock'
-                    except (ValueError, AttributeError):
-                        pass
+                        if idx < 5:
+                            logger.info(f"Найдено количество в элементе <Количество> для товара {product_id}: {quantity}")
+                    except (ValueError, AttributeError) as e:
+                        if idx < 5:
+                            logger.warning(f"Не удалось распарсить остаток из <Количество> для товара {product_id}: {quantity_elem.text}, ошибка: {e}")
+                
+                # Вариант 2: Если не нашли в элементе, ищем в атрибуте <Склад КоличествоНаСкладе="..."/>
+                if quantity is None:
+                    warehouse_elem = None
+                    if namespace:
+                        warehouse_elem = offer_elem.find(f'.//{{{namespace}}}Склад')
+                    if warehouse_elem is None:
+                        warehouse_elem = offer_elem.find('.//Склад')
+                    if warehouse_elem is None and 'catalog' in namespaces:
+                        try:
+                            warehouse_elem = offer_elem.find('.//catalog:Склад', namespaces)
+                        except (KeyError, ValueError):
+                            pass
+                    
+                    if warehouse_elem is not None:
+                        # Ищем атрибут КоличествоНаСкладе
+                        quantity_attr = warehouse_elem.get('КоличествоНаСкладе')
+                        if not quantity_attr:
+                            # Пробуем английское название атрибута
+                            quantity_attr = warehouse_elem.get('QuantityInStock')
+                        
+                        if quantity_attr:
+                            try:
+                                quantity = int(float(str(quantity_attr).strip().replace(',', '.')))
+                                if idx < 5:
+                                    logger.info(f"Найдено количество в атрибуте Склад для товара {product_id}: {quantity}")
+                            except (ValueError, AttributeError) as e:
+                                if idx < 5:
+                                    logger.warning(f"Не удалось распарсить остаток из атрибута Склад для товара {product_id}: {quantity_attr}, ошибка: {e}")
+                
+                # Обновляем количество и наличие
+                if quantity is not None:
+                    product.quantity = quantity
+                    if quantity > 0:
+                        product.availability = 'in_stock'
+                        product.is_active = True  # Товар с остатком - активен
+                    else:
+                        product.availability = 'out_of_stock'
+                        product.is_active = False  # Товар без остатка - скрываем
+                    if idx < 5:
+                        logger.info(f"✓ Обновлен остаток для товара {product_id}: {quantity}, наличие: {product.availability}, активен: {product.is_active}")
+                else:
+                    # Если количество не найдено, скрываем товар (is_active = False)
+                    # Это означает, что товара нет в остатках в 1С
+                    product.quantity = 0
+                    product.availability = 'out_of_stock'
+                    product.is_active = False  # Скрываем товар без остатка
+                    if idx < 10:
+                        logger.warning(f"⚠ Количество не найдено для товара {product_id}. Товар скрыт (is_active=False).")
+                        # Выводим структуру элемента для отладки
+                        if idx < 3:
+                            logger.debug(f"  Структура предложения: tag={offer_elem.tag}, children={[child.tag for child in offer_elem]}")
+                            # Ищем все элементы с количеством
+                            all_quantity_elems = offer_elem.findall('.//Количество')
+                            if namespace:
+                                all_quantity_elems.extend(offer_elem.findall(f'.//{{{namespace}}}Количество'))
+                            logger.debug(f"  Найдено элементов <Количество>: {len(all_quantity_elems)}")
+                            for q_elem in all_quantity_elems:
+                                logger.debug(f"    <Количество>: {q_elem.text}")
+                            # Ищем все элементы Склад
+                            all_warehouse_elems = offer_elem.findall('.//Склад')
+                            if namespace:
+                                all_warehouse_elems.extend(offer_elem.findall(f'.//{{{namespace}}}Склад'))
+                            logger.debug(f"  Найдено элементов <Склад>: {len(all_warehouse_elems)}")
+                            for w_elem in all_warehouse_elems:
+                                logger.debug(f"    <Склад> атрибуты: {w_elem.attrib}")
                 
                 product.save()
                 processed_count += 1
                 updated_count += 1
                 
-            except Exception as e:
-                logger.error(f"Ошибка обработки предложения: {e}", exc_info=True)
-                errors.append({
-                    'offer_id': product_id if 'product_id' in locals() else 'unknown',
-                    'error': str(e)
-                })
+        except Exception as e:
+            # Исключение при обработке предложения - транзакция автоматически откатывается
+            error_msg = str(e)
+            logger.error(f"✗ Исключение при обработке предложения #{idx+1}: {error_msg}", exc_info=True)
+            errors.append({
+                'offer_id': product_id if 'product_id' in locals() else f'offer_{idx}',
+                'error': error_msg
+            })
+            # Транзакция автоматически откатывается при исключении
+            # Продолжаем обработку следующего предложения
     
     processing_time = (timezone.now() - start_time).total_seconds()
     request_ip = get_client_ip(request) if request else None
@@ -1119,7 +1450,7 @@ def process_offers_file(root, namespaces, filename, request=None):
     }
 
 
-def process_product_from_commerceml(product_data):
+def process_product_from_commerceml(product_data, catalog_type='retail'):
     """
     Обрабатывает товар из CommerceML формата.
     Использует логику из process_bulk_import для правильной обработки товаров.
@@ -1165,20 +1496,42 @@ def process_product_from_commerceml(product_data):
         clean_name = re.sub(r',\s*,', ',', clean_name)  # Запятые подряд
         clean_name = clean_name.strip(' ,()')  # Убираем запятые и скобки в начале/конце
         
-        # Если название начинается с категории и содержит скобки, убираем скобки и лишние запятые
+        # Если название начинается с категории и содержит скобки, правильно обрабатываем скобки
         # Пример: "Датчик кислородный (TOYOTA,, 89467-71020,,,, 2UZFE/1GRFE,,,...)"
-        # Должно стать: "Датчик кислородный, TOYOTA 89467-71020 2UZFE/1GRFE"
-        if '(' in clean_name and ')' in clean_name:
-            # Извлекаем содержимое скобок
-            bracket_content = re.search(r'\(([^)]+)\)', clean_name)
-            if bracket_content:
-                content = bracket_content.group(1)
-                # Убираем лишние запятые и пробелы из содержимого
-                content = re.sub(r',+', ' ', content)
-                content = re.sub(r'\s+', ' ', content).strip()
-                # Заменяем скобки на запятую и содержимое
-                category_part = clean_name[:bracket_content.start()].strip()
-                clean_name = f"{category_part}, {content}".strip()
+        # Должно стать: "Датчик кислородный (TOYOTA, 89467-71020, 2UZFE/1GRFE)"
+        if '(' in clean_name:
+            # Находим все открывающие и закрывающие скобки
+            open_brackets = [i for i, char in enumerate(clean_name) if char == '(']
+            close_brackets = [i for i, char in enumerate(clean_name) if char == ')']
+            
+            # Если есть незакрытые скобки, добавляем закрывающую скобку в конец
+            if len(open_brackets) > len(close_brackets):
+                clean_name = clean_name + ')'
+            
+            # Обрабатываем содержимое скобок
+            bracket_matches = list(re.finditer(r'\(([^)]*)\)', clean_name))
+            if bracket_matches:
+                # Обрабатываем каждую пару скобок
+                for match in reversed(bracket_matches):  # Обрабатываем с конца, чтобы индексы не сбились
+                    content = match.group(1)
+                    # Убираем лишние запятые и пробелы из содержимого
+                    content = re.sub(r',+', ',', content)  # Множественные запятые -> одна
+                    content = re.sub(r'\s+', ' ', content).strip()  # Множественные пробелы -> один
+                    content = content.strip(',').strip()  # Убираем запятые в начале/конце
+                    
+                    # Заменяем содержимое скобок
+                    start, end = match.span()
+                    clean_name = clean_name[:start+1] + content + clean_name[end-1:]
+            else:
+                # Если есть открывающая скобка, но нет закрывающей, обрабатываем содержимое до конца
+                last_open = clean_name.rfind('(')
+                if last_open >= 0:
+                    content = clean_name[last_open+1:]
+                    # Убираем лишние запятые и пробелы
+                    content = re.sub(r',+', ',', content)
+                    content = re.sub(r'\s+', ' ', content).strip()
+                    content = content.strip(',').strip()
+                    clean_name = clean_name[:last_open+1] + content + ')'
         
         # Убираем оставшиеся лишние запятые и пробелы
         clean_name = re.sub(r',\s*,', ',', clean_name)
@@ -1196,11 +1549,15 @@ def process_product_from_commerceml(product_data):
         else:
             category = get_category_for_product(clean_name)
         
-        # Обрабатываем цену
+        # Обрабатываем цену (как в Excel импорте - убираем пробелы и невидимые символы)
         price = 0
         if 'price' in product_data:
             try:
-                price = float(str(product_data['price']).replace(',', '.'))
+                price_str = str(product_data['price']).strip().replace(',', '.').replace(' ', '').replace('\xa0', '')
+                if price_str and price_str.lower() not in ['none', 'null', '']:
+                    price = float(price_str)
+                    if price < 0:
+                        price = 0
             except (ValueError, TypeError):
                 price = 0
         
@@ -1212,16 +1569,18 @@ def process_product_from_commerceml(product_data):
             except (ValueError, TypeError):
                 quantity = 0
         
-        # Определяем наличие
+        # Определяем наличие и активность
+        # ВАЖНО: Товар активен только если есть остаток (quantity > 0)
         availability = 'in_stock' if quantity > 0 else 'out_of_stock'
+        is_active = quantity > 0  # Товар активен только если есть остаток
         
-        # Ищем товар по external_id (приоритет) или по артикулу
+        # Ищем товар по external_id (приоритет) или по артикулу в нужном типе каталога
         product = None
         if external_id:
-            product = Product.objects.filter(external_id=external_id, catalog_type='retail').first()
+            product = Product.objects.filter(external_id=external_id, catalog_type=catalog_type).first()
         
         if not product and article:
-            product = Product.objects.filter(article=article, catalog_type='retail').first()
+            product = Product.objects.filter(article=article, catalog_type=catalog_type).first()
         
         was_created = product is None
         
@@ -1232,13 +1591,17 @@ def process_product_from_commerceml(product_data):
                 article=article,
                 name=clean_name,  # Используем чистое название
                 brand=brand,
-                price=price,
                 quantity=quantity,
                 availability=availability,
                 category=category,
-                catalog_type='retail',
-                is_active=True
+                catalog_type=catalog_type,  # Используем переданный тип каталога
+                is_active=is_active  # Активен только если есть остаток
             )
+            # Для оптового каталога устанавливаем wholesale_price, для розничного - price
+            if catalog_type == 'wholesale':
+                product.wholesale_price = price
+            else:
+                product.price = price
         else:
             # Обновляем существующий товар
             if external_id and not product.external_id:
@@ -1247,12 +1610,20 @@ def process_product_from_commerceml(product_data):
                 product.article = article
             product.name = clean_name  # Используем чистое название
             product.brand = brand
-            product.price = price
+            # Обновляем цену только если она указана (не 0)
+            # Это позволяет сохранить цену из offers.xml, если она уже была установлена
+            # Для оптового каталога обновляем wholesale_price, для розничного - price
+            if price > 0:
+                if catalog_type == 'wholesale':
+                    product.wholesale_price = price
+                else:
+                    product.price = price
             product.quantity = quantity
             product.availability = availability
+            # ВАЖНО: Товар активен только если есть остаток (quantity > 0)
+            product.is_active = quantity > 0
             if category:
                 product.category = category
-            product.is_active = True
         
         # Описание
         if product_data.get('description'):
@@ -1260,23 +1631,42 @@ def process_product_from_commerceml(product_data):
         
         # Применимость - используем из парсинга или из данных
         applicability = None
-        if product_data.get('applicability'):
-            applicability = product_data.get('applicability')
-        elif parsed.get('applicability'):
-            applicability = parsed.get('applicability')
+        applicability_parts = []
         
-        if applicability:
-            product.applicability = applicability
+        # Если applicability пришёл как список (из характеристик)
+        if product_data.get('applicability'):
+            if isinstance(product_data.get('applicability'), list):
+                applicability_parts.extend(product_data.get('applicability'))
+            else:
+                applicability_parts.append(product_data.get('applicability'))
+        
+        # Добавляем из парсинга
+        if parsed.get('applicability'):
+            applicability_parts.append(parsed.get('applicability'))
+        
+        if applicability_parts:
+            applicability = ', '.join([p for p in applicability_parts if p and str(p).strip()])
+            if applicability:
+                product.applicability = applicability
         
         # Кросс-номера - объединяем из разных источников
         cross_numbers_parts = []
+        
+        # Если cross_numbers пришёл как список (из характеристик)
         if product_data.get('cross_numbers'):
-            cross_numbers_parts.append(product_data.get('cross_numbers'))
+            if isinstance(product_data.get('cross_numbers'), list):
+                cross_numbers_parts.extend(product_data.get('cross_numbers'))
+            else:
+                cross_numbers_parts.append(product_data.get('cross_numbers'))
+        
+        # Добавляем из парсинга
         if parsed.get('oem_number'):
             cross_numbers_parts.append(parsed.get('oem_number'))
         
         if cross_numbers_parts:
-            product.cross_numbers = ', '.join([p for p in cross_numbers_parts if p])
+            cross_numbers = ', '.join([p for p in cross_numbers_parts if p and str(p).strip()])
+            if cross_numbers:
+                product.cross_numbers = cross_numbers
         
         # Характеристики - объединяем из парсинга названия и из XML
         characteristics_parts = []
@@ -1291,6 +1681,12 @@ def process_product_from_commerceml(product_data):
                     characteristics_parts.append(char_line)
         
         # Затем добавляем характеристики из XML (как список словарей)
+        # ИСКЛЮЧАЕМ служебные характеристики: Артикул1, Артикул2, Марка, Двигатель
+        excluded_chars = ['артикул1', 'артикул 1', 'article1', 'article 1',
+                          'артикул2', 'артикул 2', 'article2', 'article 2', 'oem', 'oem номер',
+                          'марка', 'brand', 'бренд',
+                          'двигатель', 'engine', 'мотор']
+        
         if product_data.get('characteristics'):
             char_list = product_data.get('characteristics', [])
             if isinstance(char_list, list):
@@ -1299,10 +1695,12 @@ def process_product_from_commerceml(product_data):
                         char_name = char_data.get('name', '').strip()
                         char_value = char_data.get('value', '').strip()
                         if char_name and char_value:
-                            char_str = f"{char_name}: {char_value}"
-                            # Проверяем, нет ли уже такой характеристики
-                            if not any(char_str in existing for existing in characteristics_parts):
-                                characteristics_parts.append(char_str)
+                            # Пропускаем служебные характеристики
+                            if char_name.lower() not in excluded_chars:
+                                char_str = f"{char_name}: {char_value}"
+                                # Проверяем, нет ли уже такой характеристики
+                                if not any(char_str in existing for existing in characteristics_parts):
+                                    characteristics_parts.append(char_str)
         
         # Объединяем все характеристики
         if characteristics_parts:
@@ -1313,21 +1711,32 @@ def process_product_from_commerceml(product_data):
         # Обрабатываем характеристики для ProductCharacteristic (если нужно)
         # Но основное поле characteristics уже заполнено выше
         if product_data.get('characteristics') and isinstance(product_data.get('characteristics'), list):
-            # Удаляем старые ProductCharacteristic
-            ProductCharacteristic.objects.filter(product=product).delete()
-            
-            # Создаем новые ProductCharacteristic
-            for idx, char_data in enumerate(product_data.get('characteristics', [])):
-                if isinstance(char_data, dict):
-                    char_name = char_data.get('name', '').strip()
-                    char_value = char_data.get('value', '').strip()
-                    if char_name and char_value:
-                        ProductCharacteristic.objects.create(
-                            product=product,
-                            name=char_name,
-                            value=char_value,
-                            order=idx
-                        )
+            try:
+                # Пытаемся удалить старые ProductCharacteristic
+                # Если таблица не существует, это вызовет исключение, которое мы обработаем
+                ProductCharacteristic.objects.filter(product=product).delete()
+                
+                # Создаем новые ProductCharacteristic
+                for idx, char_data in enumerate(product_data.get('characteristics', [])):
+                    if isinstance(char_data, dict):
+                        char_name = char_data.get('name', '').strip()
+                        char_value = char_data.get('value', '').strip()
+                        if char_name and char_value:
+                            ProductCharacteristic.objects.create(
+                                product=product,
+                                name=char_name,
+                                value=char_value,
+                                order=idx
+                            )
+            except Exception as char_error:
+                # Если таблица ProductCharacteristic не существует (миграции не применены),
+                # или произошла другая ошибка - просто пропускаем создание характеристик,
+                # но не ломаем обработку товара
+                error_msg = str(char_error)
+                # Логируем только если это не ошибка отсутствия таблицы (чтобы не засорять логи)
+                if 'no such table' not in error_msg.lower() and 'does not exist' not in error_msg.lower():
+                    logger.warning(f"Не удалось обработать ProductCharacteristic для товара {product.external_id or product.article}: {error_msg}")
+                # Характеристики уже сохранены в поле product.characteristics, так что это не критично
         
         return product, None, was_created
         

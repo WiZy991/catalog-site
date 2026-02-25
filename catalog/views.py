@@ -33,7 +33,8 @@ class CatalogView(ListView):
             product_count = Product.objects.filter(
                 category__in=descendants,
                 is_active=True,
-                catalog_type='retail'
+                catalog_type='retail',
+                quantity__gt=0  # Только товары с остатком
             ).count()
             if product_count > 0:
                 category.retail_product_count = product_count
@@ -190,7 +191,8 @@ class CatalogItemView(ListView):
             queryset = Product.objects.filter(
                 category__in=descendants,
                 is_active=True,
-                catalog_type='retail'  # Только товары из основного каталога
+                catalog_type='retail',  # Только товары из основного каталога
+                quantity__gt=0  # Только товары с остатком
             ).select_related('category').prefetch_related('images')
             
             # Применяем фильтры
@@ -486,7 +488,8 @@ def filter_products_ajax(request):
     else:
         queryset = Product.objects.filter(
             is_active=True,
-            catalog_type='retail'  # Только товары из основного каталога
+            catalog_type='retail',  # Только товары из основного каталога
+            quantity__gt=0  # Только товары с остатком
         )
     
     # Применяем фильтры
@@ -534,7 +537,8 @@ def search_products(request):
         # Для SQLite лучше использовать iregex, для других БД - icontains
         products = Product.objects.filter(
             is_active=True,
-            catalog_type='retail'  # Только товары из основного каталога
+            catalog_type='retail',  # Только товары из основного каталога
+            quantity__gt=0  # Только товары с остатком
         )
         
         # Для каждого слова создаём условие поиска
