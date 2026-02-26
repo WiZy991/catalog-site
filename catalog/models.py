@@ -106,12 +106,13 @@ class Category(MPTTModel):
 
     @property
     def product_count(self):
-        """Количество товаров в категории и её подкатегориях."""
+        """Количество товаров в категории и её подкатегориях (только retail)."""
         from django.db.models import Q
         descendants = self.get_descendants(include_self=True)
         return Product.objects.filter(
             category__in=descendants, 
-            is_active=True
+            is_active=True,
+            catalog_type='retail'  # Только товары из основного каталога
         ).filter(
             Q(quantity__gt=0) | Q(availability='order')  # Товары с остатком или под заказ
         ).count()
@@ -267,14 +268,45 @@ class Product(models.Model):
         return '. '.join(parts)
 
     def get_characteristics_list(self):
-        """Преобразует характеристики в список кортежей (ключ, значение)."""
+        """Преобразует характеристики в список кортежей (ключ, значение) с фильтрацией."""
         if not self.characteristics:
             return []
         result = []
+        import re
+        
+        # Исключаем материалы и другие ненужные характеристики
+        excluded_keys = ['прокладка', 'gasket', 'паронит', 'paronit', 'материал', 'material']
+        
         for line in self.characteristics.strip().split('\n'):
             if ':' in line:
                 key, value = line.split(':', 1)
-                result.append((key.strip(), value.strip()))
+                key_stripped = key.strip()
+                value_stripped = value.strip()
+                key_lower = key_stripped.lower()
+                
+                # Пропускаем материалы и другие ненужные характеристики
+                if any(excluded in key_lower for excluded in excluded_keys):
+                    continue
+                
+                # Если это размер, проверяем, что это действительно размер (содержит числа и * или x)
+                if 'размер' in key_lower or 'size' in key_lower:
+                    # Размер должен содержать числа и * или x (например, 20*450, 260*170*10*29)
+                    if not re.search(r'\d+[*x]\d+', value_stripped):
+                        # Это не размер, пропускаем
+                        continue
+                
+                # Проверяем, что значение не является кодом модели/применимости
+                # Коды моделей обычно: 1-4 цифры + буквы (например, 1GEN, 1NZF, 2GR, 4AFE)
+                # Или только буквы+цифры без * или x
+                if re.match(r'^[A-Z0-9#\-/]{1,10}$', value_stripped.upper()) and not re.search(r'[*x]', value_stripped):
+                    # Это похоже на код модели, а не на характеристику
+                    # Проверяем, не является ли это применимостью
+                    if self.applicability and value_stripped.upper() in self.applicability.upper():
+                        # Это применимость, не характеристика
+                        continue
+                
+                result.append((key_stripped, value_stripped))
+        
         return result
 
     def get_cross_numbers_list(self):

@@ -458,8 +458,25 @@ class ProductView(DetailView):
         context['related_products'] = related_products[:6]  # Показываем максимум 6
         context['images'] = product.images.all()
         
-        # Получаем характеристики и добавляем вольтаж, если он есть в применимости
-        characteristics = product.get_characteristics_list()
+        # Получаем характеристики и фильтруем ненужные
+        all_characteristics = product.get_characteristics_list()
+        # Исключаем материалы и другие ненужные характеристики
+        excluded_keys = ['прокладка', 'gasket', 'паронит', 'paronit', 'материал', 'material']
+        characteristics = []
+        for key, value in all_characteristics:
+            key_lower = key.lower().strip()
+            # Пропускаем материалы и другие ненужные характеристики
+            if not any(excluded in key_lower for excluded in excluded_keys):
+                # Если это размер, проверяем, что это действительно размер (содержит числа и * или x)
+                if 'размер' in key_lower or 'size' in key_lower:
+                    import re
+                    # Размер должен содержать числа и * или x (например, 20*450, 260*170*10*29)
+                    if re.search(r'\d+[*x]\d+', value):
+                        characteristics.append((key, value))
+                else:
+                    characteristics.append((key, value))
+        
+        # Добавляем вольтаж, если он есть в применимости
         voltage = product.get_voltage_from_applicability()
         if voltage:
             # Проверяем, нет ли уже вольтажа в характеристиках

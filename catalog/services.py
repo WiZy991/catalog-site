@@ -556,6 +556,7 @@ def parse_product_name(name):
     
     # Ищем размеры (формат: 20*450, 260*170*10*29, 20x450)
     # Паттерн: числа через * или x
+    # ВАЖНО: Размер должен содержать числа и * или x, не коды моделей!
     size_pattern = r'\b(\d+(?:\*|x)\d+(?:(?:\*|x)\d+)*)\b'
     size_matches = re.findall(size_pattern, name)
     for size in size_matches:
@@ -563,7 +564,9 @@ def parse_product_name(name):
         size_upper = size.upper()
         if (size_upper not in (result.get('article') or '').upper() and
             size_upper not in (result.get('oem_number') or '').upper()):
-            characteristics_parts.append(f"Размер: {size}")
+            # Дополнительная проверка: размер должен содержать хотя бы одну цифру и * или x
+            if re.search(r'\d+[*x]\d+', size):
+                characteristics_parts.append(f"Размер: {size}")
     
     # Ищем вольтаж (формат: 12V, 24V, 12V-11V)
     voltage_patterns = [
@@ -582,12 +585,15 @@ def parse_product_name(name):
                     characteristics_parts.append(f"Напряжение: {voltage_clean}")
     
     # Ищем материал (IRIDIUM, PLATINUM, COPPER и т.д.)
+    # ВАЖНО: ПАРОНИТ и ПРОКЛАДКА - это материалы, а не размеры!
     material_keywords = [
         'IRIDIUM', 'ИРИДИЙ', 'ИРИДИЕВЫЙ',
         'PLATINUM', 'ПЛАТИНА', 'ПЛАТИНОВЫЙ',
         'COPPER', 'МЕДЬ', 'МЕДНЫЙ',
         'NICKEL', 'НИКЕЛЬ', 'НИКЕЛЕВЫЙ',
         'SILVER', 'СЕРЕБРО', 'СЕРЕБРЯНЫЙ',
+        'PARONIT', 'ПАРОНИТ', 'ПАРОНИТОВЫЙ',
+        'GASKET', 'ПРОКЛАДКА', 'ПРОКЛАДОЧНЫЙ',
     ]
     for keyword in material_keywords:
         # Ищем ключевое слово как отдельное слово

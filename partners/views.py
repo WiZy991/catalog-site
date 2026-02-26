@@ -211,14 +211,31 @@ class PartnerProductView(PartnerRequiredMixin, DetailView):
         # Похожие товары (только из партнёрского каталога)
         product = self.object
         
-        # Получаем характеристики и добавляем вольтаж, если он есть в применимости
-        characteristics = product.get_characteristics_list()
+        # Получаем характеристики и фильтруем ненужные
+        all_characteristics = product.get_characteristics_list()
+        # Исключаем материалы и другие ненужные характеристики
+        excluded_keys = ['прокладка', 'gasket', 'паронит', 'paronit', 'материал', 'material']
+        characteristics = []
+        for key, value in all_characteristics:
+            key_lower = key.lower().strip()
+            # Пропускаем материалы и другие ненужные характеристики
+            if not any(excluded in key_lower for excluded in excluded_keys):
+                # Если это размер, проверяем, что это действительно размер (содержит числа и * или x)
+                if 'размер' in key_lower or 'size' in key_lower:
+                    import re
+                    if re.search(r'\d+[*x]\d+', value):
+                        characteristics.append((key, value))
+                else:
+                    characteristics.append((key, value))
+        
+        # Добавляем вольтаж, если он есть в применимости
         voltage = product.get_voltage_from_applicability()
         if voltage:
             # Проверяем, нет ли уже вольтажа в характеристиках
             has_voltage = any(key.lower() in ['вольтаж', 'voltage', 'напряжение'] for key, _ in characteristics)
             if not has_voltage:
                 characteristics.append(('Напряжение', voltage))
+        
         context['characteristics'] = characteristics
         
         # Похожие товары - ищем по кросс-номерам и категории
@@ -485,11 +502,13 @@ class PartnerCatalogView(PartnerRequiredMixin, ListView):
     paginate_by = 24
     
     def get_queryset(self):
-        # ТОЛЬКО товары из партнёрского каталога с остатком!
+        # ТОЛЬКО товары из партнёрского каталога с остатком или под заказ!
+        from django.db.models import Q
         queryset = Product.objects.filter(
             is_active=True,
-            catalog_type='wholesale',
-            quantity__gt=0  # Только товары с остатком
+            catalog_type='wholesale'
+        ).filter(
+            Q(quantity__gt=0) | Q(availability='order')  # Товары с остатком или под заказ
         ).select_related('category').prefetch_related('images')
         
         # Фильтр по категории

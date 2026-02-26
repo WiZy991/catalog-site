@@ -285,7 +285,15 @@
                 <div class="product-info__meta">
                     {% if product.article %}
                     <span class="product-info__meta-item">
-                        <strong>Артикул:</strong> {{ product.article }}
+                        <strong>Кросс-номер:</strong> {{ product.article }}
+                    </span>
+                    {% endif %}
+                    {% if product.cross_numbers %}
+                    <span class="product-info__meta-item">
+                        <strong>Доп. кросс-номера:</strong> 
+                        {% for num in product.get_cross_numbers_list|slice:":3" %}
+                            {{ num }}{% if not forloop.last %}, {% endif %}
+                        {% endfor %}
                     </span>
                     {% endif %}
                     {% if product.brand %}
@@ -357,16 +365,6 @@
                 </div>
                 {% endif %}
                 
-                {% if product.cross_numbers %}
-                <div class="product-info__section">
-                    <h3 class="product-info__section-title">Кросс-номера</h3>
-                    <div class="product-info__applicability">
-                        {% for num in product.get_cross_numbers_list %}
-                        <span class="product-info__applicability-item">{{ num }}</span>
-                        {% endfor %}
-                    </div>
-                </div>
-                {% endif %}
                 
                 {% if product.description %}
                 <div class="product-info__section">
