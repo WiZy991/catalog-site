@@ -107,11 +107,13 @@ class Category(MPTTModel):
     @property
     def product_count(self):
         """Количество товаров в категории и её подкатегориях."""
+        from django.db.models import Q
         descendants = self.get_descendants(include_self=True)
         return Product.objects.filter(
             category__in=descendants, 
-            is_active=True,
-            quantity__gt=0  # Только товары с остатком
+            is_active=True
+        ).filter(
+            Q(quantity__gt=0) | Q(availability='order')  # Товары с остатком или под заказ
         ).count()
 
 

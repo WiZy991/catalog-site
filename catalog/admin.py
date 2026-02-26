@@ -641,6 +641,9 @@ class ProductAdmin(ImportExportModelAdmin, FarpostExportMixin, admin.ModelAdmin)
         from django.shortcuts import redirect
         from django.urls import reverse
         
+        # Проверяем существование таблицы ProductCharacteristic
+        table_exists = self._check_table_exists()
+        
         # Если это подтверждение удаления - удаляем сразу
         if request.POST.get('post') == 'yes':
             deleted_count = 0
@@ -648,21 +651,45 @@ class ProductAdmin(ImportExportModelAdmin, FarpostExportMixin, admin.ModelAdmin)
             
             for obj in queryset:
                 try:
-                    # Пробуем стандартное удаление
-                    obj.delete()
-                    deleted_count += 1
+                    # Если таблицы ProductCharacteristic нет, удаляем напрямую через SQL
+                    if not table_exists:
+                        with transaction.atomic():
+                            with connection.cursor() as cursor:
+                                # Сначала удаляем связанные изображения
+                                if 'sqlite' in connection.vendor:
+                                    cursor.execute("DELETE FROM catalog_productimage WHERE product_id = ?", [obj.pk])
+                                    cursor.execute("DELETE FROM catalog_product WHERE id = ?", [obj.pk])
+                                else:
+                                    cursor.execute("DELETE FROM catalog_productimage WHERE product_id = %s", [obj.pk])
+                                    cursor.execute("DELETE FROM catalog_product WHERE id = %s", [obj.pk])
+                        deleted_count += 1
+                    else:
+                        # Пробуем стандартное удаление
+                        obj.delete()
+                        deleted_count += 1
                 except Exception as e:
                     # Если ошибка - удаляем через SQL
                     error_msg = str(e).lower()
-                    try:
-                        with transaction.atomic():
-                            with connection.cursor() as cursor:
-                                if 'sqlite' in connection.vendor:
-                                    cursor.execute("DELETE FROM catalog_product WHERE id = ?", [obj.pk])
-                                else:
-                                    cursor.execute("DELETE FROM catalog_product WHERE id = %s", [obj.pk])
-                        deleted_count += 1
-                    except Exception:
+                    if 'productcharacteristic' in error_msg or 'no such table' in error_msg:
+                        try:
+                            with transaction.atomic():
+                                with connection.cursor() as cursor:
+                                    # Сначала удаляем связанные изображения
+                                    if 'sqlite' in connection.vendor:
+                                        cursor.execute("DELETE FROM catalog_productimage WHERE product_id = ?", [obj.pk])
+                                        cursor.execute("DELETE FROM catalog_product WHERE id = ?", [obj.pk])
+                                    else:
+                                        cursor.execute("DELETE FROM catalog_productimage WHERE product_id = %s", [obj.pk])
+                                        cursor.execute("DELETE FROM catalog_product WHERE id = %s", [obj.pk])
+                            deleted_count += 1
+                        except Exception as sql_error:
+                            errors_count += 1
+                            self.message_user(
+                                request,
+                                f'Ошибка при удалении товара "{obj.name}": {str(sql_error)}',
+                                level=messages.ERROR
+                            )
+                    else:
                         errors_count += 1
                         self.message_user(
                             request,
@@ -716,221 +743,28 @@ class ProductAdmin(ImportExportModelAdmin, FarpostExportMixin, admin.ModelAdmin)
         )
     
     def delete_model(self, request, obj):
-        from django.db import connection, transaction
-        from django.shortcuts import redirect
-        from django.urls import reverse
-        
-        # Проверяем существование таблицы
-        table_exists = self._check_table_exists()
-        
-        if not table_exists:
-            # Если таблицы нет, удаляем напрямую без показа страницы подтверждения
-            # если это POST запрос (подтверждение удаления)
-            if request.POST.get('post') == 'yes':
-                deleted_count = 0
-                errors_count = 0
-                
-                for obj in queryset:
-                    try:
-                        with transaction.atomic():
-                            with connection.cursor() as cursor:
-                                if 'sqlite' in connection.vendor:
-                                    cursor.execute("DELETE FROM catalog_product WHERE id = ?", [obj.pk])
-                                else:
-                                    cursor.execute("DELETE FROM catalog_product WHERE id = %s", [obj.pk])
-                        deleted_count += 1
-                    except Exception as e:
-                        errors_count += 1
-                        self.message_user(
-                            request,
-                            f'Ошибка при удалении товара "{obj.name}": {str(e)}',
-                            level=messages.ERROR
-                        )
-                
-                if deleted_count > 0:
-                    self.message_user(
-                        request,
-                        f'Успешно удалено товаров: {deleted_count}',
-                        messages.SUCCESS
-                    )
-                if errors_count > 0:
-                    self.message_user(
-                        request,
-                        f'Не удалось удалить товаров: {errors_count}',
-                        level=messages.WARNING
-                    )
-                
-                return redirect(reverse('admin:catalog_product_changelist'))
-            else:
-                # Показываем страницу подтверждения без попытки собрать связанные объекты
-                opts = self.model._meta
-                app_label = opts.app_label
-                
-                # ВСЕГДА создаем model_count заново, чтобы гарантировать правильный формат
-                # Не используем get_deleted_objects для model_count, создаем его напрямую
-                model_count = {}
-                nested = []
-                for obj in queryset:
-                    model = obj.__class__
-                    model_key = f"{model._meta.app_label}.{model._meta.model_name}"
-                    if model_key not in model_count:
-                        model_count[model_key] = 0
-                    model_count[model_key] += 1
-                    nested.append([str(obj)])
-                
-                # Получаем perms_needed отдельно, если нужно
-                perms_needed = set()
-                
-                # Используем стандартный шаблон подтверждения
-                from django.template.response import TemplateResponse
-                from django.contrib.admin.helpers import ActionForm
-                from django.contrib.admin import helpers
-                from django.utils.translation import gettext as _
-                
-                # Создаем контекст, но гарантируем правильный формат model_count
-                site_context = self.admin_site.each_context(request)
-                # Удаляем model_count из site_context, если он там есть
-                if 'model_count' in site_context:
-                    del site_context['model_count']
-                
-                # Убеждаемся что model_count - это словарь
-                if not isinstance(model_count, dict):
-                    # Если model_count не словарь, создаём заново
-                    model_count = {}
-                    for obj in queryset:
-                        model = obj.__class__
-                        model_key = f"{model._meta.app_label}.{model._meta.model_name}"
-                        if model_key not in model_count:
-                            model_count[model_key] = 0
-                        model_count[model_key] += 1
-                
-                context = {
-                    **site_context,
-                    'title': _('Are you sure?'),
-                    'objects_name': str(opts.verbose_name_plural),
-                    'queryset': queryset,
-                    'nested': nested,
-                    'perms_needed': perms_needed,
-                    'opts': opts,
-                    'action_checkbox_name': helpers.ACTION_CHECKBOX_NAME,
-                    'media': self.media,
-                    'action_form': ActionForm(auto_id=None),
-                    'form_url': '',
-                }
-                # Передаём model_count последним, чтобы гарантировать правильный формат
-                context['model_count'] = model_count
-                
-                return TemplateResponse(
-                    request,
-                    'admin/delete_selected_confirmation.html',
-                    context
-                )
-        else:
-            # Таблица существует — логика та же: удаляем или показываем подтверждение
-            if request.POST.get('post') == 'yes':
-                deleted_count = 0
-                errors_count = 0
-                for obj in queryset:
-                    try:
-                        obj.delete()
-                        deleted_count += 1
-                    except Exception as e:
-                        error_msg = str(e).lower()
-                        if 'productcharacteristic' in error_msg or 'no such table' in error_msg:
-                            try:
-                                with transaction.atomic():
-                                    with connection.cursor() as cursor:
-                                        if 'sqlite' in connection.vendor:
-                                            cursor.execute("DELETE FROM catalog_product WHERE id = ?", [obj.pk])
-                                        else:
-                                            cursor.execute("DELETE FROM catalog_product WHERE id = %s", [obj.pk])
-                                deleted_count += 1
-                            except Exception:
-                                errors_count += 1
-                        else:
-                            errors_count += 1
-                            self.message_user(
-                                request,
-                                f'Ошибка при удалении товара "{obj.name}": {str(e)}',
-                                level=messages.ERROR
-                            )
-
-                if deleted_count > 0:
-                    self.message_user(
-                        request,
-                        f'Успешно удалено товаров: {deleted_count}',
-                        messages.SUCCESS
-                    )
-                if errors_count > 0:
-                    self.message_user(
-                        request,
-                        f'Не удалось удалить товаров: {errors_count}',
-                        level=messages.WARNING
-                    )
-                return redirect(reverse('admin:catalog_product_changelist'))
-            else:
-                # Показываем страницу подтверждения
-                opts = self.model._meta
-                model_count = {}
-                nested = []
-                for obj in queryset:
-                    model = obj.__class__
-                    model_key = f"{model._meta.app_label}.{model._meta.model_name}"
-                    if model_key not in model_count:
-                        model_count[model_key] = 0
-                    model_count[model_key] += 1
-                    nested.append([str(obj)])
-
-                perms_needed = set()
-                from django.template.response import TemplateResponse
-                from django.contrib.admin.helpers import ActionForm
-                from django.contrib.admin import helpers
-                from django.utils.translation import gettext as _
-
-                # Создаем контекст, но гарантируем правильный формат model_count
-                site_context = self.admin_site.each_context(request)
-                # Удаляем model_count из site_context, если он там есть
-                if 'model_count' in site_context:
-                    del site_context['model_count']
-                
-                # Убеждаемся что model_count - это словарь
-                if not isinstance(model_count, dict):
-                    # Если model_count не словарь, создаём заново
-                    model_count = {}
-                    for obj in queryset:
-                        model = obj.__class__
-                        model_key = f"{model._meta.app_label}.{model._meta.model_name}"
-                        if model_key not in model_count:
-                            model_count[model_key] = 0
-                        model_count[model_key] += 1
-                
-                context = {
-                    **site_context,
-                    'title': _('Are you sure?'),
-                    'objects_name': str(opts.verbose_name_plural),
-                    'queryset': queryset,
-                    'nested': nested,
-                    'perms_needed': perms_needed,
-                    'opts': opts,
-                    'action_checkbox_name': helpers.ACTION_CHECKBOX_NAME,
-                    'media': self.media,
-                    'action_form': ActionForm(auto_id=None),
-                    'form_url': '',
-                }
-                # Передаём model_count последним, чтобы гарантировать правильный формат
-                context['model_count'] = model_count
-                return TemplateResponse(
-                    request,
-                    'admin/delete_selected_confirmation.html',
-                    context
-                )
-    
-    def delete_model(self, request, obj):
         """Переопределяем удаление одного товара, чтобы игнорировать ошибки с ProductCharacteristic."""
         from django.db import connection, transaction
         
+        # Проверяем существование таблицы ProductCharacteristic
+        table_exists = self._check_table_exists()
+        
         try:
-            obj.delete()
+            # Если таблицы нет, удаляем напрямую через SQL
+            if not table_exists:
+                with transaction.atomic():
+                    with connection.cursor() as cursor:
+                        # Сначала удаляем связанные изображения
+                        if 'sqlite' in connection.vendor:
+                            cursor.execute("DELETE FROM catalog_productimage WHERE product_id = ?", [obj.pk])
+                            cursor.execute("DELETE FROM catalog_product WHERE id = ?", [obj.pk])
+                        else:
+                            cursor.execute("DELETE FROM catalog_productimage WHERE product_id = %s", [obj.pk])
+                            cursor.execute("DELETE FROM catalog_product WHERE id = %s", [obj.pk])
+                self.message_user(request, f'Товар "{obj.name}" успешно удалён.', messages.SUCCESS)
+            else:
+                obj.delete()
+                self.message_user(request, f'Товар "{obj.name}" успешно удалён.', messages.SUCCESS)
         except Exception as e:
             # Если ошибка связана с несуществующей таблицей ProductCharacteristic, удаляем через SQL
             error_msg = str(e).lower()
@@ -938,11 +772,13 @@ class ProductAdmin(ImportExportModelAdmin, FarpostExportMixin, admin.ModelAdmin)
                 try:
                     with transaction.atomic():
                         # Удаляем товар напрямую через SQL, минуя CASCADE
-                        # Используем ? для SQLite, %s для PostgreSQL
                         with connection.cursor() as cursor:
+                            # Сначала удаляем связанные изображения
                             if 'sqlite' in connection.vendor:
+                                cursor.execute("DELETE FROM catalog_productimage WHERE product_id = ?", [obj.pk])
                                 cursor.execute("DELETE FROM catalog_product WHERE id = ?", [obj.pk])
                             else:
+                                cursor.execute("DELETE FROM catalog_productimage WHERE product_id = %s", [obj.pk])
                                 cursor.execute("DELETE FROM catalog_product WHERE id = %s", [obj.pk])
                     self.message_user(request, f'Товар "{obj.name}" успешно удалён.', messages.SUCCESS)
                 except Exception as sql_error:
