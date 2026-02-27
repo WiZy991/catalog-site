@@ -764,8 +764,80 @@ def process_commerceml_file(file_path, filename, request=None):
                 for grandchild in child:
                     logger.error(f"    Внук: {grandchild.tag}, атрибуты: {grandchild.attrib}")
         
+        # Оптимизация: создаем кэш групп один раз перед обработкой товаров
+        # Это значительно ускоряет обработку больших XML файлов
+        groups_cache = {}
+        logger.info("Создание кэша групп для оптимизации поиска категорий...")
+        try:
+            # Ищем Классификатор/Группы
+            classifier = None
+            if namespace:
+                classifier = root.find(f'.//{{{namespace}}}Классификатор')
+            if classifier is None:
+                classifier = root.find('.//Классификатор')
+            if classifier is None and 'catalog' in namespaces:
+                try:
+                    classifier = root.find('.//catalog:Классификатор', namespaces)
+                except (KeyError, ValueError):
+                    pass
+            
+            if classifier is not None:
+                # Ищем все группы
+                groups = []
+                if namespace:
+                    groups = classifier.findall(f'.//{{{namespace}}}Группа')
+                if not groups:
+                    groups = classifier.findall('.//Группа')
+                if not groups and 'catalog' in namespaces:
+                    try:
+                        groups = classifier.findall('.//catalog:Группа', namespaces)
+                    except (KeyError, ValueError):
+                        pass
+                
+                # Кэшируем группы по Ид
+                for group in groups:
+                    group_id = None
+                    group_name = None
+                    
+                    # Ищем Ид группы
+                    id_elem = None
+                    if namespace:
+                        id_elem = group.find(f'{{{namespace}}}Ид')
+                    if id_elem is None:
+                        id_elem = group.find('Ид')
+                    if id_elem is None and 'catalog' in namespaces:
+                        try:
+                            id_elem = group.find('catalog:Ид', namespaces)
+                        except (KeyError, ValueError):
+                            pass
+                    if id_elem is not None and id_elem.text:
+                        group_id = id_elem.text.strip()
+                    
+                    # Ищем Наименование группы
+                    name_elem = None
+                    if namespace:
+                        name_elem = group.find(f'{{{namespace}}}Наименование')
+                    if name_elem is None:
+                        name_elem = group.find('Наименование')
+                    if name_elem is None and 'catalog' in namespaces:
+                        try:
+                            name_elem = group.find('catalog:Наименование', namespaces)
+                        except (KeyError, ValueError):
+                            pass
+                    if name_elem is not None and name_elem.text:
+                        group_name = name_elem.text.strip()
+                    
+                    if group_id and group_name:
+                        groups_cache[group_id] = group_name
+                
+                logger.info(f"Кэш групп создан: {len(groups_cache)} групп")
+            else:
+                logger.warning("Классификатор не найден, кэш групп не создан")
+        except Exception as e:
+            logger.warning(f"Ошибка при создании кэша групп: {e}, продолжаем без кэша")
+        
         for idx, product_elem in enumerate(products_elements):
-            product_data = parse_commerceml_product(product_elem, namespaces, root)
+            product_data = parse_commerceml_product(product_elem, namespaces, root, groups_cache=groups_cache)
             if product_data:
                 products_data.append(product_data)
                 if idx < 3:  # Логируем первые 3 товара для отладки
@@ -992,7 +1064,7 @@ def process_commerceml_file(file_path, filename, request=None):
         return {'status': 'failure', 'error': str(e)}
 
 
-def parse_commerceml_product(product_elem, namespaces, root_elem=None):
+def parse_commerceml_product(product_elem, namespaces, root_elem=None, groups_cache=None):
     """
     Парсит элемент товара из CommerceML 2 XML.
     
@@ -1002,6 +1074,7 @@ def parse_commerceml_product(product_elem, namespaces, root_elem=None):
         product_elem: Элемент товара из XML
         namespaces: Словарь с namespace
         root_elem: Корневой элемент XML (опционально, для поиска групп)
+        groups_cache: Кэш групп {group_id: group_name} для оптимизации поиска
     """
     import re  # Импортируем re в начале функции
     
@@ -1167,7 +1240,11 @@ def parse_commerceml_product(product_elem, namespaces, root_elem=None):
             except:
                 pass
         
-        if root is not None:
+        # Используем кэш групп для быстрого поиска (оптимизация производительности)
+        if groups_cache and product_data['category_id'] in groups_cache:
+            product_data['category_name'] = groups_cache[product_data['category_id']]
+        elif root is not None:
+            # Fallback: поиск в XML (медленнее, но работает если кэш не создан)
             group_name_elem = None
             if namespace:
                 group_name_elem = root.find(f".//{{{namespace}}}Группа[@Ид='{product_data['category_id']}']/{{{namespace}}}Наименование")
