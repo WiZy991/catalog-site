@@ -386,10 +386,9 @@
     }
     
     .products-table__article {
-        font-family: 'Courier New', monospace;
         color: var(--color-gray-700);
         white-space: nowrap;
-        font-size: 0.8rem;
+        font-size: 0.85rem;
     }
     
     .products-table__description {
@@ -1166,11 +1165,6 @@ document.addEventListener('DOMContentLoaded', function() {
                                     <div class="products-table__price-main">
                                         {{ product.wholesale_price|default:product.price|floatformat:0 }} ₽
                                     </div>
-                                    {% if product.wholesale_price and product.wholesale_price < product.price %}
-                                    <div class="products-table__price-retail">
-                                        Розн: {{ product.price|floatformat:0 }} ₽
-                                    </div>
-                                    {% endif %}
                                 </td>
                                 <td class="products-table__order">
                                     <button type="button" 

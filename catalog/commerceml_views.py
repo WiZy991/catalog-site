@@ -1962,7 +1962,17 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
             article = external_id
         
         # Определяем бренд - всегда строка, не None
-        brand = (product_data.get('brand', '') or '').strip() or (parsed.get('brand', '') or '').strip() or ''
+        # Сначала берем из XML, потом из парсинга названия, потом пытаемся определить из названия напрямую
+        brand = (product_data.get('brand', '') or '').strip()
+        if not brand:
+            brand = (parsed.get('brand', '') or '').strip()
+        if not brand:
+            # Если бренд не найден, пытаемся определить из названия напрямую
+            from .services import detect_brand
+            detected_brand = detect_brand(name)
+            if detected_brand:
+                brand = detected_brand
+        brand = brand or ''  # Всегда строка, не None
         
         # Формируем чистое название товара на основе парсинга
         # Сначала убираем лишние запятые, скобки и пробелы из исходного названия
