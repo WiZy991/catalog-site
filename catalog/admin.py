@@ -367,9 +367,109 @@ class ProductAdmin(ImportExportModelAdmin, FarpostExportMixin, admin.ModelAdmin)
     prepopulated_fields = {'slug': ('name',)}
     autocomplete_fields = ['category']
     inlines = [ProductImageInline]
-    actions = ['export_farpost', 'sync_to_farpost_api', 'make_active', 'make_inactive']
+    actions = ['export_farpost', 'sync_to_farpost_api', 'make_active', 'make_inactive', 'delete_all_products']
     list_per_page = 100  # Оптимизировано для производительности (было 10000 - слишком много)
-    list_max_show_all = 1000  # Максимальное количество товаров, которые можно выбрать сразу (было 50000 - слишком много)
+    list_max_show_all = 50000  # Максимальное количество товаров, которые можно выбрать сразу (увеличено для массового удаления)
+    
+    def delete_all_products(self, request, queryset):
+        """Удалить ВСЕ товары в базе данных (независимо от выбора)."""
+        from django.db import connection, transaction
+        from django.shortcuts import redirect
+        from django.urls import reverse
+        from django.contrib import messages
+        
+        # Получаем ВСЕ товары, а не только выбранные
+        all_products = self.get_queryset(request)
+        total_count = all_products.count()
+        
+        if total_count == 0:
+            self.message_user(request, 'Нет товаров для удаления.', messages.WARNING)
+            return redirect(reverse('admin:catalog_product_changelist'))
+        
+        # Проверяем подтверждение
+        if request.POST.get('confirm_delete_all') == 'yes':
+            table_exists = self._check_table_exists()
+            deleted_count = 0
+            errors_count = 0
+            
+            # Используем batch удаление для производительности
+            batch_size = 1000
+            product_ids = list(all_products.values_list('id', flat=True))
+            
+            for i in range(0, len(product_ids), batch_size):
+                batch_ids = product_ids[i:i + batch_size]
+                try:
+                    with transaction.atomic():
+                        with connection.cursor() as cursor:
+                            # Удаляем изображения
+                            if 'sqlite' in connection.vendor:
+                                cursor.execute(
+                                    "DELETE FROM catalog_productimage WHERE product_id IN ({})".format(
+                                        ','.join(['?' for _ in batch_ids])
+                                    ),
+                                    batch_ids
+                                )
+                                cursor.execute(
+                                    "DELETE FROM catalog_product WHERE id IN ({})".format(
+                                        ','.join(['?' for _ in batch_ids])
+                                    ),
+                                    batch_ids
+                                )
+                            else:
+                                cursor.execute(
+                                    "DELETE FROM catalog_productimage WHERE product_id IN ({})".format(
+                                        ','.join(['%s' for _ in batch_ids])
+                                    ),
+                                    batch_ids
+                                )
+                                cursor.execute(
+                                    "DELETE FROM catalog_product WHERE id IN ({})".format(
+                                        ','.join(['%s' for _ in batch_ids])
+                                    ),
+                                    batch_ids
+                                )
+                    deleted_count += len(batch_ids)
+                except Exception as e:
+                    errors_count += len(batch_ids)
+                    self.message_user(
+                        request,
+                        f'Ошибка при удалении партии товаров: {str(e)}',
+                        level=messages.ERROR
+                    )
+            
+            if deleted_count > 0:
+                self.message_user(
+                    request,
+                    f'Успешно удалено товаров: {deleted_count}',
+                    messages.SUCCESS
+                )
+            if errors_count > 0:
+                self.message_user(
+                    request,
+                    f'Не удалось удалить товаров: {errors_count}',
+                    level=messages.WARNING
+                )
+            
+            return redirect(reverse('admin:catalog_product_changelist'))
+        
+        # Показываем страницу подтверждения
+        from django.template.response import TemplateResponse
+        context = {
+            'title': 'Подтверждение удаления всех товаров',
+            'objects_name': 'товаров',
+            'total_count': total_count,
+            'queryset': all_products[:10],  # Показываем первые 10 для примера
+            'action_checkbox_name': 'delete_all',
+            'opts': self.model._meta,
+            'has_view_permission': self.has_view_permission(request),
+        }
+        return TemplateResponse(
+            request,
+            'admin/catalog/product_delete_all_confirmation.html',
+            context
+        )
+    
+    delete_all_products.short_description = 'Удалить ВСЕ товары'
     save_on_top = True
     
     def get_actions(self, request):
@@ -464,19 +564,35 @@ class ProductAdmin(ImportExportModelAdmin, FarpostExportMixin, admin.ModelAdmin)
             from django.contrib.admin import helpers
             selected = request.POST.getlist(helpers.ACTION_CHECKBOX_NAME)
             
-            # Если использован компактный формат (для большого количества товаров)
-            if not selected:
+            # Проверяем, выбраны ли все товары (через скрытое поле select_across)
+            select_across = request.POST.get('select_across', '0') == '1'
+            
+            # Если выбраны все товары, получаем полный queryset
+            if select_across and not selected:
+                # Пользователь выбрал "Выбрать все" - получаем все товары
+                queryset = self.get_queryset(request)
+            elif selected:
+                # Выбраны конкретные товары
+                queryset = self.get_queryset(request).filter(pk__in=selected)
+            else:
+                # Если использован компактный формат (для большого количества товаров)
                 selected_ids_compact = request.POST.get('selected_ids_compact', '')
                 if selected_ids_compact:
                     selected = [id.strip() for id in selected_ids_compact.split(',') if id.strip()]
+                    queryset = self.get_queryset(request).filter(pk__in=selected)
+                else:
+                    # Если selected пустой, возвращаемся на страницу списка с сообщением
+                    from django.shortcuts import redirect
+                    from django.urls import reverse
+                    self.message_user(request, 'Не выбрано ни одного товара для удаления.', messages.WARNING)
+                    return redirect(reverse('admin:catalog_product_changelist'))
             
-            if selected:
-                queryset = self.get_queryset(request).filter(pk__in=selected)
+            if queryset:
                 # Проверяем, это подтверждение удаления или первый запрос
                 # Для обоих случаев (первый запрос и подтверждение) вызываем delete_selected
                 return self.delete_selected(request, queryset)
             else:
-                # Если selected пустой, возвращаемся на страницу списка с сообщением
+                # Если queryset пустой, возвращаемся на страницу списка с сообщением
                 from django.shortcuts import redirect
                 from django.urls import reverse
                 self.message_user(request, 'Не выбрано ни одного товара для удаления.', messages.WARNING)
@@ -650,18 +766,29 @@ class ProductAdmin(ImportExportModelAdmin, FarpostExportMixin, admin.ModelAdmin)
             from django.contrib.admin import helpers
             selected_ids = request.POST.getlist(helpers.ACTION_CHECKBOX_NAME)
             
-            # Если использован компактный формат (для большого количества товаров)
-            if not selected_ids:
-                selected_ids_compact = request.POST.get('selected_ids_compact', '')
-                if selected_ids_compact:
-                    selected_ids = [id.strip() for id in selected_ids_compact.split(',') if id.strip()]
+            # Проверяем, выбраны ли все товары (через скрытое поле select_across)
+            select_across = request.POST.get('select_across', '0') == '1'
             
-            if selected_ids:
+            if select_across and not selected_ids:
+                # Пользователь выбрал "Выбрать все" - получаем все товары из queryset
+                full_queryset = queryset
+            elif selected_ids:
+                # Если использован компактный формат (для большого количества товаров)
+                if len(selected_ids) == 1 and ',' in selected_ids[0]:
+                    # Компактный формат - один элемент со списком ID через запятую
+                    selected_ids = [id.strip() for id in selected_ids[0].split(',') if id.strip()]
+                
                 # Получаем полный queryset всех выбранных товаров
                 full_queryset = self.get_queryset(request).filter(pk__in=selected_ids)
             else:
-                # Если в POST нет выбранных элементов, используем переданный queryset
-                full_queryset = queryset
+                # Проверяем компактный формат
+                selected_ids_compact = request.POST.get('selected_ids_compact', '')
+                if selected_ids_compact:
+                    selected_ids = [id.strip() for id in selected_ids_compact.split(',') if id.strip()]
+                    full_queryset = self.get_queryset(request).filter(pk__in=selected_ids)
+                else:
+                    # Если в POST нет выбранных элементов, используем переданный queryset
+                    full_queryset = queryset
             
             deleted_count = 0
             errors_count = 0
