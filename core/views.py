@@ -29,36 +29,24 @@ class HomeView(TemplateView):
         ).order_by('name')[:6]
         
         # Для каждой категории считаем товары в ней и её подкатегориях
-        # ВАЖНО: Используем кеширование для стабильности подсчета
+        # ВАЖНО: НЕ используем кеширование - всегда получаем актуальные данные из БД
+        # Это гарантирует, что количество товаров всегда корректное
         for category in categories:
-            # Ключ кеша для категории
-            cache_key = f'category_product_count_{category.id}'
-            
-            # Пытаемся получить из кеша
-            cached_count = cache.get(cache_key)
-            if cached_count is not None:
-                category._product_count = cached_count
+            descendants = category.get_descendants(include_self=True)
+            descendant_ids = list(descendants.values_list('id', flat=True))
+            if descendant_ids:
+                # Используем один запрос для подсчета товаров
+                # ВАЖНО: Всегда получаем актуальные данные из БД
+                count = Product.objects.filter(
+                    category_id__in=descendant_ids,
+                    is_active=True,
+                    catalog_type='retail',
+                    quantity__gt=0
+                ).count()
+                # Сохраняем в атрибут для использования в шаблоне
+                category._product_count = count
             else:
-                # Если нет в кеше, считаем заново
-                # ВАЖНО: Используем select_for_update для предотвращения race conditions
-                with transaction.atomic():
-                    descendants = category.get_descendants(include_self=True)
-                    descendant_ids = list(descendants.values_list('id', flat=True))
-                    if descendant_ids:
-                        # Используем один запрос для подсчета товаров
-                        # ВАЖНО: Используем только чтение (read committed) для стабильности
-                        count = Product.objects.filter(
-                            category_id__in=descendant_ids,
-                            is_active=True,
-                            catalog_type='retail',
-                            quantity__gt=0
-                        ).count()
-                        # Сохраняем в атрибут для использования в шаблоне
-                        category._product_count = count
-                        # Кешируем на 5 минут для стабильности
-                        cache.set(cache_key, count, 300)
-                    else:
-                        category._product_count = 0
+                category._product_count = 0
                         cache.set(cache_key, 0, 300)
         
         context['categories'] = categories

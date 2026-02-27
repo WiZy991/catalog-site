@@ -111,35 +111,24 @@ class Category(MPTTModel):
         if hasattr(self, '_product_count'):
             return self._product_count
         
-        # ВАЖНО: Используем кеширование для стабильности подсчета
-        from django.core.cache import cache
-        cache_key = f'category_product_count_{self.id}'
-        cached_count = cache.get(cache_key)
-        if cached_count is not None:
-            return cached_count
-        
+        # ВАЖНО: НЕ используем кеширование - всегда получаем актуальные данные из БД
+        # Это гарантирует, что количество товаров всегда корректное
         from django.db.models import Q
-        from django.db import transaction
         
-        # ВАЖНО: Используем транзакцию для предотвращения race conditions
-        with transaction.atomic():
-            descendants = self.get_descendants(include_self=True)
-            # Преобразуем QuerySet в список ID для более надежной работы
-            descendant_ids = list(descendants.values_list('id', flat=True))
-            if not descendant_ids:
-                cache.set(cache_key, 0, 300)  # Кешируем на 5 минут
-                return 0
-            
-            count = Product.objects.filter(
-                category_id__in=descendant_ids, 
-                is_active=True,
-                catalog_type='retail',  # Только товары из основного каталога
-                quantity__gt=0  # Только товары с остатком больше 0
-            ).count()
-            
-            # Кешируем результат на 5 минут
-            cache.set(cache_key, count, 300)
-            return count
+        descendants = self.get_descendants(include_self=True)
+        # Преобразуем QuerySet в список ID для более надежной работы
+        descendant_ids = list(descendants.values_list('id', flat=True))
+        if not descendant_ids:
+            return 0
+        
+        count = Product.objects.filter(
+            category_id__in=descendant_ids, 
+            is_active=True,
+            catalog_type='retail',  # Только товары из основного каталога
+            quantity__gt=0  # Только товары с остатком больше 0
+        ).count()
+        
+        return count
 
 
 class Product(models.Model):
