@@ -138,21 +138,33 @@ class Command(BaseCommand):
         for filename in sorted(target_files):  # Сортируем по имени для предсказуемости
             file_path = os.path.join(EXCHANGE_DIR, filename)
             
-            # Проверяем, не обработан ли уже файл (по наличию файла .processed)
+            # ВАЖНО: Проверяем, не обработан ли уже файл (по наличию файла .processed)
+            # И НЕ обрабатываем повторно, если файл не изменился (даже с --all)
             processed_marker = f"{file_path}.processed"
-            if not options['all'] and os.path.exists(processed_marker):
-                # Если файл уже обработан, но опция --recent включена, проверяем время модификации маркера
-                if recent_minutes > 0:
+            if os.path.exists(processed_marker):
+                # Файл уже обрабатывался - проверяем, изменился ли он
+                try:
                     marker_mtime = datetime.fromtimestamp(os.path.getmtime(processed_marker))
                     file_mtime = datetime.fromtimestamp(os.path.getmtime(file_path))
-                    # Если файл был изменен после обработки, обрабатываем снова
-                    if file_mtime > marker_mtime and file_mtime > cutoff_time:
+                    
+                    # Если файл НЕ изменился после обработки - ПРОПУСКАЕМ (даже с --all)
+                    if file_mtime <= marker_mtime:
+                        self.stdout.write(f'Пропускаем файл (не изменился): {filename} (обработан {marker_mtime.strftime("%Y-%m-%d %H:%M:%S")}, изменен {file_mtime.strftime("%Y-%m-%d %H:%M:%S")})')
+                        continue
+                    
+                    # Файл изменился - обрабатываем снова
+                    if options['all'] or recent_minutes > 0:
+                        if recent_minutes > 0 and file_mtime < cutoff_time:
+                            self.stdout.write(f'Пропускаем старый файл: {filename} (изменен {file_mtime.strftime("%Y-%m-%d %H:%M:%S")})')
+                            continue
                         self.stdout.write(f'Файл изменен после обработки, обрабатываем снова: {filename}')
                     else:
-                        self.stdout.write(f'Пропускаем уже обработанный файл: {filename}')
+                        # Без --all и --recent пропускаем измененные файлы (для безопасности)
+                        self.stdout.write(f'Пропускаем уже обработанный файл (используйте --all для повторной обработки): {filename}')
                         continue
-                else:
-                    self.stdout.write(f'Пропускаем уже обработанный файл: {filename}')
+                except Exception as e:
+                    # Если не удалось проверить время - пропускаем для безопасности
+                    self.stdout.write(self.style.WARNING(f'Не удалось проверить время изменения файла {filename}: {e}, пропускаем'))
                     continue
             
             # Проверяем время модификации файла (если опция --recent включена)

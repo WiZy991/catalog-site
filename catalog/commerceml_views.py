@@ -8,6 +8,7 @@ import logging
 import re
 import xml.etree.ElementTree as ET
 from io import BytesIO
+from datetime import datetime
 from django.http import HttpResponse, HttpResponseBadRequest
 from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_exempt
@@ -969,9 +970,10 @@ def process_commerceml_file(file_path, filename, request=None):
             deleted_count = 0
             # file_path доступен из параметров функции process_commerceml_file
             
+            # ВАЖНО: Скрываем товары ТОЛЬКО если файл действительно новый/измененный
             # Проверяем, новый ли это файл (нет маркера) или измененный (маркер старше файла)
             should_hide_products = False
-            if file_path:
+            if file_path and os.path.exists(file_path):
                 processed_marker = f"{file_path}.processed"
                 if os.path.exists(processed_marker):
                     # Файл уже обрабатывался - проверяем, изменился ли он
@@ -981,19 +983,22 @@ def process_commerceml_file(file_path, filename, request=None):
                         # Если файл изменен после обработки - это новый обмен, скрываем товары
                         if file_mtime > marker_mtime:
                             should_hide_products = True
-                            logger.info(f"Файл изменен после последней обработки - скрываем товары, не пришедшие в обмене")
+                            logger.info(f"Файл изменен после последней обработки (файл: {datetime.fromtimestamp(file_mtime)}, маркер: {datetime.fromtimestamp(marker_mtime)}) - скрываем товары, не пришедшие в обмене")
                         else:
-                            logger.info(f"Файл не изменился с последней обработки - НЕ скрываем товары")
+                            should_hide_products = False
+                            logger.info(f"Файл НЕ изменился с последней обработки (файл: {datetime.fromtimestamp(file_mtime)}, маркер: {datetime.fromtimestamp(marker_mtime)}) - НЕ скрываем товары")
                     except Exception as e:
-                        logger.warning(f"Не удалось проверить время изменения файла: {e}, скрываем товары для безопасности")
-                        should_hide_products = True
+                        # Если не удалось проверить - НЕ скрываем товары (безопаснее)
+                        should_hide_products = False
+                        logger.warning(f"Не удалось проверить время изменения файла: {e}, НЕ скрываем товары для безопасности")
                 else:
-                    # Файл новый - скрываем товары
+                    # Файл новый (нет маркера) - скрываем товары
                     should_hide_products = True
                     logger.info(f"Файл новый (нет маркера) - скрываем товары, не пришедшие в обмене")
             else:
                 # Если не можем определить файл, не скрываем товары (безопаснее)
-                logger.warning(f"⚠ Не удалось определить путь к файлу - НЕ скрываем товары")
+                should_hide_products = False
+                logger.warning(f"⚠ Не удалось определить путь к файлу или файл не существует - НЕ скрываем товары")
             
             # Находим товары, которые были импортированы из 1С (имеют external_id),
             # но не пришли в текущем обмене
