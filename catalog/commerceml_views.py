@@ -585,13 +585,20 @@ def process_commerceml_file(file_path, filename, request=None):
                 package = root.find(f'.//{{{namespace}}}Предложения')
             if package is None:
                 package = root.find('.//Предложения')
-        if package is None and 'catalog' in namespaces:
-            try:
-                package = root.find('.//catalog:ПакетПредложений', namespaces)
-                if package is None:
-                    package = root.find('.//catalog:Предложения', namespaces)
-            except (KeyError, ValueError):
-                pass
+        # Пробуем найти с альтернативными namespace (без префикса catalog)
+        if package is None:
+            for ns_key in ['cml', 'cml2', '']:
+                if ns_key in namespaces:
+                    try:
+                        ns_value = namespaces[ns_key]
+                        if ns_value:
+                            package = root.find(f'.//{{{ns_value}}}ПакетПредложений')
+                            if package is None:
+                                package = root.find(f'.//{{{ns_value}}}Предложения')
+                            if package is not None:
+                                break
+                    except (KeyError, ValueError):
+                        pass
         
         logger.info(f"Проверка типа файла: package={package is not None}, filename={filename}")
         logger.info(f"Корневой элемент: {root.tag}, namespace: {namespace or 'нет'}")
@@ -606,11 +613,19 @@ def process_commerceml_file(file_path, filename, request=None):
                     price_types_elem = package.find(f'.//{{{namespace}}}ТипыЦен')
                 if price_types_elem is None:
                     price_types_elem = package.find('.//ТипыЦен')
-                if price_types_elem is None and 'catalog' in namespaces:
-                    try:
-                        price_types_elem = package.find('.//catalog:ТипыЦен', namespaces)
-                    except (KeyError, ValueError):
-                        pass
+                # Пробуем найти с разными вариантами namespace
+                if price_types_elem is None:
+                    # Пробуем с альтернативными namespace
+                    for ns_key in ['cml', 'cml2', '']:
+                        if ns_key in namespaces:
+                            try:
+                                ns_value = namespaces[ns_key]
+                                if ns_value:
+                                    price_types_elem = package.find(f'.//{{{ns_value}}}ТипыЦен')
+                                    if price_types_elem is not None:
+                                        break
+                            except (KeyError, ValueError):
+                                pass
                 
                 if price_types_elem is not None:
                     # Собираем все элементы ТипЦены
@@ -618,11 +633,15 @@ def process_commerceml_file(file_path, filename, request=None):
                     if namespace:
                         price_type_elems.extend(price_types_elem.findall(f'.//{{{namespace}}}ТипЦены'))
                     price_type_elems.extend(price_types_elem.findall('.//ТипЦены'))
-                    if 'catalog' in namespaces:
-                        try:
-                            price_type_elems.extend(price_types_elem.findall('.//catalog:ТипЦены', namespaces))
-                        except (KeyError, ValueError, SyntaxError):
-                            pass
+                    # Пробуем с альтернативными namespace
+                    for ns_key in ['cml', 'cml2', '']:
+                        if ns_key in namespaces:
+                            try:
+                                ns_value = namespaces[ns_key]
+                                if ns_value:
+                                    price_type_elems.extend(price_types_elem.findall(f'.//{{{ns_value}}}ТипЦены'))
+                            except (KeyError, ValueError, SyntaxError):
+                                pass
                     
                     for price_type_elem in price_type_elems:
                         name_elem = None
@@ -630,11 +649,18 @@ def process_commerceml_file(file_path, filename, request=None):
                             name_elem = price_type_elem.find(f'.//{{{namespace}}}Наименование')
                         if name_elem is None:
                             name_elem = price_type_elem.find('.//Наименование')
-                        if name_elem is None and 'catalog' in namespaces:
-                            try:
-                                name_elem = price_type_elem.find('.//catalog:Наименование', namespaces)
-                            except (KeyError, ValueError, SyntaxError):
-                                pass
+                        # Пробуем с альтернативными namespace
+                        if name_elem is None:
+                            for ns_key in ['cml', 'cml2', '']:
+                                if ns_key in namespaces:
+                                    try:
+                                        ns_value = namespaces[ns_key]
+                                        if ns_value:
+                                            name_elem = price_type_elem.find(f'.//{{{ns_value}}}Наименование')
+                                            if name_elem is not None:
+                                                break
+                                    except (KeyError, ValueError, SyntaxError):
+                                        pass
                         if name_elem is not None and name_elem.text:
                             price_type_name = name_elem.text.lower()
                             if any(keyword in price_type_name for keyword in ['опт', 'opt', 'wholesale', 'оптовая', 'оптовый', 'партнер', 'partner']):
@@ -758,7 +784,24 @@ def process_commerceml_file(file_path, filename, request=None):
             # Сохраняем информацию о файле для отладки
             logger.warning(f"Размер файла: {file_size} байт")
             logger.warning(f"Корневой элемент XML: {root.tag}")
-            return {'status': 'success', 'message': 'Товары не найдены в файле'}
+            # Если это файл каталога (import.xml), но товары не найдены - это ошибка
+            # Создаем SyncLog с предупреждением
+            request_ip = get_client_ip(request) if request else None
+            SyncLog.objects.create(
+                operation_type='file_upload',
+                status='partial',
+                message=f'Файл {filename} обработан, но товары не найдены в XML',
+                processed_count=0,
+                created_count=0,
+                updated_count=0,
+                errors_count=1,
+                errors=[{'error': 'Товары не найдены в XML файле. Проверьте структуру файла.'}],
+                request_ip=request_ip,
+                request_format='CommerceML 2',
+                filename=filename,
+                processing_time=0
+            )
+            return {'status': 'partial', 'message': 'Товары не найдены в файле', 'processed': 0, 'created': 0, 'updated': 0}
         
         # ВАЖНО: Файл import.xml содержит товары для обоих каталогов (розничного и оптового)
         # Нужно обработать его для обоих каталогов, чтобы создать товары в обоих разделах

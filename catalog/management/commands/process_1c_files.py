@@ -48,6 +48,11 @@ class Command(BaseCommand):
             action='store_true',
             help='Обрабатывать также ZIP архивы',
         )
+        parser.add_argument(
+            '--reset',
+            action='store_true',
+            help='Удалить маркеры обработанных файлов и обработать заново',
+        )
 
     def handle(self, *args, **options):
         self.stdout.write('Начинаем обработку файлов от 1С...')
@@ -78,6 +83,26 @@ class Command(BaseCommand):
             except Exception as e:
                 self.stdout.write(self.style.ERROR(f'✗ Исключение: {e}'))
             return
+        
+        # Если опция --reset, удаляем все маркеры .processed
+        if options['reset']:
+            self.stdout.write('Удаление маркеров обработанных файлов...')
+            try:
+                files = os.listdir(EXCHANGE_DIR)
+                removed_count = 0
+                for filename in files:
+                    if filename.endswith('.processed'):
+                        marker_path = os.path.join(EXCHANGE_DIR, filename)
+                        try:
+                            os.remove(marker_path)
+                            removed_count += 1
+                            self.stdout.write(f'  Удален маркер: {filename}')
+                        except Exception as e:
+                            self.stdout.write(self.style.WARNING(f'  Не удалось удалить {filename}: {e}'))
+                self.stdout.write(self.style.SUCCESS(f'Удалено маркеров: {removed_count}'))
+            except Exception as e:
+                self.stdout.write(self.style.ERROR(f'Ошибка при удалении маркеров: {e}'))
+                return
         
         # Обрабатываем все XML файлы в директории
         processed_count = 0

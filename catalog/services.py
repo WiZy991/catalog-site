@@ -392,8 +392,8 @@ def parse_product_name(name):
         oem_matches = re.findall(pattern, name)
         if oem_matches:
             for oem in oem_matches:
-                # Проверяем, что это не часть артикула или другого кода
-                # OEM обычно не содержит специальных символов кроме дефиса
+            # Проверяем, что это не часть артикула или другого кода
+            # OEM обычно не содержит специальных символов кроме дефиса
                 # Поддерживаем форматы: 8-97080-505-0, 97080-505, 15330-20010, 22620-AA000
                 if (re.match(r'^\d{1}-\d{5}-\d{3}-\d{1}$', oem, re.IGNORECASE) or  # 8-97080-505-0
                     re.match(r'^\d{5}-\d{3}$', oem, re.IGNORECASE) or  # 97080-505
@@ -479,7 +479,7 @@ def parse_product_name(name):
                                         # Это применимость, не артикул - пропускаем
                                         continue
                                     else:
-                                        result['article'] = candidate.upper()
+                                    result['article'] = candidate.upper()
                                     break
         
         # Если не нашли через OEM, ищем стандартные форматы
@@ -554,16 +554,16 @@ def parse_product_name(name):
             continue
         # ВАЖНО: TIS-166/GUIS-66, ME700054/ME701290 - это ПРИМЕНИМОСТЬ, не артикул!
         # Артикул = OEM номер (кросс-номер)
-        parts = group.split('/')
+            parts = group.split('/')
         # Проверяем, похоже ли это на применимость (коды моделей, артикулы альтернативные)
         # Формат: буквы-цифры/буквы-цифры (TIS-166/GUIS-66) или буквы+цифры/буквы+цифры
-        is_applicability = all(
+            is_applicability = all(
             re.match(r'^[A-Z0-9\-]{2,10}$', p, re.IGNORECASE)
-            for p in parts
-        )
-        if is_applicability and len(parts) >= 2:
+                for p in parts
+            )
+            if is_applicability and len(parts) >= 2:
             # Это применимость (например, TIS-166/GUIS-66)
-            applicability_parts.extend([p.upper() for p in parts])
+                applicability_parts.extend([p.upper() for p in parts])
     
     # Убираем дубликаты, сохраняя порядок
     if applicability_parts:
@@ -594,7 +594,7 @@ def parse_product_name(name):
             size_upper not in (result.get('oem_number') or '').upper()):
             # Дополнительная проверка: размер должен содержать хотя бы одну цифру и * или x
             if re.search(r'\d+[*x]\d+', size):
-                characteristics_parts.append(f"Размер: {size}")
+            characteristics_parts.append(f"Размер: {size}")
     
     # Ищем вольтаж (формат: 12V, 24V, 12V-11V)
     voltage_patterns = [
