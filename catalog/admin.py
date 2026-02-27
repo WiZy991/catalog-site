@@ -535,6 +535,12 @@ class ProductAdmin(ImportExportModelAdmin, FarpostExportMixin, admin.ModelAdmin)
         """Переопределяем, чтобы обработать ошибки с ProductCharacteristic при действиях."""
         action = request.POST.get('action')
         
+        # ВАЖНО: Проверяем select_across - если выбраны все товары, получаем полный queryset
+        select_across = request.POST.get('select_across', '0') == '1'
+        if select_across:
+            # Пользователь выбрал "Выбрать все" - получаем ВСЕ товары из базы
+            queryset = self.get_queryset(request)
+        
         # Если действие - удаление, ВСЕГДА обрабатываем через наш метод, не вызывая super()
         # Это гарантирует, что мы не обратимся к несуществующей таблице
         if action == 'delete_selected':
@@ -759,36 +765,42 @@ class ProductAdmin(ImportExportModelAdmin, FarpostExportMixin, admin.ModelAdmin)
         # Проверяем существование таблицы ProductCharacteristic
         table_exists = self._check_table_exists()
         
+        # ВАЖНО: Проверяем select_across ДО подтверждения - если выбраны все, получаем полный queryset
+        select_across = request.POST.get('select_across', '0') == '1' or request.GET.get('select_across', '0') == '1'
+        if select_across:
+            # Пользователь выбрал "Выбрать все" - получаем ВСЕ товары из базы
+            queryset = self.get_queryset(request)
+        
         # Если это подтверждение удаления - удаляем сразу
         if request.POST.get('post') == 'yes':
-            # ВАЖНО: При подтверждении получаем ВСЕ выбранные элементы из POST, а не только из queryset
-            # Это нужно, чтобы удалить все выбранные товары, а не только те, что на текущей странице
-            from django.contrib.admin import helpers
-            selected_ids = request.POST.getlist(helpers.ACTION_CHECKBOX_NAME)
+            # ВАЖНО: При подтверждении проверяем select_across снова
+            select_across_confirm = request.POST.get('select_across', '0') == '1'
             
-            # Проверяем, выбраны ли все товары (через скрытое поле select_across)
-            select_across = request.POST.get('select_across', '0') == '1'
-            
-            if select_across and not selected_ids:
-                # Пользователь выбрал "Выбрать все" - получаем все товары из queryset
-                full_queryset = queryset
-            elif selected_ids:
-                # Если использован компактный формат (для большого количества товаров)
-                if len(selected_ids) == 1 and ',' in selected_ids[0]:
-                    # Компактный формат - один элемент со списком ID через запятую
-                    selected_ids = [id.strip() for id in selected_ids[0].split(',') if id.strip()]
-                
-                # Получаем полный queryset всех выбранных товаров
-                full_queryset = self.get_queryset(request).filter(pk__in=selected_ids)
+            if select_across_confirm:
+                # Пользователь выбрал "Выбрать все" - используем полный queryset
+                full_queryset = self.get_queryset(request)
             else:
-                # Проверяем компактный формат
-                selected_ids_compact = request.POST.get('selected_ids_compact', '')
-                if selected_ids_compact:
-                    selected_ids = [id.strip() for id in selected_ids_compact.split(',') if id.strip()]
+                # Получаем выбранные элементы из POST
+                from django.contrib.admin import helpers
+                selected_ids = request.POST.getlist(helpers.ACTION_CHECKBOX_NAME)
+                
+                if selected_ids:
+                    # Если использован компактный формат (для большого количества товаров)
+                    if len(selected_ids) == 1 and ',' in selected_ids[0]:
+                        # Компактный формат - один элемент со списком ID через запятую
+                        selected_ids = [id.strip() for id in selected_ids[0].split(',') if id.strip()]
+                    
+                    # Получаем полный queryset всех выбранных товаров
                     full_queryset = self.get_queryset(request).filter(pk__in=selected_ids)
                 else:
-                    # Если в POST нет выбранных элементов, используем переданный queryset
-                    full_queryset = queryset
+                    # Проверяем компактный формат
+                    selected_ids_compact = request.POST.get('selected_ids_compact', '')
+                    if selected_ids_compact:
+                        selected_ids = [id.strip() for id in selected_ids_compact.split(',') if id.strip()]
+                        full_queryset = self.get_queryset(request).filter(pk__in=selected_ids)
+                    else:
+                        # Если в POST нет выбранных элементов, используем переданный queryset
+                        full_queryset = queryset
             
             deleted_count = 0
             errors_count = 0
@@ -866,28 +878,37 @@ class ProductAdmin(ImportExportModelAdmin, FarpostExportMixin, admin.ModelAdmin)
         opts = self.model._meta
         site_context = self.admin_site.each_context(request)
         
-        # ВАЖНО: Получаем ВСЕ выбранные ID из POST, чтобы передать их в шаблон
-        # Это нужно, чтобы удалить все выбранные товары, а не только те, что на текущей странице
-        selected_ids = request.POST.getlist(helpers.ACTION_CHECKBOX_NAME)
+        # ВАЖНО: Проверяем select_across - если выбраны все товары, получаем полный queryset
+        select_across = request.POST.get('select_across', '0') == '1'
         
-        # Если использован компактный формат (для большого количества товаров)
-        if not selected_ids:
-            selected_ids_compact = request.POST.get('selected_ids_compact', '')
-            if selected_ids_compact:
-                selected_ids = [id.strip() for id in selected_ids_compact.split(',') if id.strip()]
-        
-        if not selected_ids:
-            # Если в POST нет, пытаемся получить из queryset
-            if queryset.exists():
-                selected_ids = list(queryset.values_list('pk', flat=True))
-            else:
-                selected_ids = []
-        
-        # Получаем полный queryset всех выбранных товаров для отображения
-        if selected_ids:
-            full_queryset = self.get_queryset(request).filter(pk__in=selected_ids)
+        if select_across:
+            # Пользователь выбрал "Выбрать все" - получаем ВСЕ товары
+            full_queryset = self.get_queryset(request)
+            selected_ids = []  # Не передаем ID, так как удаляем все
+            total_count = full_queryset.count()
         else:
-            full_queryset = queryset
+            # Получаем выбранные ID из POST
+            selected_ids = request.POST.getlist(helpers.ACTION_CHECKBOX_NAME)
+            
+            # Если использован компактный формат (для большого количества товаров)
+            if not selected_ids:
+                selected_ids_compact = request.POST.get('selected_ids_compact', '')
+                if selected_ids_compact:
+                    selected_ids = [id.strip() for id in selected_ids_compact.split(',') if id.strip()]
+            
+            if not selected_ids:
+                # Если в POST нет, пытаемся получить из queryset
+                if queryset.exists():
+                    selected_ids = list(queryset.values_list('pk', flat=True))
+                else:
+                    selected_ids = []
+            
+            # Получаем полный queryset всех выбранных товаров для отображения
+            if selected_ids:
+                full_queryset = self.get_queryset(request).filter(pk__in=selected_ids)
+            else:
+                full_queryset = queryset
+            total_count = len(selected_ids) if selected_ids else full_queryset.count()
         
         # Создаём простой контекст БЕЗ model_count
         context = {
@@ -897,7 +918,8 @@ class ProductAdmin(ImportExportModelAdmin, FarpostExportMixin, admin.ModelAdmin)
             'queryset': full_queryset,
             'objects': list(full_queryset[:100]),  # Показываем только первые 100 для отображения
             'selected_ids': selected_ids,  # Передаем все ID для скрытых полей
-            'total_count': len(selected_ids),  # Общее количество выбранных
+            'total_count': total_count,  # Общее количество выбранных
+            'select_across': select_across,  # Передаем флаг "выбрать все"
             'opts': opts,
             'action_checkbox_name': helpers.ACTION_CHECKBOX_NAME,
             'media': self.media,

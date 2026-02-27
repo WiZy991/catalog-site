@@ -28,6 +28,9 @@
                 <div>
                     <input type="hidden" name="post" value="yes">
                     <input type="hidden" name="action" value="delete_selected">
+                    {% if select_across %}
+                        <input type="hidden" name="select_across" value="1">
+                    {% endif %}
                     {% if selected_ids %}
                         {% if selected_ids|length > 500 %}
                             {# Для большого количества товаров используем компактный формат #}
