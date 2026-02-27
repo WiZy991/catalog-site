@@ -33,9 +33,8 @@ class CatalogView(ListView):
             product_count = Product.objects.filter(
                 category__in=descendants,
                 is_active=True,
-                catalog_type='retail'
-            ).filter(
-                Q(quantity__gt=0) | Q(availability='order')  # Товары с остатком или под заказ
+                catalog_type='retail',
+                quantity__gt=0  # Только товары с остатком больше 0
             ).count()
             if product_count > 0:
                 category.retail_product_count = product_count
@@ -88,7 +87,8 @@ class CategoryView(ListView):
         queryset = Product.objects.filter(
             category__in=descendants,
             is_active=True,
-            catalog_type='retail'  # Только товары из основного каталога
+            catalog_type='retail',  # Только товары из основного каталога
+            quantity__gt=0  # Только товары с остатком больше 0
         ).select_related('category').prefetch_related('images')
         
         # Применяем фильтры
@@ -114,7 +114,8 @@ class CategoryView(ListView):
         all_products = Product.objects.filter(
             category__in=self.category.get_descendants(include_self=True),
             is_active=True,
-            catalog_type='retail'  # Только товары из основного каталога
+            catalog_type='retail',  # Только товары из основного каталога
+            quantity__gt=0  # Только товары с остатком больше 0
         )
         context['brands'] = get_brand_choices(self.category)
         context['price_range'] = all_products.aggregate(min_price=Min('price'), max_price=Max('price'))
@@ -192,9 +193,8 @@ class CatalogItemView(ListView):
             queryset = Product.objects.filter(
                 category__in=descendants,
                 is_active=True,
-                catalog_type='retail'  # Только товары из основного каталога
-            ).filter(
-                Q(quantity__gt=0) | Q(availability='order')  # Товары с остатком или под заказ
+                catalog_type='retail',  # Только товары из основного каталога
+                quantity__gt=0  # Только товары с остатком больше 0
             ).select_related('category').prefetch_related('images')
             
             # Применяем фильтры
@@ -224,7 +224,8 @@ class CatalogItemView(ListView):
             all_products = Product.objects.filter(
                 category__in=self.category.get_descendants(include_self=True),
                 is_active=True,
-                catalog_type='retail'  # Только товары из основного каталога
+                catalog_type='retail',  # Только товары из основного каталога
+                quantity__gt=0  # Только товары с остатком больше 0
             )
             context['brands'] = get_brand_choices(self.category)
             context['price_range'] = all_products.aggregate(min_price=Min('price'), max_price=Max('price'))
@@ -507,9 +508,8 @@ def filter_products_ajax(request):
     else:
         queryset = Product.objects.filter(
             is_active=True,
-            catalog_type='retail'  # Только товары из основного каталога
-        ).filter(
-            Q(quantity__gt=0) | Q(availability='order')  # Товары с остатком или под заказ
+            catalog_type='retail',  # Только товары из основного каталога
+            quantity__gt=0  # Только товары с остатком больше 0
         )
     
     # Применяем фильтры

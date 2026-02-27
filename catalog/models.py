@@ -112,9 +112,8 @@ class Category(MPTTModel):
         return Product.objects.filter(
             category__in=descendants, 
             is_active=True,
-            catalog_type='retail'  # Только товары из основного каталога
-        ).filter(
-            Q(quantity__gt=0) | Q(availability='order')  # Товары с остатком или под заказ
+            catalog_type='retail',  # Только товары из основного каталога
+            quantity__gt=0  # Только товары с остатком больше 0
         ).count()
 
 
