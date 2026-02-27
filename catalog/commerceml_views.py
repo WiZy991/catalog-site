@@ -2349,10 +2349,10 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
         parsed = parse_product_name(name)
         
         # Используем артикул из данных или из парсинга
+        # ВАЖНО: external_id НЕ должен использоваться как артикул!
+        # Артикул должен быть только из поля "Артикул" в XML, "Артикул1" в характеристиках или из парсинга названия
         if not article and parsed.get('article'):
             article = parsed['article']
-        if not article and external_id:
-            article = external_id
         
         # Определяем бренд - всегда строка, не None
         # Сначала берем из XML, потом из парсинга названия, потом пытаемся определить из названия напрямую
@@ -2548,15 +2548,89 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
             else:
                 applicability_parts.append(product_data.get('applicability'))
         
-        # Добавляем из парсинга
+        # Добавляем из парсинга (может быть строка с разделителями)
         if parsed.get('applicability'):
-            applicability_parts.append(parsed.get('applicability'))
+            parsed_applicability = parsed.get('applicability')
+            # Если это строка, разбиваем по запятым
+            if isinstance(parsed_applicability, str):
+                parsed_parts = [p.strip() for p in parsed_applicability.split(',') if p.strip()]
+                applicability_parts.extend(parsed_parts)
+            elif isinstance(parsed_applicability, list):
+                applicability_parts.extend(parsed_applicability)
+            else:
+                applicability_parts.append(str(parsed_applicability))
+        
+        # Извлекаем модели машин из скобок в названии
+        # Пример: "Датчик кислородный (TOYOTA, 89467-71020, 2UZFE/1GRFE)" -> извлечь 2UZFE, 1GRFE
+        import re
+        bracket_matches = re.findall(r'\(([^)]+)\)', clean_name)
+        for bracket_content in bracket_matches:
+            # Разбиваем содержимое скобок по запятым
+            parts = [p.strip() for p in bracket_content.split(',')]
+            for part in parts:
+                part = part.strip()
+                if not part:
+                    continue
+                
+                # Пропускаем артикулы (OEM номера типа 89467-71020)
+                if re.match(r'^\d{5}-\d{5}$', part) or re.match(r'^\d{1}-\d{5}-\d{3}-\d{1}$', part) or re.match(r'^\d{5}-\d{3}$', part):
+                    continue
+                
+                # Пропускаем бренды (TOYOTA, DENSO и т.д.) - они не являются применимостью
+                known_brands = ['TOYOTA', 'DENSO', 'NGK', 'BOSCH', 'HONDA', 'NISSAN', 'MAZDA', 'MITSUBISHI', 'SUBARU', 'SUZUKI', 'ISUZU', 'TOYO', 'GMB', 'FEBEST']
+                if part.upper() in known_brands:
+                    continue
+                
+                # Ищем коды моделей/двигателей (формат: 2UZFE, 1GRFE, 1MZFE и т.д.)
+                # Паттерн: цифра + буквы + цифры (например, 2UZFE, 1GRFE, 1MZFE)
+                engine_model_pattern = r'^(\d?[A-Z]{2,5}\d?[A-Z]{0,3}-?[A-Z]{0,2}\d{0,2}[A-Z]?)$'
+                if re.match(engine_model_pattern, part, re.IGNORECASE):
+                    # Это код модели/двигателя - добавляем в применимость
+                    if part.upper() not in [p.upper() for p in applicability_parts]:
+                        applicability_parts.append(part.upper())
+                    continue
+                
+                # Ищем связки через слеш (например, 2UZFE/1GRFE)
+                if '/' in part:
+                    slash_parts = [p.strip() for p in part.split('/')]
+                    for slash_part in slash_parts:
+                        if re.match(engine_model_pattern, slash_part, re.IGNORECASE):
+                            if slash_part.upper() not in [p.upper() for p in applicability_parts]:
+                                applicability_parts.append(slash_part.upper())
         
         # ВАЖНО: TIS-166/GUIS-66 - это ПРИМЕНИМОСТЬ, не артикул!
         # Артикул = OEM номер (кросс-номер)
         # Применимость может содержать артикулы альтернативные (TIS-166, GUIS-66) - это нормально
-        if applicability_parts:
-            applicability = ', '.join([p for p in applicability_parts if p and str(p).strip()])
+        # Убираем дубликаты и фильтруем пустые значения
+        unique_applicability = []
+        seen = set()
+        for p in applicability_parts:
+            if p and str(p).strip():
+                p_upper = str(p).strip().upper()
+                if p_upper not in seen:
+                    seen.add(p_upper)
+                    unique_applicability.append(str(p).strip())
+        
+        # Извлекаем вольтаж из применимости и переносим в характеристики
+        # ВАЖНО: Вольтаж (12V, 24V и т.д.) должен быть в характеристиках, а не в применимости!
+        voltage_from_applicability = None
+        if unique_applicability:
+            # Проверяем, есть ли вольтаж в применимости
+            import re
+            voltage_pattern = re.compile(r'\b(\d+V(?:-\d+V)?)\b', re.IGNORECASE)
+            filtered_applicability = []
+            for item in unique_applicability:
+                voltage_match = voltage_pattern.search(item)
+                if voltage_match:
+                    # Найден вольтаж - извлекаем его и не добавляем в применимость
+                    voltage_from_applicability = voltage_match.group(1).upper()
+                else:
+                    # Это не вольтаж - добавляем в применимость
+                    filtered_applicability.append(item)
+            unique_applicability = filtered_applicability
+        
+        if unique_applicability:
+            applicability = ', '.join(unique_applicability)
             if applicability:
                 product.applicability = applicability
         
@@ -2671,6 +2745,23 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
                                 # Проверяем, нет ли уже такой характеристики
                                 if not any(char_str in existing for existing in characteristics_parts):
                                     characteristics_parts.append(char_str)
+        
+        # Добавляем вольтаж из применимости в характеристики (если он был найден)
+        if voltage_from_applicability:
+            voltage_char = f"Напряжение: {voltage_from_applicability}"
+            # Проверяем, нет ли уже такой характеристики
+            if not any('Напряжение:' in char and voltage_from_applicability in char for char in characteristics_parts):
+                characteristics_parts.append(voltage_char)
+        
+        # Также проверяем, есть ли вольтаж в уже сохраненной применимости товара
+        if product.applicability:
+            voltage_match = re.search(r'\b(\d+V(?:-\d+V)?)\b', product.applicability, re.IGNORECASE)
+            if voltage_match:
+                voltage_value = voltage_match.group(1).upper()
+                voltage_char = f"Напряжение: {voltage_value}"
+                # Проверяем, нет ли уже такой характеристики
+                if not any('Напряжение:' in char and voltage_value in char for char in characteristics_parts):
+                    characteristics_parts.append(voltage_char)
         
         # Объединяем все характеристики
         if characteristics_parts:

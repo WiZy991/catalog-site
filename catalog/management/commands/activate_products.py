@@ -200,13 +200,17 @@ class Command(BaseCommand):
         
         # Деактивируем товары, которые не должны быть активны
         # Розничный каталог: товары без остатка и без цены
-        retail_deactivated = Product.objects.filter(
+        retail_to_deactivate = Product.objects.filter(
             catalog_type='retail',
             is_active=True
         ).filter(
             quantity=0,
             price=0
-        ).update(is_active=False)
+        )
+        retail_deactivated = retail_to_deactivate.update(
+            is_active=False,
+            availability='out_of_stock'
+        )
         
         if retail_deactivated > 0:
             self.stdout.write(
@@ -214,17 +218,53 @@ class Command(BaseCommand):
             )
         
         # Оптовый каталог: товары без остатка и без оптовой цены
-        wholesale_deactivated = Product.objects.filter(
+        # ВАЖНО: Товары с оптовой ценой должны оставаться активными, даже если остаток = 0
+        wholesale_to_deactivate = Product.objects.filter(
             catalog_type='wholesale',
             is_active=True
         ).filter(
             quantity=0,
             wholesale_price=0
-        ).update(is_active=False)
+        )
+        wholesale_deactivated = wholesale_to_deactivate.update(
+            is_active=False,
+            availability='out_of_stock'
+        )
         
         if wholesale_deactivated > 0:
             self.stdout.write(
                 self.style.WARNING(f'Деактивировано товаров в оптовом каталоге (нет остатка и оптовой цены): {wholesale_deactivated}')
+            )
+        
+        # Обновляем availability для товаров без остатка, но с ценой
+        # Розничный каталог: товары без остатка, но с ценой - под заказ
+        retail_without_stock_but_with_price = Product.objects.filter(
+            catalog_type='retail',
+            quantity=0,
+            price__gt=0,
+            is_active=True
+        )
+        retail_updated_to_order = retail_without_stock_but_with_price.update(
+            availability='order'
+        )
+        if retail_updated_to_order > 0:
+            self.stdout.write(
+                self.style.SUCCESS(f'Обновлено товаров в розничном каталоге без остатка, но с ценой (статус: под заказ): {retail_updated_to_order}')
+            )
+        
+        # Оптовый каталог: товары без остатка, но с оптовой ценой - под заказ
+        wholesale_without_stock_but_with_price = Product.objects.filter(
+            catalog_type='wholesale',
+            quantity=0,
+            wholesale_price__gt=0,
+            is_active=True
+        )
+        wholesale_updated_to_order = wholesale_without_stock_but_with_price.update(
+            availability='order'
+        )
+        if wholesale_updated_to_order > 0:
+            self.stdout.write(
+                self.style.SUCCESS(f'Обновлено товаров в оптовом каталоге без остатка, но с оптовой ценой (статус: под заказ): {wholesale_updated_to_order}')
             )
         
         self.stdout.write(
