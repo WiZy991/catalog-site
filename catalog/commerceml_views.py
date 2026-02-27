@@ -927,7 +927,7 @@ def process_commerceml_file(file_path, filename, request=None):
         updated_count = 0
         errors = []
         
-            logger.info(f"Начало обработки {len(products_data)} товаров для каталога {current_catalog_type} (каждый в отдельной транзакции)")
+        logger.info(f"Начало обработки {len(products_data)} товаров для каталога {current_catalog_type} (каждый в отдельной транзакции)")
         
         for idx, product_data in enumerate(products_data):
             # Каждый товар обрабатывается в отдельной транзакции
@@ -936,42 +936,42 @@ def process_commerceml_file(file_path, filename, request=None):
                 with transaction.atomic():
                     # Логируем данные товара перед обработкой (для первых 3)
                     if idx < 3:
-                            logger.info(f"Обработка товара #{idx+1} для {current_catalog_type}: sku={product_data.get('sku')}, name={product_data.get('name')[:50] if product_data.get('name') else 'N/A'}")
+                        logger.info(f"Обработка товара #{idx+1} для {current_catalog_type}: sku={product_data.get('sku')}, name={product_data.get('name')[:50] if product_data.get('name') else 'N/A'}")
                     
-                        product, error, was_created = process_product_from_commerceml(product_data, catalog_type=current_catalog_type)
+                    product, error, was_created = process_product_from_commerceml(product_data, catalog_type=current_catalog_type)
                     if product:
                         processed_count += 1
                         if was_created:
                             created_count += 1
-                                logger.info(f"✓ Создан товар в каталоге {current_catalog_type}: {product.article} - {product.name[:50]}")
+                            logger.info(f"✓ Создан товар в каталоге {current_catalog_type}: {product.article} - {product.name[:50]}")
                         else:
                             updated_count += 1
                             if idx < 10:  # Логируем первые 10 обновлений
-                                    logger.info(f"✓ Обновлен товар в каталоге {current_catalog_type}: {product.article} - {product.name[:50]}")
+                                logger.info(f"✓ Обновлен товар в каталоге {current_catalog_type}: {product.article} - {product.name[:50]}")
                     elif error:
                         # Ошибка внутри process_product_from_commerceml
                         error_info = {
                             'sku': product_data.get('sku', 'unknown'),
-                                'catalog_type': current_catalog_type,
+                            'catalog_type': current_catalog_type,
                             'error': error
                         }
                         errors.append(error_info)
-                            logger.warning(f"✗ Ошибка обработки товара {product_data.get('sku', 'unknown')} для {current_catalog_type}: {error}")
-                            # Выводим данные товара при ошибке (только для первых 5)
+                        logger.warning(f"✗ Ошибка обработки товара {product_data.get('sku', 'unknown')} для {current_catalog_type}: {error}")
+                        # Выводим данные товара при ошибке (только для первых 5)
                         if idx < 5:
                             logger.warning(f"  Данные товара: {product_data}")
             except Exception as e:
                 # Исключение при обработке товара - транзакция автоматически откатывается
                 error_msg = str(e)
-                    logger.error(f"✗ Исключение при обработке товара {product_data.get('sku', 'unknown')} для {current_catalog_type}: {error_msg}", exc_info=True)
+                logger.error(f"✗ Исключение при обработке товара {product_data.get('sku', 'unknown')} для {current_catalog_type}: {error_msg}", exc_info=True)
                 errors.append({
                     'sku': product_data.get('sku', 'unknown'),
-                        'catalog_type': current_catalog_type,
+                    'catalog_type': current_catalog_type,
                     'error': error_msg
                 })
-                    # Выводим данные товара при ошибке (только для первых 5)
-                    if idx < 5:
-                        logger.warning(f"  Данные товара: {product_data}")
+                # Выводим данные товара при ошибке (только для первых 5)
+                if idx < 5:
+                    logger.warning(f"  Данные товара: {product_data}")
                 # Транзакция автоматически откатывается при исключении
                 # Продолжаем обработку следующего товара
         
@@ -1799,7 +1799,7 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                                 continue
                     else:
                         # Пропускаем этот товар - он должен быть создан из import.xml
-                    continue
+                        continue
                 
                 # Обновляем цену из предложений (приоритет - цены из offers.xml)
                 # В offers.xml может быть несколько типов цен:
@@ -1847,8 +1847,8 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                         if price_type_id_elem is None and 'catalog' in namespaces:
                             try:
                                 price_type_id_elem = price_elem.find('catalog:ИдТипаЦены', namespaces)
-                    except (KeyError, ValueError):
-                        pass
+                            except (KeyError, ValueError):
+                                pass
                 
                         if price_type_id_elem is not None and price_type_id_elem.text:
                             price_type_id = price_type_id_elem.text.strip()
@@ -1878,12 +1878,12 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                                 if price_value_elem is not None and price_value_elem.text:
                                     try:
                                         price_str = price_value_elem.text.strip().replace(',', '.').replace(' ', '').replace('\xa0', '')
-                        if price_str:
-                            price = float(price_str)
-                            if price > 0:
-                                # Для оптового каталога обновляем wholesale_price, для розничного - price
-                                if catalog_type == 'wholesale':
-                                    product.wholesale_price = price
+                                        if price_str:
+                                            price = float(price_str)
+                                            if price > 0:
+                                                # Для оптового каталога обновляем wholesale_price, для розничного - price
+                                                if catalog_type == 'wholesale':
+                                                    product.wholesale_price = price
                                                     if idx < 10:
                                                         logger.info(f"✓ Обновлена оптовая цена для товара {product_id}: {price} (тип цены: {price_type_id})")
                                                 else:
@@ -1892,7 +1892,7 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                                                         logger.info(f"✓ Обновлена розничная цена для товара {product_id}: {price} (тип цены: {price_type_id})")
                                                 break  # Нашли нужную цену, выходим из цикла
                                     except (ValueError, AttributeError, TypeError) as e:
-                                    if idx < 5:
+                                        if idx < 5:
                                             logger.warning(f"Не удалось распарсить цену для товара {product_id}: {price_value_elem.text}, ошибка: {e}")
                 
                 # Если не нашли цену по типу, пробуем взять нужную цену (fallback)
@@ -1955,9 +1955,9 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                                                         product.wholesale_price = price
                                                         if idx < 5:
                                                             logger.info(f"Обновлена оптовая цена (fallback по типу) для товара {product_id}: {price}")
-                                else:
-                                    product.price = price
-                                    if idx < 5:
+                                                    else:
+                                                        product.price = price
+                                                        if idx < 5:
                                                             logger.info(f"Обновлена розничная цена (fallback по типу) для товара {product_id}: {price}")
                                                     break
                                         except (ValueError, AttributeError, TypeError):
@@ -1985,7 +1985,7 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                                             price = float(price_str)
                                             if price > 0:
                                                 product.wholesale_price = price
-                        if idx < 5:
+                                                if idx < 5:
                                                     logger.warning(f"⚠ Обновлена оптовая цена (fallback - любая цена) для товара {product_id}: {price}")
                                                 break
                                     except (ValueError, AttributeError, TypeError):
@@ -2023,10 +2023,10 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                                 total_quantity_from_elems = 0
                             total_quantity_from_elems += qty_value
                             found_quantity_in_xml = True
-                        if idx < 5:
+                            if idx < 5:
                                 logger.info(f"Найдено количество в элементе <Количество> для товара {product_id}: {qty_value}")
-                    except (ValueError, AttributeError) as e:
-                        if idx < 5:
+                        except (ValueError, AttributeError) as e:
+                            if idx < 5:
                                 logger.warning(f"Не удалось распарсить остаток из <Количество> для товара {product_id}: {qty_elem.text}, ошибка: {e}")
                 
                 if found_quantity_in_xml:
@@ -2184,7 +2184,7 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                             # ВАЖНО: Если quantity = 0 и нет цены, НЕ деактивируем товар автоматически при обновлении из offers.xml
                             # Товар может быть временно без остатка, но должен оставаться активным
                             # Деактивация происходит только при скрытии в import.xml (когда товар удален в 1С)
-                    product.availability = 'out_of_stock'
+                            product.availability = 'out_of_stock'
                             # НЕ меняем is_active - оставляем существующее значение
                             # Это предотвращает случайную деактивацию товаров при обновлении из offers.xml
                     
