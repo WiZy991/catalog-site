@@ -1,0 +1,58 @@
+{% extends "admin/change_list.html" %}
+{% load static %}
+
+{% block extrahead %}
+{{ block.super }}
+<script>
+(function() {
+    // Перехватываем отправку формы с действием delete_selected
+    document.addEventListener('DOMContentLoaded', function() {
+        var actionForm = document.getElementById('changelist-form');
+        if (!actionForm) return;
+        
+        var actionSelect = actionForm.querySelector('select[name="action"]');
+        if (!actionSelect) return;
+        
+        // Обработчик отправки формы
+        actionForm.addEventListener('submit', function(e) {
+            // Проверяем, выбрано ли действие delete_selected
+            if (actionSelect.value === 'delete_selected') {
+                // Получаем все выбранные чекбоксы (Django admin использует разные имена)
+                var checkboxes = actionForm.querySelectorAll('input[type="checkbox"]:checked');
+                var selectedCheckboxes = [];
+                checkboxes.forEach(function(checkbox) {
+                    // Проверяем, что это чекбокс выбора товара (не главный чекбокс)
+                    var name = checkbox.name || '';
+                    if (name.indexOf('_selected_action') !== -1 || name.indexOf('action') !== -1) {
+                        if (checkbox.value && checkbox.value !== 'on') {
+                            selectedCheckboxes.push(checkbox);
+                        }
+                    }
+                });
+                
+                // Если выбрано больше 500 товаров, используем компактный формат
+                if (selectedCheckboxes.length > 500) {
+                    // Если выбрано больше 500 товаров, используем компактный формат
+                    var selectedIds = [];
+                    selectedCheckboxes.forEach(function(checkbox) {
+                        selectedIds.push(checkbox.value);
+                    });
+                    
+                    // Удаляем все чекбоксы выбора из формы
+                    selectedCheckboxes.forEach(function(checkbox) {
+                        checkbox.remove();
+                    });
+                    
+                    // Добавляем один скрытый input с компактным форматом
+                    var compactInput = document.createElement('input');
+                    compactInput.type = 'hidden';
+                    compactInput.name = 'selected_ids_compact';
+                    compactInput.value = selectedIds.join(',');
+                    actionForm.appendChild(compactInput);
+                }
+            }
+        });
+    });
+})();
+</script>
+{% endblock %}

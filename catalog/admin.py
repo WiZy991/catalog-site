@@ -472,6 +472,13 @@ class ProductAdmin(ImportExportModelAdmin, FarpostExportMixin, admin.ModelAdmin)
             # Получаем queryset из POST данных
             from django.contrib.admin import helpers
             selected = request.POST.getlist(helpers.ACTION_CHECKBOX_NAME)
+            
+            # Если использован компактный формат (для большого количества товаров)
+            if not selected:
+                selected_ids_compact = request.POST.get('selected_ids_compact', '')
+                if selected_ids_compact:
+                    selected = [id.strip() for id in selected_ids_compact.split(',') if id.strip()]
+            
             if selected:
                 queryset = self.get_queryset(request).filter(pk__in=selected)
                 # Проверяем, это подтверждение удаления или первый запрос
@@ -651,6 +658,13 @@ class ProductAdmin(ImportExportModelAdmin, FarpostExportMixin, admin.ModelAdmin)
             # Это нужно, чтобы удалить все выбранные товары, а не только те, что на текущей странице
             from django.contrib.admin import helpers
             selected_ids = request.POST.getlist(helpers.ACTION_CHECKBOX_NAME)
+            
+            # Если использован компактный формат (для большого количества товаров)
+            if not selected_ids:
+                selected_ids_compact = request.POST.get('selected_ids_compact', '')
+                if selected_ids_compact:
+                    selected_ids = [id.strip() for id in selected_ids_compact.split(',') if id.strip()]
+            
             if selected_ids:
                 # Получаем полный queryset всех выбранных товаров
                 full_queryset = self.get_queryset(request).filter(pk__in=selected_ids)
@@ -737,6 +751,13 @@ class ProductAdmin(ImportExportModelAdmin, FarpostExportMixin, admin.ModelAdmin)
         # ВАЖНО: Получаем ВСЕ выбранные ID из POST, чтобы передать их в шаблон
         # Это нужно, чтобы удалить все выбранные товары, а не только те, что на текущей странице
         selected_ids = request.POST.getlist(helpers.ACTION_CHECKBOX_NAME)
+        
+        # Если использован компактный формат (для большого количества товаров)
+        if not selected_ids:
+            selected_ids_compact = request.POST.get('selected_ids_compact', '')
+            if selected_ids_compact:
+                selected_ids = [id.strip() for id in selected_ids_compact.split(',') if id.strip()]
+        
         if not selected_ids:
             # Если в POST нет, пытаемся получить из queryset
             if queryset.exists():
