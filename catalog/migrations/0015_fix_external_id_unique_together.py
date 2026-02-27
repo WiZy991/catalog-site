@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('catalog', '0013_add_farpost_auto_update_fields'),
+        ('catalog', '0014_rename_catalog_pro_product_name_idx_catalog_pro_product_e414c9_idx_and_more'),
     ]
 
     operations = [
