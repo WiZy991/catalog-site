@@ -739,10 +739,16 @@ class ProductAdmin(ImportExportModelAdmin, FarpostExportMixin, admin.ModelAdmin)
         selected_ids = request.POST.getlist(helpers.ACTION_CHECKBOX_NAME)
         if not selected_ids:
             # Если в POST нет, пытаемся получить из queryset
-            selected_ids = list(queryset.values_list('pk', flat=True))
+            if queryset.exists():
+                selected_ids = list(queryset.values_list('pk', flat=True))
+            else:
+                selected_ids = []
         
         # Получаем полный queryset всех выбранных товаров для отображения
-        full_queryset = self.get_queryset(request).filter(pk__in=selected_ids)
+        if selected_ids:
+            full_queryset = self.get_queryset(request).filter(pk__in=selected_ids)
+        else:
+            full_queryset = queryset
         
         # Создаём простой контекст БЕЗ model_count
         context = {
