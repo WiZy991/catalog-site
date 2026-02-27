@@ -389,6 +389,10 @@
         color: var(--color-gray-700);
         white-space: nowrap;
         font-size: 0.85rem;
+        font-weight: 600; /* Жирный шрифт для кода детали */
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 100%;
     }
     
     .products-table__description {
@@ -1104,9 +1108,9 @@ document.addEventListener('DOMContentLoaded', function() {
                                         <span class="text-muted">—</span>
                                     {% endif %}
                                 </td>
-                                <td class="products-table__article">
+                                <td class="products-table__article" title="{% if product.article %}{{ product.article }}{% endif %}">
                                     {% if product.article %}
-                                        {{ product.article }}
+                                        {{ product.article|truncatechars:20 }}
                                     {% else %}
                                         <span class="text-muted">—</span>
                                     {% endif %}
