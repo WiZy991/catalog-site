@@ -832,87 +832,48 @@ def process_commerceml_file(file_path, filename, request=None):
             for idx, product_data in enumerate(products_data):
                 # Каждый товар обрабатывается в отдельной транзакции
                 # Это гарантирует, что ошибка одного товара не повлияет на обработку остальных
-                # Добавляем retry логику для "database is locked"
-                max_retries = 3
-                retry_delay = 0.1  # 100ms задержка между попытками
-                success = False
-                
-                for retry in range(max_retries):
-                    try:
-                        with transaction.atomic():
-                            # Логируем данные товара перед обработкой (для первых 3)
-                            if idx < 3:
-                                logger.info(f"Обработка товара #{idx+1} для {current_catalog_type}: sku={product_data.get('sku')}, name={product_data.get('name')[:50] if product_data.get('name') else 'N/A'}")
-                            
-                            product, error, was_created = process_product_from_commerceml(product_data, catalog_type=current_catalog_type)
-                            if product:
-                                processed_count += 1
-                                if was_created:
-                                    created_count += 1
-                                    logger.info(f"✓ Создан товар в каталоге {current_catalog_type}: {product.article} - {product.name[:50]}")
-                                else:
-                                    updated_count += 1
-                                    if idx < 10:  # Логируем первые 10 обновлений
-                                        logger.info(f"✓ Обновлен товар в каталоге {current_catalog_type}: {product.article} - {product.name[:50]}")
-                                success = True
-                                break  # Успешно обработано, выходим из retry цикла
-                            elif error:
-                                # Ошибка внутри process_product_from_commerceml
-                                error_info = {
-                                    'sku': product_data.get('sku', 'unknown'),
-                                    'catalog_type': current_catalog_type,
-                                    'error': error
-                                }
-                                errors.append(error_info)
-                                logger.warning(f"✗ Ошибка обработки товара {product_data.get('sku', 'unknown')} для {current_catalog_type}: {error}")
-                                success = True  # Ошибка обработана, не retry
-                                break
-                    except Exception as e:
-                        error_msg = str(e).lower()
-                        # Проверяем, это ли ошибка "database is locked"
-                        if 'database is locked' in error_msg or 'locked' in error_msg:
-                            if retry < max_retries - 1:
-                                # Ждем перед следующей попыткой
-                                import time
-                                time.sleep(retry_delay * (retry + 1))  # Увеличиваем задержку с каждой попыткой
-                                logger.warning(f"Database locked, retry {retry + 1}/{max_retries} для товара {product_data.get('sku', 'unknown')}")
-                                continue
+                try:
+                    with transaction.atomic():
+                        # Логируем данные товара перед обработкой (для первых 3)
+                        if idx < 3:
+                            logger.info(f"Обработка товара #{idx+1} для {current_catalog_type}: sku={product_data.get('sku')}, name={product_data.get('name')[:50] if product_data.get('name') else 'N/A'}")
+                        
+                        product, error, was_created = process_product_from_commerceml(product_data, catalog_type=current_catalog_type)
+                        if product:
+                            processed_count += 1
+                            if was_created:
+                                created_count += 1
+                                logger.info(f"✓ Создан товар в каталоге {current_catalog_type}: {product.article} - {product.name[:50]}")
                             else:
-                                # Последняя попытка не удалась
-                                error_info = {
-                                    'sku': product_data.get('sku', 'unknown'),
-                                    'catalog_type': current_catalog_type,
-                                    'error': f'Ошибка обработки товара: {str(e)}'
-                                }
-                                errors.append(error_info)
-                                logger.error(f"✗ Ошибка обработки товара {product_data.get('sku', 'unknown')} для {current_catalog_type} после {max_retries} попыток: {e}")
-                                success = True  # Ошибка обработана
-                                break
-                        else:
-                            # Другая ошибка - не retry, сразу логируем
+                                updated_count += 1
+                                if idx < 10:  # Логируем первые 10 обновлений
+                                    logger.info(f"✓ Обновлен товар в каталоге {current_catalog_type}: {product.article} - {product.name[:50]}")
+                        elif error:
+                            # Ошибка внутри process_product_from_commerceml
                             error_info = {
                                 'sku': product_data.get('sku', 'unknown'),
                                 'catalog_type': current_catalog_type,
-                                'error': f'Ошибка обработки товара: {str(e)}'
+                                'error': error
                             }
                             errors.append(error_info)
-                            logger.error(f"✗ Ошибка обработки товара {product_data.get('sku', 'unknown')} для {current_catalog_type}: {e}", exc_info=True)
-                            success = True  # Ошибка обработана
-                            break
-                
-                if not success:
-                    # Если не удалось обработать после всех попыток
-                    error_info = {
+                            logger.warning(f"✗ Ошибка обработки товара {product_data.get('sku', 'unknown')} для {current_catalog_type}: {error}")
+                            # Выводим данные товара при ошибке (только для первых 5)
+                            if idx < 5:
+                                logger.warning(f"  Данные товара: {product_data}")
+                except Exception as e:
+                    # Исключение при обработке товара - транзакция автоматически откатывается
+                    error_msg = str(e)
+                    logger.error(f"✗ Исключение при обработке товара {product_data.get('sku', 'unknown')} для {current_catalog_type}: {error_msg}", exc_info=True)
+                    errors.append({
                         'sku': product_data.get('sku', 'unknown'),
                         'catalog_type': current_catalog_type,
-                        'error': 'Ошибка обработки товара: не удалось обработать после всех попыток'
-                    }
-                    errors.append(error_info)
-                    logger.error(f"✗ Не удалось обработать товар {product_data.get('sku', 'unknown')} для {current_catalog_type} после всех попыток")
-                
-                # Выводим данные товара при ошибке (только для первых 5)
-                if idx < 5 and not success:
-                    logger.warning(f"  Данные товара: {product_data}")
+                        'error': error_msg
+                    })
+                    # Выводим данные товара при ошибке (только для первых 5)
+                    if idx < 5:
+                        logger.warning(f"  Данные товара: {product_data}")
+                    # Транзакция автоматически откатывается при исключении
+                    # Продолжаем обработку следующего товара
             
             logger.info(f"Обработка для {current_catalog_type} завершена: обработано={processed_count}, создано={created_count}, обновлено={updated_count}, ошибок={len(errors)}")
             
@@ -2389,7 +2350,16 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
         if characteristics_parts:
             product.characteristics = '\n'.join(characteristics_parts)
         
-        product.save()
+        # ВАЖНО: Сохраняем товар ПЕРЕД обработкой ProductCharacteristic
+        # Это гарантирует, что товар будет создан даже если ProductCharacteristic не работает
+        try:
+            product.save()
+            if was_created:
+                logger.info(f"✓ Товар сохранен в БД: {product.external_id or product.article} (catalog_type={catalog_type})")
+        except Exception as save_error:
+            error_msg = f"Ошибка сохранения товара: {str(save_error)}"
+            logger.error(error_msg, exc_info=True)
+            return None, error_msg, False
         
         # Обрабатываем характеристики для ProductCharacteristic (если нужно)
         # Но основное поле characteristics уже заполнено выше
