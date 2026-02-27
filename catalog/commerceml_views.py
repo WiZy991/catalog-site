@@ -42,6 +42,20 @@ def get_client_ip(request):
     return ip
 
 
+def invalidate_category_cache(category):
+    """Инвалидирует кеш подсчета товаров для категории и всех её родителей."""
+    if not category:
+        return
+    
+    from django.core.cache import cache
+    # Инвалидируем кеш для текущей категории и всех родительских
+    current = category
+    while current:
+        cache_key = f'category_product_count_{current.id}'
+        cache.delete(cache_key)
+        current = current.parent
+
+
 def check_basic_auth(request):
     """Проверка базовой HTTP авторизации (логин/пароль из админки Django)."""
     if 'HTTP_AUTHORIZATION' in request.META:
@@ -2174,6 +2188,11 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                                 logger.debug(f"    <Склад> атрибуты: {w_elem.attrib}")
                 
                 product.save()
+                
+                # ВАЖНО: Инвалидируем кеш подсчета товаров для категории
+                # Это нужно для обновления счетчиков на главной странице
+                invalidate_category_cache(product.category)
+                
                 processed_count += 1
                 updated_count += 1
                 
@@ -2604,6 +2623,11 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
         # Это гарантирует, что товар будет создан даже если ProductCharacteristic не работает
         try:
             product.save()
+            
+            # ВАЖНО: Инвалидируем кеш подсчета товаров для категории
+            # Это нужно для обновления счетчиков на главной странице
+            invalidate_category_cache(product.category)
+            
             if was_created:
                 logger.info(f"✓ Товар сохранен в БД: {product.external_id or product.article} (catalog_type={catalog_type})")
         except Exception as save_error:

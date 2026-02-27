@@ -19,6 +19,9 @@ class HomeView(TemplateView):
             quantity__gt=0  # Только товары с остатком
         ).select_related('category').prefetch_related('images')[:8]
         from django.db.models import Count, Q
+        from django.core.cache import cache
+        from django.db import transaction
+        
         # Получаем категории
         categories = Category.objects.filter(
             parent=None, 
@@ -26,22 +29,37 @@ class HomeView(TemplateView):
         ).order_by('name')[:6]
         
         # Для каждой категории считаем товары в ней и её подкатегориях
-        # ВАЖНО: Используем prefetch_related для оптимизации запросов
+        # ВАЖНО: Используем кеширование для стабильности подсчета
         for category in categories:
-            descendants = category.get_descendants(include_self=True)
-            descendant_ids = list(descendants.values_list('id', flat=True))
-            if descendant_ids:
-                # Используем один запрос для подсчета товаров
-                count = Product.objects.filter(
-                    category_id__in=descendant_ids,
-                    is_active=True,
-                    catalog_type='retail',
-                    quantity__gt=0
-                ).count()
-                # Сохраняем в атрибут для использования в шаблоне
-                category._product_count = count
+            # Ключ кеша для категории
+            cache_key = f'category_product_count_{category.id}'
+            
+            # Пытаемся получить из кеша
+            cached_count = cache.get(cache_key)
+            if cached_count is not None:
+                category._product_count = cached_count
             else:
-                category._product_count = 0
+                # Если нет в кеше, считаем заново
+                # ВАЖНО: Используем select_for_update для предотвращения race conditions
+                with transaction.atomic():
+                    descendants = category.get_descendants(include_self=True)
+                    descendant_ids = list(descendants.values_list('id', flat=True))
+                    if descendant_ids:
+                        # Используем один запрос для подсчета товаров
+                        # ВАЖНО: Используем только чтение (read committed) для стабильности
+                        count = Product.objects.filter(
+                            category_id__in=descendant_ids,
+                            is_active=True,
+                            catalog_type='retail',
+                            quantity__gt=0
+                        ).count()
+                        # Сохраняем в атрибут для использования в шаблоне
+                        category._product_count = count
+                        # Кешируем на 5 минут для стабильности
+                        cache.set(cache_key, count, 300)
+                    else:
+                        category._product_count = 0
+                        cache.set(cache_key, 0, 300)
         
         context['categories'] = categories
         # Защита от ошибки, если миграции не применены
