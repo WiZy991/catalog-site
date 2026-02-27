@@ -1880,6 +1880,7 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                 quantity_elem = None
                 
                 # Вариант 1: Ищем элемент <Количество> (используем findall для поиска всех вложенных элементов)
+                # ВАЖНО: Может быть несколько элементов <Количество>, суммируем их
                 quantity_elems = []
                 if namespace:
                     quantity_elems = offer_elem.findall(f'.//{{{namespace}}}Количество')
@@ -1891,33 +1892,41 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                     except (KeyError, ValueError):
                         pass
                 
-                # Берем первый найденный элемент с количеством
-                if quantity_elems:
-                    quantity_elem = quantity_elems[0]
+                # Суммируем количество из всех элементов <Количество>
+                total_quantity_from_elems = 0
+                for qty_elem in quantity_elems:
+                    if qty_elem is not None and qty_elem.text:
+                        try:
+                            qty_value = int(float(qty_elem.text.strip().replace(',', '.')))
+                            total_quantity_from_elems += qty_value
+                            if idx < 5:
+                                logger.info(f"Найдено количество в элементе <Количество> для товара {product_id}: {qty_value}")
+                        except (ValueError, AttributeError) as e:
+                            if idx < 5:
+                                logger.warning(f"Не удалось распарсить остаток из <Количество> для товара {product_id}: {qty_elem.text}, ошибка: {e}")
                 
-                if quantity_elem is not None and quantity_elem.text:
-                    try:
-                        quantity = int(float(quantity_elem.text.strip().replace(',', '.')))
-                        if idx < 5:
-                            logger.info(f"Найдено количество в элементе <Количество> для товара {product_id}: {quantity}")
-                    except (ValueError, AttributeError) as e:
-                        if idx < 5:
-                            logger.warning(f"Не удалось распарсить остаток из <Количество> для товара {product_id}: {quantity_elem.text}, ошибка: {e}")
+                if total_quantity_from_elems > 0:
+                    quantity = total_quantity_from_elems
+                    if idx < 5:
+                        logger.info(f"✓ Общее количество из элементов <Количество> для товара {product_id}: {quantity}")
                 
                 # Вариант 2: Если не нашли в элементе, ищем в атрибуте <Склад КоличествоНаСкладе="..."/>
+                # ВАЖНО: Может быть несколько складов, нужно суммировать количество со всех складов
                 if quantity is None:
-                    warehouse_elem = None
+                    warehouse_elems = []
                     if namespace:
-                        warehouse_elem = offer_elem.find(f'.//{{{namespace}}}Склад')
-                    if warehouse_elem is None:
-                        warehouse_elem = offer_elem.find('.//Склад')
-                    if warehouse_elem is None and 'catalog' in namespaces:
+                        warehouse_elems = offer_elem.findall(f'.//{{{namespace}}}Склад')
+                    if not warehouse_elems:
+                        warehouse_elems = offer_elem.findall('.//Склад')
+                    if not warehouse_elems and 'catalog' in namespaces:
                         try:
-                            warehouse_elem = offer_elem.find('.//catalog:Склад', namespaces)
+                            warehouse_elems = offer_elem.findall('.//catalog:Склад', namespaces)
                         except (KeyError, ValueError):
                             pass
                     
-                    if warehouse_elem is not None:
+                    # Суммируем количество со всех складов
+                    total_warehouse_quantity = 0
+                    for warehouse_elem in warehouse_elems:
                         # Ищем атрибут КоличествоНаСкладе
                         quantity_attr = warehouse_elem.get('КоличествоНаСкладе')
                         if not quantity_attr:
@@ -1926,12 +1935,18 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                         
                         if quantity_attr:
                             try:
-                                quantity = int(float(str(quantity_attr).strip().replace(',', '.')))
+                                warehouse_qty = int(float(str(quantity_attr).strip().replace(',', '.')))
+                                total_warehouse_quantity += warehouse_qty
                                 if idx < 5:
-                                    logger.info(f"Найдено количество в атрибуте Склад для товара {product_id}: {quantity}")
+                                    logger.info(f"Найдено количество на складе для товара {product_id}: {warehouse_qty} (всего складов: {len(warehouse_elems)})")
                             except (ValueError, AttributeError) as e:
                                 if idx < 5:
                                     logger.warning(f"Не удалось распарсить остаток из атрибута Склад для товара {product_id}: {quantity_attr}, ошибка: {e}")
+                    
+                    if total_warehouse_quantity > 0:
+                        quantity = total_warehouse_quantity
+                        if idx < 5:
+                            logger.info(f"✓ Общее количество со всех складов для товара {product_id}: {quantity}")
                 
                 # Обновляем количество и наличие
                 # ВАЖНО: Определяем текущую цену ПОСЛЕ обновления цены выше

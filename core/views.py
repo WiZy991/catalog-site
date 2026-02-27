@@ -18,10 +18,30 @@ class HomeView(TemplateView):
             is_featured=True,
             quantity__gt=0  # Только товары с остатком
         ).select_related('category').prefetch_related('images')[:8]
-        context['categories'] = Category.objects.filter(
+        from django.db.models import Count, Q
+        # Получаем категории с аннотацией количества товаров
+        categories = Category.objects.filter(
             parent=None, 
             is_active=True
         ).order_by('name')[:6]
+        
+        # Для каждой категории считаем товары в ней и её подкатегориях
+        for category in categories:
+            descendants = category.get_descendants(include_self=True)
+            descendant_ids = list(descendants.values_list('id', flat=True))
+            if descendant_ids:
+                count = Product.objects.filter(
+                    category_id__in=descendant_ids,
+                    is_active=True,
+                    catalog_type='retail',
+                    quantity__gt=0
+                ).count()
+                # Сохраняем в атрибут для использования в шаблоне
+                category._product_count = count
+            else:
+                category._product_count = 0
+        
+        context['categories'] = categories
         # Защита от ошибки, если миграции не применены
         try:
             context['promotions'] = Promotion.objects.filter(

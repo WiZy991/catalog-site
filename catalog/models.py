@@ -107,10 +107,18 @@ class Category(MPTTModel):
     @property
     def product_count(self):
         """Количество товаров в категории и её подкатегориях (только retail)."""
+        # Если уже посчитано (например, в HomeView), используем кэшированное значение
+        if hasattr(self, '_product_count'):
+            return self._product_count
+        
         from django.db.models import Q
         descendants = self.get_descendants(include_self=True)
+        # Преобразуем QuerySet в список ID для более надежной работы
+        descendant_ids = list(descendants.values_list('id', flat=True))
+        if not descendant_ids:
+            return 0
         return Product.objects.filter(
-            category__in=descendants, 
+            category_id__in=descendant_ids, 
             is_active=True,
             catalog_type='retail',  # Только товары из основного каталога
             quantity__gt=0  # Только товары с остатком больше 0
