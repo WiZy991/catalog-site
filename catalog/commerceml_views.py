@@ -625,8 +625,8 @@ def process_commerceml_file(file_path, filename, request=None):
                                 package = root.find(f'.//{{{ns_value}}}Предложения')
                             if package is not None:
                                 break
-            except (KeyError, ValueError):
-                pass
+                    except (KeyError, ValueError):
+                        pass
         
         logger.info(f"Проверка типа файла: package={package is not None}, filename={filename}")
         logger.info(f"Корневой элемент: {root.tag}, namespace: {namespace or 'нет'}")
@@ -652,8 +652,8 @@ def process_commerceml_file(file_path, filename, request=None):
                                     price_types_elem = package.find(f'.//{{{ns_value}}}ТипыЦен')
                                     if price_types_elem is not None:
                                         break
-                    except (KeyError, ValueError):
-                        pass
+                            except (KeyError, ValueError):
+                                pass
                 
                 if price_types_elem is not None:
                     # Собираем все элементы ТипЦены
@@ -1132,20 +1132,34 @@ def process_commerceml_file(file_path, filename, request=None):
             status = 'success'
             message = f'Обработано товаров из файла {filename} для обоих каталогов'
         
-        sync_log = SyncLog.objects.create(
-            operation_type='file_upload',
-            status=status,
-            message=message,
-            processed_count=total_processed,
-            created_count=total_created,
-            updated_count=total_updated,
-            errors_count=len(all_errors),
-            errors=all_errors,
-            request_ip=request_ip,
-            request_format='CommerceML 2',
-            filename=filename,
-            processing_time=processing_time
-        )
+            # ВАЖНО: Проверяем существование таблицы SyncLog перед использованием
+            from django.db import connection
+            table_exists = False
+            try:
+                with connection.cursor() as cursor:
+                    if 'sqlite' in connection.vendor:
+                        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='catalog_synclog'")
+                    else:
+                        cursor.execute("SELECT table_name FROM information_schema.tables WHERE table_name='catalog_synclog'")
+                    table_exists = cursor.fetchone() is not None
+            except Exception:
+                pass
+            
+            if table_exists:
+                sync_log = SyncLog.objects.create(
+                    operation_type='file_upload',
+                    status=status,
+                    message=message,
+                    processed_count=total_processed,
+                    created_count=total_created,
+                    updated_count=total_updated,
+                    errors_count=len(all_errors),
+                    errors=all_errors,
+                    request_ip=request_ip,
+                    request_format='CommerceML 2',
+                    filename=filename,
+                    processing_time=processing_time
+                )
         
         logger.info(f"Импорт завершен: обработано {total_processed}, создано {total_created}, обновлено {total_updated}, скрыто {total_deleted}, ошибок {len(all_errors)}")
         logger.info(f"  Розничный каталог: обработано={results['retail']['processed']}, создано={results['retail']['created']}, обновлено={results['retail']['updated']}")
@@ -2255,20 +2269,34 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
         status = 'success'
         message = f'Обработано предложений из файла {filename} для каталога {catalog_type}'
     
-    sync_log = SyncLog.objects.create(
-        operation_type='file_upload',
-        status=status,
-        message=message,
-        processed_count=processed_count,
-        created_count=0,
-        updated_count=updated_count,
-        errors_count=len(errors),
-        errors=errors,
-        request_ip=request_ip,
-        request_format='CommerceML 2 (offers)',
-        filename=filename,
-        processing_time=processing_time
-    )
+    # ВАЖНО: Проверяем существование таблицы SyncLog перед использованием
+    from django.db import connection
+    table_exists = False
+    try:
+        with connection.cursor() as cursor:
+            if 'sqlite' in connection.vendor:
+                cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='catalog_synclog'")
+            else:
+                cursor.execute("SELECT table_name FROM information_schema.tables WHERE table_name='catalog_synclog'")
+            table_exists = cursor.fetchone() is not None
+    except Exception:
+        pass
+    
+    if table_exists:
+        sync_log = SyncLog.objects.create(
+            operation_type='file_upload',
+            status=status,
+            message=message,
+            processed_count=processed_count,
+            created_count=0,
+            updated_count=updated_count,
+            errors_count=len(errors),
+            errors=errors,
+            request_ip=request_ip,
+            request_format='CommerceML 2 (offers)',
+            filename=filename,
+            processing_time=processing_time
+        )
     
     logger.info(f"Обработка предложений завершена: обработано {processed_count}, обновлено {updated_count}, ошибок {len(errors)}")
     
@@ -2689,30 +2717,30 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
                 table_exists = False
             
             if table_exists:
-            try:
-                # Пытаемся удалить старые ProductCharacteristic
-                ProductCharacteristic.objects.filter(product=product).delete()
-                
-                # Создаем новые ProductCharacteristic
-                for idx, char_data in enumerate(product_data.get('characteristics', [])):
-                    if isinstance(char_data, dict):
-                        char_name = char_data.get('name', '').strip()
-                        char_value = char_data.get('value', '').strip()
-                        if char_name and char_value:
-                            ProductCharacteristic.objects.create(
-                                product=product,
-                                name=char_name,
-                                value=char_value,
-                                order=idx
-                            )
-            except Exception as char_error:
+                try:
+                    # Пытаемся удалить старые ProductCharacteristic
+                    ProductCharacteristic.objects.filter(product=product).delete()
+                    
+                    # Создаем новые ProductCharacteristic
+                    for idx, char_data in enumerate(product_data.get('characteristics', [])):
+                        if isinstance(char_data, dict):
+                            char_name = char_data.get('name', '').strip()
+                            char_value = char_data.get('value', '').strip()
+                            if char_name and char_value:
+                                ProductCharacteristic.objects.create(
+                                    product=product,
+                                    name=char_name,
+                                    value=char_value,
+                                    order=idx
+                                )
+                except Exception as char_error:
                     # Если произошла ошибка - просто пропускаем создание характеристик,
-                # но не ломаем обработку товара
-                error_msg = str(char_error)
-                # Логируем только если это не ошибка отсутствия таблицы (чтобы не засорять логи)
-                if 'no such table' not in error_msg.lower() and 'does not exist' not in error_msg.lower():
-                    logger.warning(f"Не удалось обработать ProductCharacteristic для товара {product.external_id or product.article}: {error_msg}")
-                # Характеристики уже сохранены в поле product.characteristics, так что это не критично
+                    # но не ломаем обработку товара
+                    error_msg = str(char_error)
+                    # Логируем только если это не ошибка отсутствия таблицы (чтобы не засорять логи)
+                    if 'no such table' not in error_msg.lower() and 'does not exist' not in error_msg.lower():
+                        logger.warning(f"Не удалось обработать ProductCharacteristic для товара {product.external_id or product.article}: {error_msg}")
+                    # Характеристики уже сохранены в поле product.characteristics, так что это не критично
             # Если таблица не существует, просто пропускаем - характеристики уже сохранены в product.characteristics
         
         return product, None, was_created
