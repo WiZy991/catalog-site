@@ -368,7 +368,7 @@ class ProductAdmin(ImportExportModelAdmin, FarpostExportMixin, admin.ModelAdmin)
     autocomplete_fields = ['category']
     inlines = [ProductImageInline]
     actions = ['export_farpost', 'sync_to_farpost_api', 'make_active', 'make_inactive']
-    list_per_page = 1000  # Увеличено для массового удаления
+    list_per_page = 10000  # Увеличено для массового удаления
     list_max_show_all = 50000  # Максимальное количество товаров, которые можно выбрать сразу (увеличено для удаления всех товаров)
     save_on_top = True
     
