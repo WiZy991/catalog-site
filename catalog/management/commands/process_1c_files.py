@@ -172,28 +172,35 @@ class Command(BaseCommand):
                 
                 result = process_commerceml_file(file_path, filename)
                 
-                if result['status'] == 'success':
+                # ВАЖНО: Маркер создается только если товары действительно обработаны
+                # Если processed_count = 0, это ошибка, маркер не создается
+                processed_items = result.get("processed", 0)
+                if result['status'] == 'success' and processed_items > 0:
                     processed_count += 1
                     # Создаем маркер обработанного файла
                     try:
                         with open(processed_marker, 'w') as f:
                             f.write(f'processed\n')
                             f.write(f'time: {datetime.now().isoformat()}\n')
-                            f.write(f'processed_count: {result.get("processed", 0)}\n')
+                            f.write(f'processed_count: {processed_items}\n')
                             f.write(f'created: {result.get("created", 0)}\n')
                             f.write(f'updated: {result.get("updated", 0)}\n')
                     except Exception as marker_error:
                         self.stdout.write(self.style.WARNING(f'Не удалось создать маркер: {marker_error}'))
                     
                     self.stdout.write(self.style.SUCCESS(
-                        f'✓ {filename}: обработано {result.get("processed", 0)} товаров '
+                        f'✓ {filename}: обработано {processed_items} товаров '
                         f'(создано: {result.get("created", 0)}, обновлено: {result.get("updated", 0)})'
                     ))
                 else:
                     error_count += 1
-                    error_msg = result.get("error", "Неизвестная ошибка")
+                    if processed_items == 0:
+                        error_msg = f"Товары не обработаны (processed_count=0). Статус: {result.get('status', 'unknown')}"
+                    else:
+                        error_msg = result.get("error", "Неизвестная ошибка")
                     self.stdout.write(self.style.ERROR(f'✗ {filename}: {error_msg}'))
                     logger.error(f'Ошибка обработки файла {filename}: {error_msg}')
+                    # НЕ создаем маркер, если товары не обработаны
             except Exception as e:
                 error_count += 1
                 self.stdout.write(self.style.ERROR(f'✗ {filename}: исключение - {e}'))

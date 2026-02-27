@@ -981,10 +981,22 @@ def process_commerceml_file(file_path, filename, request=None):
         
         request_ip = get_client_ip(request) if request else None
         
+        # ВАЖНО: Статус 'success' только если товары действительно обработаны
+        # Если processed_count = 0, это ошибка, а не успех
+        if total_processed == 0:
+            status = 'failure'
+            message = f'Файл {filename} обработан, но товары не были созданы или обновлены'
+        elif all_errors:
+            status = 'partial'
+            message = f'Обработано товаров из файла {filename} для обоих каталогов (с ошибками)'
+        else:
+            status = 'success'
+            message = f'Обработано товаров из файла {filename} для обоих каталогов'
+        
         sync_log = SyncLog.objects.create(
             operation_type='file_upload',
-            status='success' if not all_errors else 'partial',
-            message=f'Обработано товаров из файла {filename} для обоих каталогов',
+            status=status,
+            message=message,
             processed_count=total_processed,
             created_count=total_created,
             updated_count=total_updated,
@@ -1892,16 +1904,13 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                 if quantity is not None:
                     product.quantity = quantity
                     # Определяем наличие и активность на основе остатка и цены
+                    # ВАЖНО: В обоих каталогах товар активен, если есть остаток ИЛИ есть цена
                     if quantity > 0:
                         product.availability = 'in_stock'
                         product.is_active = True  # Товар с остатком - всегда активен
                     elif current_price and current_price > 0:
                         product.availability = 'order'  # Под заказ, если есть цена
-                        # В оптовом каталоге товары показываются только с остатком
-                        if catalog_type == 'wholesale':
-                            product.is_active = False  # В оптовом каталоге не показываем товары без остатка
-                        else:
-                            product.is_active = True  # В розничном каталоге товар с ценой - активен (под заказ)
+                        product.is_active = True  # Товар с ценой - активен (под заказ) в обоих каталогах
                     else:
                         product.availability = 'out_of_stock'
                         product.is_active = False  # Товар без остатка и без цены - скрываем
@@ -1918,14 +1927,10 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                     else:
                         current_price = product.price
                     
+                    # ВАЖНО: В обоих каталогах товар активен, если есть цена
                     if current_price and current_price > 0:
                         product.availability = 'order'  # Под заказ, если есть цена
-                        # В оптовом каталоге товары показываются только с остатком
-                        if catalog_type == 'wholesale':
-                            product.is_active = False  # В оптовом каталоге не показываем товары без остатка
-                            product.availability = 'out_of_stock'  # В оптовом каталоге без остатка = нет в наличии
-                        else:
-                            product.is_active = True  # В розничном каталоге товар с ценой - активен (под заказ)
+                        product.is_active = True  # Товар с ценой - активен (под заказ) в обоих каталогах
                     else:
                         product.availability = 'out_of_stock'
                         product.is_active = False  # Товар без цены - скрываем
@@ -1975,10 +1980,21 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
     processing_time = (timezone.now() - start_time).total_seconds()
     request_ip = get_client_ip(request) if request else None
     
+    # ВАЖНО: Статус 'success' только если товары действительно обработаны
+    if processed_count == 0:
+        status = 'failure'
+        message = f'Файл {filename} обработан, но товары не были обновлены для каталога {catalog_type}'
+    elif errors:
+        status = 'partial'
+        message = f'Обработано предложений из файла {filename} для каталога {catalog_type} (с ошибками)'
+    else:
+        status = 'success'
+        message = f'Обработано предложений из файла {filename} для каталога {catalog_type}'
+    
     sync_log = SyncLog.objects.create(
         operation_type='file_upload',
-        status='success' if not errors else 'partial',
-        message=f'Обработано предложений из файла {filename}',
+        status=status,
+        message=message,
         processed_count=processed_count,
         created_count=0,
         updated_count=updated_count,
