@@ -971,9 +971,15 @@ def process_commerceml_file(file_path, filename, request=None):
             # file_path доступен из параметров функции process_commerceml_file
             
             # ВАЖНО: Скрываем товары ТОЛЬКО если файл действительно новый/измененный
-            # Проверяем, новый ли это файл (нет маркера) или измененный (маркер старше файла)
+            # И ТОЛЬКО для файла import.xml (каталога товаров), НЕ для offers.xml
+            # offers.xml обновляет только цены и остатки, не должен скрывать товары
             should_hide_products = False
-            if file_path and os.path.exists(file_path):
+            
+            # Проверяем тип файла - скрываем товары только для import.xml
+            filename_lower = filename.lower() if filename else ''
+            is_import_file = 'import' in filename_lower and 'offers' not in filename_lower
+            
+            if is_import_file and file_path and os.path.exists(file_path):
                 processed_marker = f"{file_path}.processed"
                 if os.path.exists(processed_marker):
                     # Файл уже обрабатывался - проверяем, изменился ли он
@@ -983,10 +989,10 @@ def process_commerceml_file(file_path, filename, request=None):
                         # Если файл изменен после обработки - это новый обмен, скрываем товары
                         if file_mtime > marker_mtime:
                             should_hide_products = True
-                            logger.info(f"Файл изменен после последней обработки (файл: {datetime.fromtimestamp(file_mtime)}, маркер: {datetime.fromtimestamp(marker_mtime)}) - скрываем товары, не пришедшие в обмене")
+                            logger.info(f"Файл import.xml изменен после последней обработки (файл: {datetime.fromtimestamp(file_mtime)}, маркер: {datetime.fromtimestamp(marker_mtime)}) - скрываем товары, не пришедшие в обмене")
                         else:
                             should_hide_products = False
-                            logger.info(f"Файл НЕ изменился с последней обработки (файл: {datetime.fromtimestamp(file_mtime)}, маркер: {datetime.fromtimestamp(marker_mtime)}) - НЕ скрываем товары")
+                            logger.info(f"Файл import.xml НЕ изменился с последней обработки (файл: {datetime.fromtimestamp(file_mtime)}, маркер: {datetime.fromtimestamp(marker_mtime)}) - НЕ скрываем товары")
                     except Exception as e:
                         # Если не удалось проверить - НЕ скрываем товары (безопаснее)
                         should_hide_products = False
@@ -994,11 +1000,14 @@ def process_commerceml_file(file_path, filename, request=None):
                 else:
                     # Файл новый (нет маркера) - скрываем товары
                     should_hide_products = True
-                    logger.info(f"Файл новый (нет маркера) - скрываем товары, не пришедшие в обмене")
+                    logger.info(f"Файл import.xml новый (нет маркера) - скрываем товары, не пришедшие в обмене")
             else:
-                # Если не можем определить файл, не скрываем товары (безопаснее)
+                # Для offers.xml или если не можем определить файл - НЕ скрываем товары
                 should_hide_products = False
-                logger.warning(f"⚠ Не удалось определить путь к файлу или файл не существует - НЕ скрываем товары")
+                if not is_import_file:
+                    logger.info(f"Файл {filename} - это offers.xml, НЕ скрываем товары (только обновляем цены и остатки)")
+                else:
+                    logger.warning(f"⚠ Не удалось определить путь к файлу или файл не существует - НЕ скрываем товары")
             
             # Находим товары, которые были импортированы из 1С (имеют external_id),
             # но не пришли в текущем обмене
@@ -1933,20 +1942,26 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                         pass
                 
                 # Суммируем количество из всех элементов <Количество>
-                total_quantity_from_elems = 0
+                # ВАЖНО: Если в XML указано количество = 0, это валидное значение (товар без остатка)
+                total_quantity_from_elems = None
+                found_quantity_in_xml = False
                 for qty_elem in quantity_elems:
                     if qty_elem is not None and qty_elem.text:
                         try:
                             qty_value = int(float(qty_elem.text.strip().replace(',', '.')))
+                            if total_quantity_from_elems is None:
+                                total_quantity_from_elems = 0
                             total_quantity_from_elems += qty_value
+                            found_quantity_in_xml = True
                             if idx < 5:
                                 logger.info(f"Найдено количество в элементе <Количество> для товара {product_id}: {qty_value}")
                         except (ValueError, AttributeError) as e:
                             if idx < 5:
                                 logger.warning(f"Не удалось распарсить остаток из <Количество> для товара {product_id}: {qty_elem.text}, ошибка: {e}")
                 
-                if total_quantity_from_elems > 0:
-                    quantity = total_quantity_from_elems
+                if found_quantity_in_xml:
+                    # Количество найдено в XML (даже если = 0) - используем его
+                    quantity = total_quantity_from_elems if total_quantity_from_elems is not None else 0
                     if idx < 5:
                         logger.info(f"✓ Общее количество из элементов <Количество> для товара {product_id}: {quantity}")
                 
@@ -1965,7 +1980,9 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                             pass
                     
                     # Суммируем количество со всех складов
-                    total_warehouse_quantity = 0
+                    # ВАЖНО: Если в XML указано количество = 0, это валидное значение (товар без остатка)
+                    total_warehouse_quantity = None
+                    found_warehouse_quantity = False
                     for warehouse_elem in warehouse_elems:
                         # Ищем атрибут КоличествоНаСкладе
                         quantity_attr = warehouse_elem.get('КоличествоНаСкладе')
@@ -1976,15 +1993,19 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                         if quantity_attr:
                             try:
                                 warehouse_qty = int(float(str(quantity_attr).strip().replace(',', '.')))
+                                if total_warehouse_quantity is None:
+                                    total_warehouse_quantity = 0
                                 total_warehouse_quantity += warehouse_qty
+                                found_warehouse_quantity = True
                                 if idx < 5:
                                     logger.info(f"Найдено количество на складе для товара {product_id}: {warehouse_qty} (всего складов: {len(warehouse_elems)})")
                             except (ValueError, AttributeError) as e:
                                 if idx < 5:
                                     logger.warning(f"Не удалось распарсить остаток из атрибута Склад для товара {product_id}: {quantity_attr}, ошибка: {e}")
                     
-                    if total_warehouse_quantity > 0:
-                        quantity = total_warehouse_quantity
+                    if found_warehouse_quantity:
+                        # Количество найдено в XML (даже если = 0) - используем его
+                        quantity = total_warehouse_quantity if total_warehouse_quantity is not None else 0
                         if idx < 5:
                             logger.info(f"✓ Общее количество со всех складов для товара {product_id}: {quantity}")
                 
@@ -2012,9 +2033,13 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                     if idx < 5:
                         logger.info(f"✓ Обновлен остаток для товара {product_id}: {quantity}, наличие: {product.availability}, активен: {product.is_active}, цена: {current_price}")
                 else:
-                    # Если количество не найдено, оставляем товар активным, если есть цена
-                    # Товар может быть доступен под заказ
-                    product.quantity = 0
+                    # ВАЖНО: Если количество не найдено в XML, НЕ обновляем существующее количество
+                    # Это предотвращает случайное обнуление количества при повторной обработке
+                    # Товар может быть доступен под заказ, если есть цена
+                    # НЕ меняем product.quantity - оставляем существующее значение
+                    if idx < 10:
+                        logger.warning(f"⚠ Количество не найдено в XML для товара {product_id}, оставляем существующее количество: {product.quantity}")
+                    
                     # Проверяем цену ПОСЛЕ обновления
                     # Для оптового каталога проверяем wholesale_price, для розничного - price
                     if catalog_type == 'wholesale':
@@ -2022,18 +2047,24 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                     else:
                         current_price = product.price
                     
-                    # ВАЖНО: В обоих каталогах товар активен, если есть цена
-                    if current_price and current_price > 0:
+                    # ВАЖНО: В обоих каталогах товар активен, если есть остаток ИЛИ есть цена
+                    # Используем существующее количество (не обнуляем)
+                    existing_quantity = product.quantity or 0
+                    if existing_quantity > 0:
+                        product.availability = 'in_stock'
+                        product.is_active = True  # Товар с остатком - всегда активен
+                    elif current_price and current_price > 0:
                         product.availability = 'order'  # Под заказ, если есть цена
                         product.is_active = True  # Товар с ценой - активен (под заказ) в обоих каталогах
                     else:
                         product.availability = 'out_of_stock'
-                        product.is_active = False  # Товар без цены - скрываем
+                        product.is_active = False  # Товар без остатка и без цены - скрываем
+                    
                     if idx < 10:
                         if product.is_active:
-                            logger.info(f"⚠ Количество не найдено для товара {product_id}, но товар активен (есть цена: {current_price}).")
+                            logger.info(f"⚠ Количество не найдено в XML для товара {product_id}, но товар активен (существующее количество: {existing_quantity}, цена: {current_price}).")
                         else:
-                            logger.warning(f"⚠ Количество не найдено для товара {product_id} и нет цены. Товар скрыт.")
+                            logger.warning(f"⚠ Количество не найдено в XML для товара {product_id} и нет цены. Товар скрыт.")
                         # Выводим структуру элемента для отладки
                         if idx < 3:
                             logger.debug(f"  Структура предложения: tag={offer_elem.tag}, children={[child.tag for child in offer_elem]}")

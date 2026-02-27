@@ -144,13 +144,33 @@ class Command(BaseCommand):
             if os.path.exists(processed_marker):
                 # Файл уже обрабатывался - проверяем, изменился ли он
                 try:
-                    marker_mtime = datetime.fromtimestamp(os.path.getmtime(processed_marker))
+                    # Получаем текущее время файла
                     file_mtime = datetime.fromtimestamp(os.path.getmtime(file_path))
                     
-                    # Если файл НЕ изменился после обработки - ПРОПУСКАЕМ (даже с --all)
-                    if file_mtime <= marker_mtime:
-                        self.stdout.write(f'Пропускаем файл (не изменился): {filename} (обработан {marker_mtime.strftime("%Y-%m-%d %H:%M:%S")}, изменен {file_mtime.strftime("%Y-%m-%d %H:%M:%S")})')
-                        continue
+                    # Пытаемся прочитать время файла из маркера (если оно там сохранено)
+                    file_mtime_from_marker = None
+                    try:
+                        with open(processed_marker, 'r') as f:
+                            for line in f:
+                                if line.startswith('file_mtime:'):
+                                    file_mtime_from_marker = datetime.fromisoformat(line.split(':', 1)[1].strip())
+                                    break
+                    except Exception:
+                        pass
+                    
+                    # Если время файла сохранено в маркере, используем его
+                    # Иначе используем время маркера (старая логика)
+                    if file_mtime_from_marker:
+                        # Сравниваем текущее время файла с временем из маркера
+                        if file_mtime <= file_mtime_from_marker:
+                            self.stdout.write(f'Пропускаем файл (не изменился): {filename} (обработан {file_mtime_from_marker.strftime("%Y-%m-%d %H:%M:%S")}, текущее {file_mtime.strftime("%Y-%m-%d %H:%M:%S")})')
+                            continue
+                    else:
+                        # Старая логика - сравниваем с временем маркера
+                        marker_mtime = datetime.fromtimestamp(os.path.getmtime(processed_marker))
+                        if file_mtime <= marker_mtime:
+                            self.stdout.write(f'Пропускаем файл (не изменился): {filename} (маркер {marker_mtime.strftime("%Y-%m-%d %H:%M:%S")}, файл {file_mtime.strftime("%Y-%m-%d %H:%M:%S")})')
+                            continue
                     
                     # Файл изменился - обрабатываем снова
                     if options['all'] or recent_minutes > 0:
@@ -190,10 +210,15 @@ class Command(BaseCommand):
                 if result['status'] == 'success' and processed_items > 0:
                     processed_count += 1
                     # Создаем маркер обработанного файла
+                    # ВАЖНО: Сохраняем время изменения ФАЙЛА, а не время создания маркера
+                    # Это нужно для правильной проверки, изменился ли файл
                     try:
+                        file_mtime = os.path.getmtime(file_path)
+                        file_mtime_iso = datetime.fromtimestamp(file_mtime).isoformat()
                         with open(processed_marker, 'w') as f:
                             f.write(f'processed\n')
-                            f.write(f'time: {datetime.now().isoformat()}\n')
+                            f.write(f'file_mtime: {file_mtime_iso}\n')  # Время изменения файла
+                            f.write(f'marker_time: {datetime.now().isoformat()}\n')  # Время создания маркера
                             f.write(f'processed_count: {processed_items}\n')
                             f.write(f'created: {result.get("created", 0)}\n')
                             f.write(f'updated: {result.get("updated", 0)}\n')
