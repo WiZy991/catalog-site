@@ -1,14 +1,6 @@
 {% extends "admin/base_site.html" %}
 {% load i18n l10n %}
 
-{% block breadcrumbs %}
-<div class="breadcrumbs">
-<a href="{% url 'admin:index' %}">{% trans 'Home' %}</a>
-&rsaquo; <a href="{% url 'admin:catalog_product_changelist' %}">{{ opts.verbose_name_plural|capfirst }}</a>
-&rsaquo; {% trans 'Delete' %}
-</div>
-{% endblock %}
-
 {% block content %}
 <h1>{% trans 'Вы уверены?' %}</h1>
 <p>{% trans 'Вы уверены, что хотите удалить выбранные' %} {{ objects_name }}? {% trans 'Все следующие объекты и связанные элементы будут удалены:' %}</p>

@@ -64,8 +64,9 @@ class WholesaleView(TemplateView):
         # Несколько товаров для превью (ТОЛЬКО из партнёрского каталога с остатком!)
         context['preview_products'] = Product.objects.filter(
             is_active=True,
-            catalog_type='wholesale',
-            quantity__gt=0  # Только товары с остатком
+            catalog_type='wholesale'
+        ).filter(
+            Q(quantity__gt=0) | Q(wholesale_price__gt=0)  # Товары с остатком ИЛИ оптовой ценой
         ).select_related('category').prefetch_related('images')[:6]
         
         return context
@@ -200,8 +201,9 @@ class PartnerProductView(PartnerRequiredMixin, DetailView):
         # ТОЛЬКО товары из партнёрского каталога с остатком!
         return Product.objects.filter(
             is_active=True,
-            catalog_type='wholesale',
-            quantity__gt=0  # Только товары с остатком
+            catalog_type='wholesale'
+        ).filter(
+            Q(quantity__gt=0) | Q(wholesale_price__gt=0)  # Товары с остатком ИЛИ оптовой ценой
         ).select_related('category').prefetch_related('images')
     
     def get_context_data(self, **kwargs):
@@ -359,8 +361,9 @@ class PublicPartnerCatalogView(ListView):
         # ТОЛЬКО товары из партнёрского каталога с остатком!
         queryset = Product.objects.filter(
             is_active=True,
-            catalog_type='wholesale',
-            quantity__gt=0  # Только товары с остатком
+            catalog_type='wholesale'
+        ).filter(
+            Q(quantity__gt=0) | Q(wholesale_price__gt=0)  # Товары с остатком ИЛИ оптовой ценой
         ).select_related('category').prefetch_related('images')
         
         # Фильтр по категории
@@ -505,8 +508,9 @@ class PartnerCatalogView(PartnerRequiredMixin, ListView):
         # ТОЛЬКО товары из партнёрского каталога с остатком!
         queryset = Product.objects.filter(
             is_active=True,
-            catalog_type='wholesale',
-            quantity__gt=0  # Только товары с остатком
+            catalog_type='wholesale'
+        ).filter(
+            Q(quantity__gt=0) | Q(wholesale_price__gt=0)  # Товары с остатком ИЛИ оптовой ценой
         ).select_related('category').prefetch_related('images')
         
         # Фильтр по категории

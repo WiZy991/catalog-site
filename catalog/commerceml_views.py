@@ -2103,12 +2103,13 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
                 quantity = 0
         
         # Определяем наличие и активность
-        # В оптовом каталоге товары показываются только с остатком
-        # В розничном каталоге товары могут быть под заказ (если есть цена)
+        # ВАЖНО: В обоих каталогах (розничном и оптовом) товары должны быть активны, если есть остаток ИЛИ есть цена
+        # Это обеспечивает идентичное количество активных товаров в обоих каталогах
         if catalog_type == 'wholesale':
-            # В оптовом каталоге товар активен только если есть остаток
-            availability = 'in_stock' if quantity > 0 else 'out_of_stock'
-            is_active = quantity > 0
+            # В оптовом каталоге товар активен, если есть остаток ИЛИ есть оптовая цена
+            # Используем price как оптовую цену (она будет установлена в wholesale_price)
+            availability = 'in_stock' if quantity > 0 else ('order' if price > 0 else 'out_of_stock')
+            is_active = quantity > 0 or price > 0
         else:
             # В розничном каталоге товар активен, если есть цена (может быть под заказ) или есть остаток
             # ВАЖНО: Товар должен быть активен, если есть остаток ИЛИ есть цена (даже если остаток 0)
@@ -2171,17 +2172,16 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
             product.availability = availability
             # ВАЖНО: Обновляем is_active в зависимости от остатка и цены
             # В оптовом каталоге товар активен только если есть остаток
-            # В розничном каталоге товар активен, если есть остаток ИЛИ есть цена (даже если остаток 0)
+            # ВАЖНО: В обоих каталогах товар активен, если есть остаток ИЛИ есть цена
+            # Это обеспечивает идентичное количество активных товаров в обоих каталогах
             if catalog_type == 'wholesale':
-                # В оптовом каталоге товар активен только если есть остаток
-                product.is_active = quantity > 0
+                # В оптовом каталоге: активен если есть остаток ИЛИ есть оптовая цена
+                current_price = product.wholesale_price
+                product.is_active = quantity > 0 or (current_price and current_price > 0)
             else:
                 # В розничном каталоге: активен если есть остаток ИЛИ есть цена
-                current_price = product.price if catalog_type == 'retail' else product.wholesale_price
-                product.is_active = quantity > 0 or current_price > 0
-                # В розничном каталоге товар активен, если есть цена (может быть под заказ) или есть остаток
                 current_price = product.price
-                product.is_active = (current_price and current_price > 0) or quantity > 0
+                product.is_active = quantity > 0 or (current_price and current_price > 0)
             if category:
                 product.category = category
         
