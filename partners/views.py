@@ -502,13 +502,11 @@ class PartnerCatalogView(PartnerRequiredMixin, ListView):
     paginate_by = 24
     
     def get_queryset(self):
-        # ТОЛЬКО товары из партнёрского каталога с остатком или под заказ!
-        from django.db.models import Q
+        # ТОЛЬКО товары из партнёрского каталога с остатком!
         queryset = Product.objects.filter(
             is_active=True,
-            catalog_type='wholesale'
-        ).filter(
-            Q(quantity__gt=0) | Q(availability='order')  # Товары с остатком или под заказ
+            catalog_type='wholesale',
+            quantity__gt=0  # Только товары с остатком
         ).select_related('category').prefetch_related('images')
         
         # Фильтр по категории

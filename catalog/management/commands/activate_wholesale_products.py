@@ -4,11 +4,11 @@ from catalog.models import Product
 
 
 class Command(BaseCommand):
-    help = 'Активирует товары в оптовом каталоге, у которых есть оптовая цена'
+    help = 'Активирует товары в оптовом каталоге, у которых количество больше 0'
 
     def handle(self, *args, **options):
         # В оптовом каталоге товары показываются только с остатком
-        # Активируем только товары с остатком
+        # Активируем все товары с остатком (независимо от цены)
         products = Product.objects.filter(
             catalog_type='wholesale',
             quantity__gt=0,
@@ -50,9 +50,18 @@ class Command(BaseCommand):
             is_active=True,
             quantity__gt=0
         ).count()
+        with_price = Product.objects.filter(catalog_type='wholesale', wholesale_price__gt=0).count()
+        active_with_stock_and_price = Product.objects.filter(
+            catalog_type='wholesale',
+            is_active=True,
+            quantity__gt=0,
+            wholesale_price__gt=0
+        ).count()
         
         self.stdout.write(f'\nСтатистика оптового каталога:')
         self.stdout.write(f'  Всего товаров: {total}')
         self.stdout.write(f'  С остатком: {with_stock}')
+        self.stdout.write(f'  С оптовой ценой > 0: {with_price}')
         self.stdout.write(f'  Активных: {active}')
         self.stdout.write(f'  Активных с остатком: {active_with_stock}')
+        self.stdout.write(f'  Активных с остатком и ценой: {active_with_stock_and_price}')

@@ -1639,7 +1639,8 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                                         if idx < 5:
                                             logger.warning(f"Не удалось распарсить цену для товара {product_id}: {price_value_elem.text}, ошибка: {e}")
                 
-                # Если не нашли цену по типу, пробуем взять первую ненулевую цену (fallback)
+                # Если не нашли цену по типу, пробуем взять нужную цену (fallback)
+                # ВАЖНО: Для оптового каталога ищем оптовую цену, для розничного - розничную
                 if price is None or price == 0:
                     if prices_elem is not None:
                         price_elems = []
@@ -1653,36 +1654,86 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                             except (KeyError, ValueError):
                                 pass
                         
+                        # Сначала пытаемся найти нужный тип цены (оптовая для оптового каталога, розничная для розничного)
                         for price_elem in price_elems:
-                            price_value_elem = None
+                            price_type_id_elem = None
                             if namespace:
-                                price_value_elem = price_elem.find(f'{{{namespace}}}ЦенаЗаЕдиницу')
-                            if price_value_elem is None:
-                                price_value_elem = price_elem.find('ЦенаЗаЕдиницу')
-                            if price_value_elem is None and 'catalog' in namespaces:
+                                price_type_id_elem = price_elem.find(f'{{{namespace}}}ИдТипаЦены')
+                            if price_type_id_elem is None:
+                                price_type_id_elem = price_elem.find('ИдТипаЦены')
+                            if price_type_id_elem is None and 'catalog' in namespaces:
                                 try:
-                                    price_value_elem = price_elem.find('catalog:ЦенаЗаЕдиницу', namespaces)
+                                    price_type_id_elem = price_elem.find('catalog:ИдТипаЦены', namespaces)
                                 except (KeyError, ValueError):
                                     pass
                             
-                            if price_value_elem is not None and price_value_elem.text:
-                                try:
-                                    price_str = price_value_elem.text.strip().replace(',', '.').replace(' ', '').replace('\xa0', '')
-                                    if price_str:
-                                        price = float(price_str)
-                                        if price > 0:
-                                            # Для оптового каталога обновляем wholesale_price, для розничного - price
-                                            if catalog_type == 'wholesale':
+                            if price_type_id_elem is not None and price_type_id_elem.text:
+                                price_type_id = price_type_id_elem.text.strip()
+                                # Проверяем, подходит ли эта цена для текущего типа каталога
+                                is_correct_price_type = False
+                                if catalog_type == 'wholesale':
+                                    is_correct_price_type = (price_type_id == WHOLESALE_PRICE_TYPE_ID)
+                                else:
+                                    is_correct_price_type = (price_type_id == RETAIL_PRICE_TYPE_ID)
+                                
+                                if is_correct_price_type:
+                                    price_value_elem = None
+                                    if namespace:
+                                        price_value_elem = price_elem.find(f'{{{namespace}}}ЦенаЗаЕдиницу')
+                                    if price_value_elem is None:
+                                        price_value_elem = price_elem.find('ЦенаЗаЕдиницу')
+                                    if price_value_elem is None and 'catalog' in namespaces:
+                                        try:
+                                            price_value_elem = price_elem.find('catalog:ЦенаЗаЕдиницу', namespaces)
+                                        except (KeyError, ValueError):
+                                            pass
+                                    
+                                    if price_value_elem is not None and price_value_elem.text:
+                                        try:
+                                            price_str = price_value_elem.text.strip().replace(',', '.').replace(' ', '').replace('\xa0', '')
+                                            if price_str:
+                                                price = float(price_str)
+                                                if price > 0:
+                                                    # Для оптового каталога обновляем wholesale_price, для розничного - price
+                                                    if catalog_type == 'wholesale':
+                                                        product.wholesale_price = price
+                                                        if idx < 5:
+                                                            logger.info(f"Обновлена оптовая цена (fallback по типу) для товара {product_id}: {price}")
+                                                    else:
+                                                        product.price = price
+                                                        if idx < 5:
+                                                            logger.info(f"Обновлена розничная цена (fallback по типу) для товара {product_id}: {price}")
+                                                    break
+                                        except (ValueError, AttributeError, TypeError):
+                                            pass
+                        
+                        # Если все еще не нашли, берем первую ненулевую цену (последний fallback)
+                        if (price is None or price == 0) and catalog_type == 'wholesale':
+                            # Для оптового каталога в крайнем случае берем любую цену, но логируем
+                            for price_elem in price_elems:
+                                price_value_elem = None
+                                if namespace:
+                                    price_value_elem = price_elem.find(f'{{{namespace}}}ЦенаЗаЕдиницу')
+                                if price_value_elem is None:
+                                    price_value_elem = price_elem.find('ЦенаЗаЕдиницу')
+                                if price_value_elem is None and 'catalog' in namespaces:
+                                    try:
+                                        price_value_elem = price_elem.find('catalog:ЦенаЗаЕдиницу', namespaces)
+                                    except (KeyError, ValueError):
+                                        pass
+                                
+                                if price_value_elem is not None and price_value_elem.text:
+                                    try:
+                                        price_str = price_value_elem.text.strip().replace(',', '.').replace(' ', '').replace('\xa0', '')
+                                        if price_str:
+                                            price = float(price_str)
+                                            if price > 0:
                                                 product.wholesale_price = price
                                                 if idx < 5:
-                                                    logger.info(f"Обновлена оптовая цена (fallback) для товара {product_id}: {price}")
-                                            else:
-                                                product.price = price
-                                                if idx < 5:
-                                                    logger.info(f"Обновлена розничная цена (fallback) для товара {product_id}: {price}")
-                                            break
-                                except (ValueError, AttributeError, TypeError):
-                                    pass
+                                                    logger.warning(f"⚠ Обновлена оптовая цена (fallback - любая цена) для товара {product_id}: {price}")
+                                                break
+                                    except (ValueError, AttributeError, TypeError):
+                                        pass
                 
                 # Обновляем остаток
                 # Количество может быть в:
@@ -2000,9 +2051,16 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
                 quantity = 0
         
         # Определяем наличие и активность
-        # Товар активен, если есть цена (может быть под заказ) или есть остаток
-        availability = 'in_stock' if quantity > 0 else ('order' if price > 0 else 'out_of_stock')
-        is_active = price > 0 or quantity > 0  # Товар активен, если есть цена или остаток
+        # В оптовом каталоге товары показываются только с остатком
+        # В розничном каталоге товары могут быть под заказ (если есть цена)
+        if catalog_type == 'wholesale':
+            # В оптовом каталоге товар активен только если есть остаток
+            availability = 'in_stock' if quantity > 0 else 'out_of_stock'
+            is_active = quantity > 0
+        else:
+            # В розничном каталоге товар активен, если есть цена (может быть под заказ) или есть остаток
+            availability = 'in_stock' if quantity > 0 else ('order' if price > 0 else 'out_of_stock')
+            is_active = price > 0 or quantity > 0
         
         # Ищем товар по external_id (приоритет) или по артикулу в нужном типе каталога
         product = None

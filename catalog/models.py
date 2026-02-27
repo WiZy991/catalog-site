@@ -316,7 +316,7 @@ class Product(models.Model):
         return [n.strip() for n in self.cross_numbers.split(',') if n.strip()]
 
     def get_applicability_list(self):
-        """Преобразует применимость в список, исключая вольтаж."""
+        """Преобразует применимость в список, исключая вольтаж и длинные описания."""
         if not self.applicability:
             return []
         # Поддерживаем разные разделители: запятая, точка с запятой, перенос строки
@@ -330,8 +330,19 @@ class Product(models.Model):
             item_stripped = item.strip()
             if item_stripped:
                 # Пропускаем элементы, которые являются вольтажем
-                if not voltage_pattern.match(item_stripped):
-                    result.append(item_stripped)
+                if voltage_pattern.match(item_stripped):
+                    continue
+                # Пропускаем слишком длинные элементы (это описания, а не применимость)
+                # Применимость обычно короткая: коды моделей, двигателей (1GEN, 1NZF, 2GR и т.д.)
+                if len(item_stripped) > 50:
+                    # Слишком длинное - это описание, не применимость
+                    continue
+                # Пропускаем элементы, которые содержат много слов (это описания)
+                word_count = len(item_stripped.split())
+                if word_count > 5:
+                    # Слишком много слов - это описание, не применимость
+                    continue
+                result.append(item_stripped)
         return result
     
     def get_voltage_from_applicability(self):
