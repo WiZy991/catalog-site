@@ -19,7 +19,6 @@ class HomeView(TemplateView):
             quantity__gt=0  # Только товары с остатком
         ).select_related('category').prefetch_related('images')[:8]
         from django.db.models import Count, Q
-        from django.core.cache import cache
         from django.db import transaction
         
         # Получаем категории
@@ -47,7 +46,6 @@ class HomeView(TemplateView):
                 category._product_count = count
             else:
                 category._product_count = 0
-                        cache.set(cache_key, 0, 300)
         
         context['categories'] = categories
         # Защита от ошибки, если миграции не применены
