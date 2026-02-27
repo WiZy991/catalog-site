@@ -1065,8 +1065,8 @@ def process_commerceml_file(file_path, filename, request=None):
         # Находим товары, которые были импортированы из 1С (имеют external_id),
         # но не пришли в текущем обмене
         # ВАЖНО: Скрываем только товары из того же типа каталога (retail или wholesale)
-            # И ТОЛЬКО ЕСЛИ ФАЙЛ НОВЫЙ/ИЗМЕНЕННЫЙ
-            if processed_external_ids and should_hide_products:
+        # И ТОЛЬКО ЕСЛИ ФАЙЛ НОВЫЙ/ИЗМЕНЕННЫЙ
+        if processed_external_ids and should_hide_products:
             # Ищем товары, которые:
             # 1. Имеют external_id (были импортированы из 1С)
             # 2. Принадлежат к текущему типу каталога (retail или wholesale)
@@ -1093,11 +1093,11 @@ def process_commerceml_file(file_path, filename, request=None):
                 # НЕ обнуляем quantity - оставляем существующее значение
                 logger.info(f"✓ Скрыто товаров в каталоге {current_catalog_type}: {deleted_count} (количество сохранено)")
             else:
-                    logger.info(f"Все товары из 1С присутствуют в обмене для каталога {current_catalog_type}, скрывать нечего")
-            elif not should_hide_products:
-                logger.info(f"Файл не изменился - НЕ скрываем товары для каталога {current_catalog_type}")
+                logger.info(f"Все товары из 1С присутствуют в обмене для каталога {current_catalog_type}, скрывать нечего")
+        elif not should_hide_products:
+            logger.info(f"Файл не изменился - НЕ скрываем товары для каталога {current_catalog_type}")
         else:
-                logger.warning(f"⚠ В обмене нет товаров с external_id для каталога {current_catalog_type} - невозможно определить удаленные товары")
+            logger.warning(f"⚠ В обмене нет товаров с external_id для каталога {current_catalog_type} - невозможно определить удаленные товары")
             
             # Сохраняем результаты для текущего каталога
             results[current_catalog_type] = {
@@ -2128,14 +2128,14 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                             # ВАЖНО: Если quantity = 0 и нет цены, НЕ деактивируем товар автоматически при обновлении из offers.xml
                             # Товар может быть временно без остатка, но должен оставаться активным
                             # Деактивация происходит только при скрытии в import.xml (когда товар удален в 1С)
-                        product.availability = 'out_of_stock'
+                            product.availability = 'out_of_stock'
                             # НЕ меняем is_active - оставляем существующее значение
                             # Это предотвращает случайную деактивацию товаров при обновлении из offers.xml
                     
                     if idx < 5:
                         if catalog_type == 'wholesale':
                             current_price = product.wholesale_price
-                else:
+                        else:
                             current_price = product.price
                         logger.info(f"✓ Обновлен остаток для товара {product_id}: {quantity}, наличие: {product.availability}, активен: {product.is_active}, цена: {current_price}")
                 else:
