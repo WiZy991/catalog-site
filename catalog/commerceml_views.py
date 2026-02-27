@@ -5,6 +5,7 @@ Views для обработки стандартного протокола Comm
 import os
 import json
 import logging
+import re
 import xml.etree.ElementTree as ET
 from io import BytesIO
 from django.http import HttpResponse, HttpResponseBadRequest
