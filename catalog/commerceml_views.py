@@ -1041,6 +1041,8 @@ def parse_commerceml_product(product_elem, namespaces, root_elem=None):
         namespaces: Словарь с namespace
         root_elem: Корневой элемент XML (опционально, для поиска групп)
     """
+    import re  # Импортируем re в начале функции
+    
     product_data = {}
     
     # Получаем namespace из словаря (если есть)
@@ -1323,7 +1325,6 @@ def parse_commerceml_product(product_elem, namespaces, root_elem=None):
                         
                         # Если это размер, проверяем, что это действительно размер
                         if 'размер' in char_name_lower or 'size' in char_name_lower:
-                            import re
                             # Размер должен содержать числа и * или x (например, 20*450)
                             if not re.search(r'\d+[*x]\d+', char_value):
                                 # Это не размер, пропускаем
