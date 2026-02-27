@@ -594,7 +594,7 @@ def parse_product_name(name):
             size_upper not in (result.get('oem_number') or '').upper()):
             # Дополнительная проверка: размер должен содержать хотя бы одну цифру и * или x
             if re.search(r'\d+[*x]\d+', size):
-            characteristics_parts.append(f"Размер: {size}")
+                characteristics_parts.append(f"Размер: {size}")
     
     # Ищем вольтаж (формат: 12V, 24V, 12V-11V)
     voltage_patterns = [
