@@ -150,7 +150,7 @@ class Product(models.Model):
     # Основные поля
     name = models.CharField('Название', max_length=500)
     slug = models.SlugField('URL', max_length=500, unique=True, blank=True)
-    external_id = models.CharField('ID из 1С', max_length=255, unique=True, blank=True, null=True, db_index=True, help_text='Уникальный идентификатор товара из 1С')
+    external_id = models.CharField('ID из 1С', max_length=255, blank=True, null=True, db_index=True, help_text='Уникальный идентификатор товара из 1С (уникален в комбинации с catalog_type)')
     article = models.CharField('Кросс-номер', max_length=100, blank=True, db_index=True)
     brand = models.CharField('Бренд', max_length=200, blank=True, db_index=True)
     
@@ -209,6 +209,7 @@ class Product(models.Model):
         verbose_name = 'Товар'
         verbose_name_plural = 'Товары'
         ordering = ['-created_at']
+        unique_together = [['external_id', 'catalog_type']]
         indexes = [
             models.Index(fields=['article']),
             models.Index(fields=['brand']),
