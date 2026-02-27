@@ -479,8 +479,8 @@ def parse_product_name(name):
                                         # Это применимость, не артикул - пропускаем
                                         continue
                                     else:
-                                    result['article'] = candidate.upper()
-                                    break
+                                        result['article'] = candidate.upper()
+                                        break
         
         # Если не нашли через OEM, ищем стандартные форматы
         if not result['article']:
