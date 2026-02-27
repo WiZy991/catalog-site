@@ -2037,27 +2037,68 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                             logger.info(f"✓ Общее количество со всех складов для товара {product_id}: {quantity}")
                 
                 # Обновляем количество и наличие
-                # ВАЖНО: Определяем текущую цену ПОСЛЕ обновления цены выше
-                # Для оптового каталога проверяем wholesale_price, для розничного - price
-                if catalog_type == 'wholesale':
-                    current_price = product.wholesale_price
-                else:
-                    current_price = product.price
-                
+                # ВАЖНО: Количество одинаково для обоих каталогов (retail и wholesale)
+                # Разница только в ценах (price для retail, wholesale_price для wholesale)
                 if quantity is not None:
                     product.quantity = quantity
-                    # Определяем наличие и активность на основе остатка и цены
-                    # ВАЖНО: В обоих каталогах товар активен, если есть остаток ИЛИ есть цена
+                    # ВАЖНО: Синхронизируем количество с другим каталогом (retail <-> wholesale)
+                    # Количество одинаково для обоих каталогов, разница только в ценах
+                    if product.external_id:
+                        # Находим товар в другом каталоге с тем же external_id
+                        other_catalog_type = 'wholesale' if catalog_type == 'retail' else 'retail'
+                        other_product = Product.objects.filter(
+                            external_id=product.external_id,
+                            catalog_type=other_catalog_type
+                        ).first()
+                        if other_product:
+                            # Синхронизируем количество
+                            other_product.quantity = quantity
+                            # Также обновляем availability для другого каталога
+                            if quantity > 0:
+                                other_product.availability = 'in_stock'
+                                other_product.is_active = True
+                            else:
+                                # Проверяем цену для другого каталога
+                                if other_catalog_type == 'wholesale':
+                                    other_price = other_product.wholesale_price
+                                else:
+                                    other_price = other_product.price
+                                
+                                if other_price and other_price > 0:
+                                    other_product.availability = 'order'
+                                    other_product.is_active = True
+                                else:
+                                    other_product.availability = 'out_of_stock'
+                                    other_product.is_active = False
+                            other_product.save(update_fields=['quantity', 'availability', 'is_active'])
+                            if idx < 5:
+                                logger.info(f"✓ Синхронизировано количество для товара {product_id} в каталоге {other_catalog_type}: {quantity}")
+                    
+                    # ВАЖНО: Определяем наличие на основе остатка (одинаково для обоих каталогов)
+                    # Если есть остаток > 0, товар всегда в наличии
                     if quantity > 0:
                         product.availability = 'in_stock'
                         product.is_active = True  # Товар с остатком - всегда активен
-                    elif current_price and current_price > 0:
-                        product.availability = 'order'  # Под заказ, если есть цена
-                        product.is_active = True  # Товар с ценой - активен (под заказ) в обоих каталогах
                     else:
-                        product.availability = 'out_of_stock'
-                        product.is_active = False  # Товар без остатка и без цены - скрываем
+                        # Если остатка нет, проверяем цену для определения статуса
+                        # Для оптового каталога проверяем wholesale_price, для розничного - price
+                        if catalog_type == 'wholesale':
+                            current_price = product.wholesale_price
+                        else:
+                            current_price = product.price
+                        
+                        if current_price and current_price > 0:
+                            product.availability = 'order'  # Под заказ, если есть цена
+                            product.is_active = True  # Товар с ценой - активен (под заказ)
+                        else:
+                            product.availability = 'out_of_stock'
+                            product.is_active = False  # Товар без остатка и без цены - скрываем
+                    
                     if idx < 5:
+                        if catalog_type == 'wholesale':
+                            current_price = product.wholesale_price
+                        else:
+                            current_price = product.price
                         logger.info(f"✓ Обновлен остаток для товара {product_id}: {quantity}, наличие: {product.availability}, активен: {product.is_active}, цена: {current_price}")
                 else:
                     # ВАЖНО: Если количество не найдено в XML, НЕ обновляем существующее количество
@@ -2067,25 +2108,47 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                     if idx < 10:
                         logger.warning(f"⚠ Количество не найдено в XML для товара {product_id}, оставляем существующее количество: {product.quantity}")
                     
-                    # Проверяем цену ПОСЛЕ обновления
-                    # Для оптового каталога проверяем wholesale_price, для розничного - price
-                    if catalog_type == 'wholesale':
-                        current_price = product.wholesale_price
-                    else:
-                        current_price = product.price
-                    
-                    # ВАЖНО: В обоих каталогах товар активен, если есть остаток ИЛИ есть цена
-                    # Используем существующее количество (не обнуляем)
+                    # ВАЖНО: Используем существующее количество (не обнуляем)
+                    # Количество одинаково для обоих каталогов
                     existing_quantity = product.quantity or 0
+                    
+                    # ВАЖНО: Определяем наличие на основе остатка (одинаково для обоих каталогов)
+                    # Если есть остаток > 0, товар всегда в наличии
                     if existing_quantity > 0:
                         product.availability = 'in_stock'
                         product.is_active = True  # Товар с остатком - всегда активен
-                    elif current_price and current_price > 0:
-                        product.availability = 'order'  # Под заказ, если есть цена
-                        product.is_active = True  # Товар с ценой - активен (под заказ) в обоих каталогах
                     else:
-                        product.availability = 'out_of_stock'
-                        product.is_active = False  # Товар без остатка и без цены - скрываем
+                        # Если остатка нет, проверяем цену для определения статуса
+                        # Для оптового каталога проверяем wholesale_price, для розничного - price
+                        if catalog_type == 'wholesale':
+                            current_price = product.wholesale_price
+                        else:
+                            current_price = product.price
+                        
+                        if current_price and current_price > 0:
+                            product.availability = 'order'  # Под заказ, если есть цена
+                            product.is_active = True  # Товар с ценой - активен (под заказ)
+                        else:
+                            product.availability = 'out_of_stock'
+                            product.is_active = False  # Товар без остатка и без цены - скрываем
+                    
+                    # ВАЖНО: Синхронизируем availability с другим каталогом (retail <-> wholesale)
+                    # Availability должно быть одинаковым для обоих каталогов, если количество одинаково
+                    if product.external_id and existing_quantity > 0:
+                        # Находим товар в другом каталоге с тем же external_id
+                        other_catalog_type = 'wholesale' if catalog_type == 'retail' else 'retail'
+                        other_product = Product.objects.filter(
+                            external_id=product.external_id,
+                            catalog_type=other_catalog_type
+                        ).first()
+                        if other_product:
+                            # Синхронизируем availability, если количество одинаково
+                            if other_product.quantity == existing_quantity:
+                                other_product.availability = product.availability
+                                other_product.is_active = product.is_active
+                                other_product.save(update_fields=['availability', 'is_active'])
+                                if idx < 5:
+                                    logger.info(f"✓ Синхронизировано availability для товара {product_id} в каталоге {other_catalog_type}: {product.availability}")
                     
                     if idx < 10:
                         if product.is_active:

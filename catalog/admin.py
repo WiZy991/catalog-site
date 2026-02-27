@@ -368,8 +368,8 @@ class ProductAdmin(ImportExportModelAdmin, FarpostExportMixin, admin.ModelAdmin)
     autocomplete_fields = ['category']
     inlines = [ProductImageInline]
     actions = ['export_farpost', 'sync_to_farpost_api', 'make_active', 'make_inactive']
-    list_per_page = 10000  # Увеличено для массового удаления
-    list_max_show_all = 50000  # Максимальное количество товаров, которые можно выбрать сразу (увеличено для удаления всех товаров)
+    list_per_page = 100  # Оптимизировано для производительности (было 10000 - слишком много)
+    list_max_show_all = 1000  # Максимальное количество товаров, которые можно выбрать сразу (было 50000 - слишком много)
     save_on_top = True
     
     def get_actions(self, request):
@@ -387,23 +387,14 @@ class ProductAdmin(ImportExportModelAdmin, FarpostExportMixin, admin.ModelAdmin)
         return actions
     
     def get_queryset(self, request):
-        """Переопределяем queryset, чтобы избежать ошибок с ProductCharacteristic."""
+        """Переопределяем queryset для оптимизации производительности."""
         qs = super().get_queryset(request)
-        # Используем select_related и prefetch_related, но исключаем product_characteristics
-        # если таблица не существует
-        try:
-            from django.db import connection
-            with connection.cursor() as cursor:
-                cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='catalog_productcharacteristic'")
-                table_exists = cursor.fetchone() is not None
-            
-            if not table_exists:
-                # Если таблицы нет, используем только безопасные prefetch_related
-                qs = qs.select_related('category').prefetch_related('images')
-        except Exception:
-            # Если не удалось проверить, используем безопасные prefetch
-            qs = qs.select_related('category').prefetch_related('images')
-        
+        # ВАЖНО: Оптимизируем запросы для производительности
+        # Используем только необходимые select_related и prefetch_related
+        # Не загружаем images для списка (только при необходимости)
+        qs = qs.select_related('category')
+        # Избегаем prefetch_related('images') для списка - это замедляет загрузку
+        # Images будут загружены только при просмотре конкретного товара
         return qs
     
     def _check_table_exists(self):
