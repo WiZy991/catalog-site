@@ -789,45 +789,87 @@ def process_commerceml_file(file_path, filename, request=None):
             for idx, product_data in enumerate(products_data):
                 # Каждый товар обрабатывается в отдельной транзакции
                 # Это гарантирует, что ошибка одного товара не повлияет на обработку остальных
-                try:
-                    with transaction.atomic():
-                        # Логируем данные товара перед обработкой (для первых 3)
-                        if idx < 3:
-                            logger.info(f"Обработка товара #{idx+1} для {current_catalog_type}: sku={product_data.get('sku')}, name={product_data.get('name')[:50] if product_data.get('name') else 'N/A'}")
-                        
-                        product, error, was_created = process_product_from_commerceml(product_data, catalog_type=current_catalog_type)
-                        if product:
-                            processed_count += 1
-                            if was_created:
-                                created_count += 1
-                                logger.info(f"✓ Создан товар в каталоге {current_catalog_type}: {product.article} - {product.name[:50]}")
+                # Добавляем retry логику для "database is locked"
+                max_retries = 3
+                retry_delay = 0.1  # 100ms задержка между попытками
+                success = False
+                
+                for retry in range(max_retries):
+                    try:
+                        with transaction.atomic():
+                            # Логируем данные товара перед обработкой (для первых 3)
+                            if idx < 3:
+                                logger.info(f"Обработка товара #{idx+1} для {current_catalog_type}: sku={product_data.get('sku')}, name={product_data.get('name')[:50] if product_data.get('name') else 'N/A'}")
+                            
+                            product, error, was_created = process_product_from_commerceml(product_data, catalog_type=current_catalog_type)
+                            if product:
+                                processed_count += 1
+                                if was_created:
+                                    created_count += 1
+                                    logger.info(f"✓ Создан товар в каталоге {current_catalog_type}: {product.article} - {product.name[:50]}")
+                                else:
+                                    updated_count += 1
+                                    if idx < 10:  # Логируем первые 10 обновлений
+                                        logger.info(f"✓ Обновлен товар в каталоге {current_catalog_type}: {product.article} - {product.name[:50]}")
+                                success = True
+                                break  # Успешно обработано, выходим из retry цикла
+                            elif error:
+                                # Ошибка внутри process_product_from_commerceml
+                                error_info = {
+                                    'sku': product_data.get('sku', 'unknown'),
+                                    'catalog_type': current_catalog_type,
+                                    'error': error
+                                }
+                                errors.append(error_info)
+                                logger.warning(f"✗ Ошибка обработки товара {product_data.get('sku', 'unknown')} для {current_catalog_type}: {error}")
+                                success = True  # Ошибка обработана, не retry
+                                break
+                    except Exception as e:
+                        error_msg = str(e).lower()
+                        # Проверяем, это ли ошибка "database is locked"
+                        if 'database is locked' in error_msg or 'locked' in error_msg:
+                            if retry < max_retries - 1:
+                                # Ждем перед следующей попыткой
+                                import time
+                                time.sleep(retry_delay * (retry + 1))  # Увеличиваем задержку с каждой попыткой
+                                logger.warning(f"Database locked, retry {retry + 1}/{max_retries} для товара {product_data.get('sku', 'unknown')}")
+                                continue
                             else:
-                                updated_count += 1
-                                if idx < 10:  # Логируем первые 10 обновлений
-                                    logger.info(f"✓ Обновлен товар в каталоге {current_catalog_type}: {product.article} - {product.name[:50]}")
-                        elif error:
-                            # Ошибка внутри process_product_from_commerceml
+                                # Последняя попытка не удалась
+                                error_info = {
+                                    'sku': product_data.get('sku', 'unknown'),
+                                    'catalog_type': current_catalog_type,
+                                    'error': f'Ошибка обработки товара: {str(e)}'
+                                }
+                                errors.append(error_info)
+                                logger.error(f"✗ Ошибка обработки товара {product_data.get('sku', 'unknown')} для {current_catalog_type} после {max_retries} попыток: {e}")
+                                success = True  # Ошибка обработана
+                                break
+                        else:
+                            # Другая ошибка - не retry, сразу логируем
                             error_info = {
                                 'sku': product_data.get('sku', 'unknown'),
                                 'catalog_type': current_catalog_type,
-                                'error': error
+                                'error': f'Ошибка обработки товара: {str(e)}'
                             }
                             errors.append(error_info)
-                            logger.warning(f"✗ Ошибка обработки товара {product_data.get('sku', 'unknown')} для {current_catalog_type}: {error}")
-                            # Выводим данные товара при ошибке
-                            if idx < 5:
-                                logger.warning(f"  Данные товара: {product_data}")
-                except Exception as e:
-                    # Исключение при обработке товара - транзакция автоматически откатывается
-                    error_msg = str(e)
-                    logger.error(f"✗ Исключение при обработке товара {product_data.get('sku', 'unknown')} для {current_catalog_type}: {error_msg}", exc_info=True)
-                    errors.append({
+                            logger.error(f"✗ Ошибка обработки товара {product_data.get('sku', 'unknown')} для {current_catalog_type}: {e}", exc_info=True)
+                            success = True  # Ошибка обработана
+                            break
+                
+                if not success:
+                    # Если не удалось обработать после всех попыток
+                    error_info = {
                         'sku': product_data.get('sku', 'unknown'),
                         'catalog_type': current_catalog_type,
-                        'error': error_msg
-                    })
-                    # Транзакция автоматически откатывается при исключении
-                    # Продолжаем обработку следующего товара
+                        'error': 'Ошибка обработки товара: не удалось обработать после всех попыток'
+                    }
+                    errors.append(error_info)
+                    logger.error(f"✗ Не удалось обработать товар {product_data.get('sku', 'unknown')} для {current_catalog_type} после всех попыток")
+                
+                # Выводим данные товара при ошибке (только для первых 5)
+                if idx < 5 and not success:
+                    logger.warning(f"  Данные товара: {product_data}")
             
             logger.info(f"Обработка для {current_catalog_type} завершена: обработано={processed_count}, создано={created_count}, обновлено={updated_count}, ошибок={len(errors)}")
             
@@ -2069,8 +2111,9 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
             is_active = quantity > 0
         else:
             # В розничном каталоге товар активен, если есть цена (может быть под заказ) или есть остаток
+            # ВАЖНО: Товар должен быть активен, если есть остаток ИЛИ есть цена (даже если остаток 0)
             availability = 'in_stock' if quantity > 0 else ('order' if price > 0 else 'out_of_stock')
-            is_active = price > 0 or quantity > 0
+            is_active = quantity > 0 or price > 0
         
         # Ищем товар по external_id (приоритет) или по артикулу в нужном типе каталога
         product = None
@@ -2126,13 +2169,16 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
             # нужно убедиться, что товар активируется после установки цены
             product.quantity = quantity
             product.availability = availability
-            # Товар активен, если есть остаток
-            # В оптовом каталоге товары показываются только с остатком
-            # В розничном каталоге товары могут быть под заказ (если есть цена)
+            # ВАЖНО: Обновляем is_active в зависимости от остатка и цены
+            # В оптовом каталоге товар активен только если есть остаток
+            # В розничном каталоге товар активен, если есть остаток ИЛИ есть цена (даже если остаток 0)
             if catalog_type == 'wholesale':
                 # В оптовом каталоге товар активен только если есть остаток
                 product.is_active = quantity > 0
             else:
+                # В розничном каталоге: активен если есть остаток ИЛИ есть цена
+                current_price = product.price if catalog_type == 'retail' else product.wholesale_price
+                product.is_active = quantity > 0 or current_price > 0
                 # В розничном каталоге товар активен, если есть цена (может быть под заказ) или есть остаток
                 current_price = product.price
                 product.is_active = (current_price and current_price > 0) or quantity > 0
@@ -2144,6 +2190,7 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
             product.description = product_data.get('description')
         
         # Применимость - используем из парсинга или из данных
+        # ВАЖНО: Артикулы НЕ должны попадать в применимость!
         applicability = None
         applicability_parts = []
         
@@ -2158,6 +2205,9 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
         if parsed.get('applicability'):
             applicability_parts.append(parsed.get('applicability'))
         
+        # ВАЖНО: TIS-166/GUIS-66 - это ПРИМЕНИМОСТЬ, не артикул!
+        # Артикул = OEM номер (кросс-номер)
+        # Применимость может содержать артикулы альтернативные (TIS-166, GUIS-66) - это нормально
         if applicability_parts:
             applicability = ', '.join([p for p in applicability_parts if p and str(p).strip()])
             if applicability:
@@ -2176,6 +2226,13 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
         # Добавляем из парсинга
         if parsed.get('oem_number'):
             cross_numbers_parts.append(parsed.get('oem_number'))
+        
+        # Добавляем кросс-номера из парсинга (если они были извлечены из артикула со слешем)
+        if parsed.get('cross_numbers'):
+            if isinstance(parsed.get('cross_numbers'), list):
+                cross_numbers_parts.extend(parsed.get('cross_numbers'))
+            else:
+                cross_numbers_parts.append(parsed.get('cross_numbers'))
         
         if cross_numbers_parts:
             cross_numbers = ', '.join([p for p in cross_numbers_parts if p and str(p).strip()])

@@ -362,6 +362,7 @@ def parse_product_name(name):
         'oem_number': None,
         'applicability': None,
         'characteristics': None,
+        'cross_numbers': [],  # Кросс-номера (второй артикул из TIS-166/GUIS-66 и т.д.)
     }
     
     # Определяем категорию
@@ -376,22 +377,40 @@ def parse_product_name(name):
     # Или: 5 цифр + дефис + буквы + цифры (Nissan стиль: 22620-AA000)
     
     # Сначала ищем стандартный формат OEM: 5 цифр-5 цифр или 5 цифр-буквы-цифры
+    # ВАЖНО: Также ищем форматы типа 8-97080-505-0 (1 цифра-5 цифр-3 цифры-1 цифра) и 97080-505 (5 цифр-3 цифры)
     oem_patterns = [
+        r'\b(\d{1}-\d{5}-\d{3}-\d{1})\b',  # Формат: 8-97080-505-0
+        r'\b(\d{5}-\d{3})\b',  # Формат: 97080-505
         r'\b(\d{5}-\d{5})\b',  # Toyota/Honda: 15330-20010, 31250-25160, 90919-01209
         r'\b(\d{5}-[A-Z]{1,2}\d{3}[A-Z]?)\b',  # Nissan: 22620-AA000, 16546-ED00A
         r'\b(\d{5}-[A-Z0-9]{3,6})\b',  # Общий формат: 48510-B1020, 51601-S5P-G03
     ]
     
+    # ВАЖНО: Собираем ВСЕ OEM номера для кросс-номеров
+    all_oem_numbers = []
     for pattern in oem_patterns:
         oem_matches = re.findall(pattern, name)
         if oem_matches:
-            # Берем последний найденный OEM (обычно он идет после артикулов)
-            oem_candidate = oem_matches[-1]
-            # Проверяем, что это не часть артикула или другого кода
-            # OEM обычно не содержит специальных символов кроме дефиса
-            if re.match(r'^\d{5}-[A-Z0-9\-]{3,10}$', oem_candidate, re.IGNORECASE):
-                result['oem_number'] = oem_candidate.upper()
-                break
+            for oem in oem_matches:
+                # Проверяем, что это не часть артикула или другого кода
+                # OEM обычно не содержит специальных символов кроме дефиса
+                # Поддерживаем форматы: 8-97080-505-0, 97080-505, 15330-20010, 22620-AA000
+                if (re.match(r'^\d{1}-\d{5}-\d{3}-\d{1}$', oem, re.IGNORECASE) or  # 8-97080-505-0
+                    re.match(r'^\d{5}-\d{3}$', oem, re.IGNORECASE) or  # 97080-505
+                    re.match(r'^\d{5}-[A-Z0-9\-]{3,10}$', oem, re.IGNORECASE)):  # 15330-20010, 22620-AA000
+                    oem_upper = oem.upper()
+                    if oem_upper not in all_oem_numbers:
+                        all_oem_numbers.append(oem_upper)
+    
+    if all_oem_numbers:
+        # Берем первый найденный OEM как основной (для артикула)
+        result['oem_number'] = all_oem_numbers[0]
+        # Все OEM номера добавляем в кросс-номера
+        if 'cross_numbers' not in result:
+            result['cross_numbers'] = []
+        for oem in all_oem_numbers:
+            if oem not in result['cross_numbers']:
+                result['cross_numbers'].append(oem)
     
     # Если не нашли через паттерны, пробуем найти после слеша (старый формат)
     if not result['oem_number']:
@@ -454,7 +473,13 @@ def parse_product_name(name):
                             if not re.match(r'^\d{5}-\d{5}$', candidate):
                                 # Проверяем, что это не код двигателя
                                 if not re.match(r'^\d?[A-Z]{2,4}-?F[E|D]$', candidate, re.IGNORECASE):
-                                    result['article'] = candidate.upper()
+                                    # ВАЖНО: Если содержит слеш (например, TIS-166/GUIS-66), это ПРИМЕНИМОСТЬ, не артикул!
+                                    # Артикул - это OEM номер (кросс-номер)
+                                    if '/' in candidate:
+                                        # Это применимость, не артикул - пропускаем
+                                        continue
+                                    else:
+                                        result['article'] = candidate.upper()
                                     break
         
         # Если не нашли через OEM, ищем стандартные форматы
@@ -479,6 +504,7 @@ def parse_product_name(name):
                             if re.search(r'[A-Z]', candidate, re.IGNORECASE):
                                 result['article'] = candidate.upper()
     
+    # ВАЖНО: Артикул = OEM номер (кросс-номер)
     # Если не нашли фирменный артикул, используем OEM как артикул (код детали)
     # Это для типов 1 и 2, где нет фирменного артикула
     if not result['article'] and result.get('oem_number'):
@@ -517,25 +543,27 @@ def parse_product_name(name):
             if re.search(r'[A-Z]', eng_upper) and re.search(r'\d', eng_upper):
                 applicability_parts.append(eng_upper)
     
-    # Ищем связки через слеш типа "1ZRFE/2ZRFE" или "LD20/RD28"
-    # Но исключаем артикулы типа "IK16#4(5303#4)/BKR5EIX-11(5464)"
+    # Ищем связки через слеш типа "1ZRFE/2ZRFE", "LD20/RD28" или "TIS-166/GUIS-66"
+    # ВАЖНО: TIS-166/GUIS-66 - это ПРИМЕНИМОСТЬ, не артикул!
     slash_groups = re.findall(r'([A-Z0-9#\-]+(?:/[A-Z0-9#\-]+)+)', name)
     
     for group in slash_groups:
-        # Проверяем, что это не артикул (артикулы обычно содержат #, скобки или длинные)
+        # Проверяем, что это не артикул (артикулы обычно содержат #, скобки)
         # Артикулы типа IK16#4(5303#4)/BKR5EIX-11(5464) содержат # или скобки
         if '#' in group or '(' in group:
             continue
-        # Проверяем, что это не артикул (артикулы обычно содержат 5+ цифр подряд)
-        if not re.search(r'\d{5,}', group):
-            parts = group.split('/')
-            # Проверяем, похоже ли это на коды двигателей/кузовов
-            is_applicability = all(
-                re.match(r'^[A-Z0-9\-]{2,8}$', p, re.IGNORECASE) 
-                for p in parts
-            )
-            if is_applicability and len(parts) >= 2:
-                applicability_parts.extend([p.upper() for p in parts])
+        # ВАЖНО: TIS-166/GUIS-66, ME700054/ME701290 - это ПРИМЕНИМОСТЬ, не артикул!
+        # Артикул = OEM номер (кросс-номер)
+        parts = group.split('/')
+        # Проверяем, похоже ли это на применимость (коды моделей, артикулы альтернативные)
+        # Формат: буквы-цифры/буквы-цифры (TIS-166/GUIS-66) или буквы+цифры/буквы+цифры
+        is_applicability = all(
+            re.match(r'^[A-Z0-9\-]{2,10}$', p, re.IGNORECASE)
+            for p in parts
+        )
+        if is_applicability and len(parts) >= 2:
+            # Это применимость (например, TIS-166/GUIS-66)
+            applicability_parts.extend([p.upper() for p in parts])
     
     # Убираем дубликаты, сохраняя порядок
     if applicability_parts:

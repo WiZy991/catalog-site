@@ -311,11 +311,6 @@
                 <div class="product-info__prices">
                     <div class="product-info__price-label">Оптовая цена для партнёров</div>
                     <div class="product-info__price" style="white-space: nowrap;">{{ product.wholesale_price|default:product.price|floatformat:0 }} ₽</div>
-                    {% if product.wholesale_price and product.wholesale_price < product.price %}
-                    <div class="product-info__price-retail" style="white-space: nowrap;">
-                        <span>Розничная: {{ product.price|floatformat:0 }} ₽</span>
-                    </div>
-                    {% endif %}
                 </div>
                 
                 <div class="product-info__stock 
