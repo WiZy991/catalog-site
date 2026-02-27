@@ -596,7 +596,25 @@ def parse_product_name(name):
             if re.search(r'\d+[*x]\d+', size):
                 characteristics_parts.append(f"Размер: {size}")
     
-    # Ищем вольтаж (формат: 12V, 24V, 12V-11V)
+    # Ищем вольтаж и мощность (формат: 12V, 24V, 12V/1.2KW, 12V-11V)
+    # ВАЖНО: Ищем комбинации типа "12V/1.2KW" - это вольтаж и мощность вместе
+    voltage_power_pattern = r'\b(\d+V(?:-\d+V)?)\s*/\s*(\d+(?:\.\d+)?KW)\b'  # 12V/1.2KW
+    voltage_power_matches = re.findall(voltage_power_pattern, name, re.IGNORECASE)
+    for voltage, power in voltage_power_matches:
+        voltage_clean = voltage.upper().replace(' ', '')
+        power_clean = power.upper().replace(' ', '')
+        # Проверяем, что это не часть артикула или OEM
+        if (voltage_clean not in (result.get('article') or '').upper() and
+            voltage_clean not in (result.get('oem_number') or '').upper() and
+            power_clean not in (result.get('article') or '').upper() and
+            power_clean not in (result.get('oem_number') or '').upper()):
+            # Добавляем и вольтаж, и мощность
+            if not any('Напряжение:' in p and voltage_clean in p for p in characteristics_parts):
+                characteristics_parts.append(f"Напряжение: {voltage_clean}")
+            if not any('Мощность:' in p and power_clean in p for p in characteristics_parts):
+                characteristics_parts.append(f"Мощность: {power_clean}")
+    
+    # Ищем отдельно вольтаж (если не нашли в комбинации)
     voltage_patterns = [
         r'\b(\d+V(?:-\d+V)?)\b',  # 12V, 24V, 12V-11V
         r'\b(\d+\s*V(?:-\d+\s*V)?)\b',  # 12 V, 24 V (с пробелом)
@@ -605,12 +623,34 @@ def parse_product_name(name):
         voltage_matches = re.findall(pattern, name, re.IGNORECASE)
         for voltage in voltage_matches:
             voltage_clean = voltage.upper().replace(' ', '')
+            # Пропускаем, если уже добавлен в комбинации с мощностью
+            if any('Напряжение:' in p and voltage_clean in p for p in characteristics_parts):
+                continue
             # Проверяем, что это не часть артикула или OEM
             if (voltage_clean not in (result.get('article') or '').upper() and
                 voltage_clean not in (result.get('oem_number') or '').upper()):
                 # Проверяем, что еще не добавлено
                 if not any('Напряжение:' in p and voltage_clean in p for p in characteristics_parts):
                     characteristics_parts.append(f"Напряжение: {voltage_clean}")
+    
+    # Ищем отдельно мощность (если не нашли в комбинации)
+    power_patterns = [
+        r'\b(\d+(?:\.\d+)?KW)\b',  # 1.2KW, 2KW
+        r'\b(\d+(?:\.\d+)?\s*KW)\b',  # 1.2 KW (с пробелом)
+    ]
+    for pattern in power_patterns:
+        power_matches = re.findall(pattern, name, re.IGNORECASE)
+        for power in power_matches:
+            power_clean = power.upper().replace(' ', '')
+            # Пропускаем, если уже добавлен в комбинации с вольтажом
+            if any('Мощность:' in p and power_clean in p for p in characteristics_parts):
+                continue
+            # Проверяем, что это не часть артикула или OEM
+            if (power_clean not in (result.get('article') or '').upper() and
+                power_clean not in (result.get('oem_number') or '').upper()):
+                # Проверяем, что еще не добавлено
+                if not any('Мощность:' in p and power_clean in p for p in characteristics_parts):
+                    characteristics_parts.append(f"Мощность: {power_clean}")
     
     # Ищем материал (IRIDIUM, PLATINUM, COPPER и т.д.)
     # ВАЖНО: ПАРОНИТ и ПРОКЛАДКА - это материалы, а не размеры!

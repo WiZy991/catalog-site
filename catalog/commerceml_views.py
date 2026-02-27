@@ -951,6 +951,7 @@ def process_commerceml_file(file_path, filename, request=None):
             logger.info(f"Обработка для {current_catalog_type} завершена: обработано={processed_count}, создано={created_count}, обновлено={updated_count}, ошибок={len(errors)}")
             
             # ВАЖНО: Скрываем товары, которые были импортированы из 1С, но не пришли в текущем обмене
+            # НО ТОЛЬКО ЕСЛИ ФАЙЛ ДЕЙСТВИТЕЛЬНО НОВЫЙ/ИЗМЕНЕННЫЙ
             # Это означает, что они были удалены в 1С
             # Собираем все external_id из обработанных товаров (это уникальный идентификатор из 1С)
             processed_external_ids = set()
@@ -962,11 +963,43 @@ def process_commerceml_file(file_path, filename, request=None):
             
             logger.info(f"Обработано товаров в обмене: {len(processed_external_ids)} с external_id для каталога {current_catalog_type}")
             
+            # ВАЖНО: Скрываем товары ТОЛЬКО если файл действительно новый/измененный
+            # Проверяем, есть ли маркер обработанного файла
+            # Если файл обрабатывается повторно без изменений, НЕ скрываем товары
+            deleted_count = 0
+            # file_path доступен из параметров функции process_commerceml_file
+            
+            # Проверяем, новый ли это файл (нет маркера) или измененный (маркер старше файла)
+            should_hide_products = False
+            if file_path:
+                processed_marker = f"{file_path}.processed"
+                if os.path.exists(processed_marker):
+                    # Файл уже обрабатывался - проверяем, изменился ли он
+                    try:
+                        marker_mtime = os.path.getmtime(processed_marker)
+                        file_mtime = os.path.getmtime(file_path)
+                        # Если файл изменен после обработки - это новый обмен, скрываем товары
+                        if file_mtime > marker_mtime:
+                            should_hide_products = True
+                            logger.info(f"Файл изменен после последней обработки - скрываем товары, не пришедшие в обмене")
+                        else:
+                            logger.info(f"Файл не изменился с последней обработки - НЕ скрываем товары")
+                    except Exception as e:
+                        logger.warning(f"Не удалось проверить время изменения файла: {e}, скрываем товары для безопасности")
+                        should_hide_products = True
+                else:
+                    # Файл новый - скрываем товары
+                    should_hide_products = True
+                    logger.info(f"Файл новый (нет маркера) - скрываем товары, не пришедшие в обмене")
+            else:
+                # Если не можем определить файл, не скрываем товары (безопаснее)
+                logger.warning(f"⚠ Не удалось определить путь к файлу - НЕ скрываем товары")
+            
             # Находим товары, которые были импортированы из 1С (имеют external_id),
             # но не пришли в текущем обмене
             # ВАЖНО: Скрываем только товары из того же типа каталога (retail или wholesale)
-            deleted_count = 0
-            if processed_external_ids:
+            # И ТОЛЬКО ЕСЛИ ФАЙЛ НОВЫЙ/ИЗМЕНЕННЫЙ
+            if processed_external_ids and should_hide_products:
                 # Ищем товары, которые:
                 # 1. Имеют external_id (были импортированы из 1С)
                 # 2. Принадлежат к текущему типу каталога (retail или wholesale)
@@ -991,6 +1024,8 @@ def process_commerceml_file(file_path, filename, request=None):
                     logger.info(f"✓ Скрыто товаров в каталоге {current_catalog_type}: {deleted_count}")
                 else:
                     logger.info(f"Все товары из 1С присутствуют в обмене для каталога {current_catalog_type}, скрывать нечего")
+            elif not should_hide_products:
+                logger.info(f"Файл не изменился - НЕ скрываем товары для каталога {current_catalog_type}")
             else:
                 logger.warning(f"⚠ В обмене нет товаров с external_id для каталога {current_catalog_type} - невозможно определить удаленные товары")
             
