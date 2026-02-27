@@ -1,30 +1,57 @@
 {% extends "admin/base_site.html" %}
-{% load i18n l10n %}
+{% load i18n l10n admin_urls static %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+<a href="{% url 'admin:index' %}">{% trans 'Home' %}</a>
+&rsaquo; <a href="{% url 'admin:catalog_product_changelist' %}">{{ opts.verbose_name_plural|capfirst }}</a>
+&rsaquo; {% trans 'Delete' %}
+</div>
+{% endblock %}
 
 {% block content %}
-<h1>{% trans 'Вы уверены?' %}</h1>
-<p>{% trans 'Вы уверены, что хотите удалить выбранные' %} {{ objects_name }}? {% trans 'Все следующие объекты и связанные элементы будут удалены:' %}</p>
-
-<!-- Кнопки подтверждения вверху - ПЕРВЫМИ -->
-<div style="position: sticky; top: 0; background: #fff; z-index: 100; padding: 20px 0; margin-bottom: 20px; border-bottom: 2px solid #ddd;">
-    <form method="post" style="margin: 0; padding: 15px; background: #f8f8f8; border: 1px solid #ddd; border-radius: 4px;">
-        {% csrf_token %}
-        <div>
-            <input type="hidden" name="post" value="yes">
-            <input type="hidden" name="action" value="delete_selected">
-            {% for obj in objects %}
-                <input type="hidden" name="{{ action_checkbox_name }}" value="{{ obj.pk|unlocalize }}">
-            {% endfor %}
-            <input type="submit" value="{% trans 'Да, я уверен' %}" class="default" style="margin-right: 10px; font-size: 14px; padding: 10px 20px;">
-            <a href="{% url 'admin:catalog_product_changelist' %}" class="button cancel-link" style="font-size: 14px; padding: 10px 20px;">{% trans "Нет, отменить" %}</a>
+<div id="content-main">
+    <div class="module">
+        <h2>{% trans 'Вы уверены?' %}</h2>
+        <p>{% trans 'Вы уверены, что хотите удалить выбранные' %} {{ objects_name }}? {% trans 'Все следующие объекты и связанные элементы будут удалены:' %}</p>
+        
+        {% if total_count %}
+            <p><strong>{% trans 'Всего выбрано товаров' %}: {{ total_count }}</strong></p>
+            {% if total_count > 100 %}
+                <p><em>{% trans 'Показаны первые 100 товаров из' %} {{ total_count }}. {% trans 'Все выбранные товары будут удалены' %}.</em></p>
+            {% endif %}
+        {% endif %}
+        
+        <div class="form-row">
+            <form method="post">
+                {% csrf_token %}
+                <div>
+                    <input type="hidden" name="post" value="yes">
+                    <input type="hidden" name="action" value="delete_selected">
+                    {% if selected_ids %}
+                        {% for obj_id in selected_ids %}
+                            <input type="hidden" name="{{ action_checkbox_name }}" value="{{ obj_id|unlocalize }}">
+                        {% endfor %}
+                    {% else %}
+                        {% for obj in objects %}
+                            <input type="hidden" name="{{ action_checkbox_name }}" value="{{ obj.pk|unlocalize }}">
+                        {% endfor %}
+                    {% endif %}
+                    <input type="submit" value="{% trans 'Да, я уверен' %}" class="default">
+                    <a href="{% url 'admin:catalog_product_changelist' %}" class="button cancel-link">{% trans "Нет, отменить" %}</a>
+                </div>
+            </form>
         </div>
-    </form>
+        
+        <h2>{% trans 'Объекты' %}:</h2>
+        <ul>
+        {% for obj in objects %}
+            <li>{{ obj }}</li>
+        {% endfor %}
+        {% if total_count > 100 %}
+            <li><em>... {% trans 'и еще' %} {{ total_count|add:"-100" }} {% trans 'товаров' %}</em></li>
+        {% endif %}
+        </ul>
+    </div>
 </div>
-
-<h2>{% trans 'Объекты' %}:</h2>
-<ul>
-{% for obj in objects %}
-    <li>{{ obj }}</li>
-{% endfor %}
-</ul>
 {% endblock %}

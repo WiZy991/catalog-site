@@ -647,10 +647,22 @@ class ProductAdmin(ImportExportModelAdmin, FarpostExportMixin, admin.ModelAdmin)
         
         # Если это подтверждение удаления - удаляем сразу
         if request.POST.get('post') == 'yes':
+            # ВАЖНО: При подтверждении получаем ВСЕ выбранные элементы из POST, а не только из queryset
+            # Это нужно, чтобы удалить все выбранные товары, а не только те, что на текущей странице
+            from django.contrib.admin import helpers
+            selected_ids = request.POST.getlist(helpers.ACTION_CHECKBOX_NAME)
+            if selected_ids:
+                # Получаем полный queryset всех выбранных товаров
+                full_queryset = self.get_queryset(request).filter(pk__in=selected_ids)
+            else:
+                # Если в POST нет выбранных элементов, используем переданный queryset
+                full_queryset = queryset
+            
             deleted_count = 0
             errors_count = 0
             
-            for obj in queryset:
+            # Используем iterator() для эффективной обработки больших queryset
+            for obj in full_queryset.iterator():
                 try:
                     # Если таблицы ProductCharacteristic нет, удаляем напрямую через SQL
                     if not table_exists:
@@ -722,13 +734,25 @@ class ProductAdmin(ImportExportModelAdmin, FarpostExportMixin, admin.ModelAdmin)
         opts = self.model._meta
         site_context = self.admin_site.each_context(request)
         
+        # ВАЖНО: Получаем ВСЕ выбранные ID из POST, чтобы передать их в шаблон
+        # Это нужно, чтобы удалить все выбранные товары, а не только те, что на текущей странице
+        selected_ids = request.POST.getlist(helpers.ACTION_CHECKBOX_NAME)
+        if not selected_ids:
+            # Если в POST нет, пытаемся получить из queryset
+            selected_ids = list(queryset.values_list('pk', flat=True))
+        
+        # Получаем полный queryset всех выбранных товаров для отображения
+        full_queryset = self.get_queryset(request).filter(pk__in=selected_ids)
+        
         # Создаём простой контекст БЕЗ model_count
         context = {
             **site_context,
             'title': _('Вы уверены?'),
             'objects_name': str(opts.verbose_name_plural),
-            'queryset': queryset,
-            'objects': list(queryset),  # Простой список объектов
+            'queryset': full_queryset,
+            'objects': list(full_queryset[:100]),  # Показываем только первые 100 для отображения
+            'selected_ids': selected_ids,  # Передаем все ID для скрытых полей
+            'total_count': len(selected_ids),  # Общее количество выбранных
             'opts': opts,
             'action_checkbox_name': helpers.ACTION_CHECKBOX_NAME,
             'media': self.media,
