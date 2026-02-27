@@ -15,7 +15,10 @@
         <h2>{% trans 'Вы уверены?' %}</h2>
 <p>{% trans 'Вы уверены, что хотите удалить выбранные' %} {{ objects_name }}? {% trans 'Все следующие объекты и связанные элементы будут удалены:' %}</p>
 
-        {% if total_count %}
+        {% if select_across %}
+            <p><strong style="color: red; font-size: 1.2em;">⚠️ ВНИМАНИЕ: Будет удалено ВСЕ {{ total_count }} товаров из базы данных!</strong></p>
+            <p><em>{% trans 'Показаны первые 100 товаров из' %} {{ total_count }}. {% trans 'Все товары будут удалены' %}.</em></p>
+        {% elif total_count %}
             <p><strong>{% trans 'Всего выбрано товаров' %}: {{ total_count }}</strong></p>
             {% if total_count > 100 %}
                 <p><em>{% trans 'Показаны первые 100 товаров из' %} {{ total_count }}. {% trans 'Все выбранные товары будут удалены' %}.</em></p>

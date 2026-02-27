@@ -536,10 +536,16 @@ class ProductAdmin(ImportExportModelAdmin, FarpostExportMixin, admin.ModelAdmin)
         action = request.POST.get('action')
         
         # ВАЖНО: Проверяем select_across - если выбраны все товары, получаем полный queryset
-        select_across = request.POST.get('select_across', '0') == '1'
-        if select_across:
+        # Django admin передает select_across как строку "1" или "0"
+        select_across = request.POST.get('select_across', '0')
+        if select_across == '1' or select_across is True:
             # Пользователь выбрал "Выбрать все" - получаем ВСЕ товары из базы
+            # ВАЖНО: Игнорируем queryset, так как он содержит только товары с текущей страницы
             queryset = self.get_queryset(request)
+            # Логируем для отладки
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.info(f'DEBUG response_action: select_across={select_across}, queryset.count()={queryset.count()}')
         
         # Если действие - удаление, ВСЕГДА обрабатываем через наш метод, не вызывая super()
         # Это гарантирует, что мы не обратимся к несуществующей таблице
@@ -570,13 +576,22 @@ class ProductAdmin(ImportExportModelAdmin, FarpostExportMixin, admin.ModelAdmin)
             from django.contrib.admin import helpers
             selected = request.POST.getlist(helpers.ACTION_CHECKBOX_NAME)
             
-            # Проверяем, выбраны ли все товары (через скрытое поле select_across)
-            select_across = request.POST.get('select_across', '0') == '1'
+            # ВАЖНО: Проверяем select_across - Django admin передает его как строку "1" или "0"
+            select_across_str = request.POST.get('select_across', '0')
+            select_across = select_across_str == '1' or select_across_str is True
+            
+            # Логируем для отладки
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.info(f'DEBUG changelist_view: select_across={select_across_str}, selected.count()={len(selected)}')
             
             # Если выбраны все товары, получаем полный queryset
-            if select_across and not selected:
-                # Пользователь выбрал "Выбрать все" - получаем все товары
+            # ВАЖНО: При select_across=1 Django admin может передавать selected с товарами только с текущей страницы
+            # Поэтому мы ИГНОРИРУЕМ selected и получаем ВСЕ товары
+            if select_across:
+                # Пользователь выбрал "Выбрать все" - получаем ВСЕ товары из базы
                 queryset = self.get_queryset(request)
+                logger.info(f'DEBUG changelist_view: select_across=1, получаем ВСЕ товары. Всего: {queryset.count()}')
             elif selected:
                 # Выбраны конкретные товары
                 queryset = self.get_queryset(request).filter(pk__in=selected)
@@ -766,19 +781,33 @@ class ProductAdmin(ImportExportModelAdmin, FarpostExportMixin, admin.ModelAdmin)
         table_exists = self._check_table_exists()
         
         # ВАЖНО: Проверяем select_across ДО подтверждения - если выбраны все, получаем полный queryset
-        select_across = request.POST.get('select_across', '0') == '1' or request.GET.get('select_across', '0') == '1'
+        # Django admin передает select_across как строку "1" или "0"
+        select_across_str = request.POST.get('select_across', '0') or request.GET.get('select_across', '0')
+        select_across = select_across_str == '1' or select_across_str is True
         if select_across:
             # Пользователь выбрал "Выбрать все" - получаем ВСЕ товары из базы
+            # ВАЖНО: Игнорируем переданный queryset, так как он содержит только товары с текущей страницы
             queryset = self.get_queryset(request)
+            # Логируем для отладки
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.info(f'DEBUG delete_selected: select_across={select_across_str}, queryset.count()={queryset.count()}')
         
         # Если это подтверждение удаления - удаляем сразу
         if request.POST.get('post') == 'yes':
             # ВАЖНО: При подтверждении проверяем select_across снова
-            select_across_confirm = request.POST.get('select_across', '0') == '1'
+            # Это критически важно - если select_across=1, игнорируем selected_ids и удаляем ВСЕ
+            select_across_confirm_str = request.POST.get('select_across', '0')
+            select_across_confirm = select_across_confirm_str == '1' or select_across_confirm_str is True
             
             if select_across_confirm:
-                # Пользователь выбрал "Выбрать все" - используем полный queryset
+                # Пользователь выбрал "Выбрать все" - используем полный queryset ВСЕХ товаров
+                # ВАЖНО: Игнорируем selected_ids, так как они содержат только товары с текущей страницы
                 full_queryset = self.get_queryset(request)
+                # Логируем для отладки
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.info(f'DEBUG delete_selected confirm: select_across={select_across_confirm_str}, удаляем ВСЕ товары. Всего: {full_queryset.count()}')
             else:
                 # Получаем выбранные элементы из POST
                 from django.contrib.admin import helpers
@@ -879,13 +908,22 @@ class ProductAdmin(ImportExportModelAdmin, FarpostExportMixin, admin.ModelAdmin)
         site_context = self.admin_site.each_context(request)
         
         # ВАЖНО: Проверяем select_across - если выбраны все товары, получаем полный queryset
-        select_across = request.POST.get('select_across', '0') == '1'
+        # Django admin передает select_across как строку "1" или "0"
+        select_across_str = request.POST.get('select_across', '0')
+        select_across = select_across_str == '1' or select_across_str is True
+        
+        # Логируем для отладки
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f'DEBUG delete_selected (confirmation page): select_across={select_across_str}, queryset.count()={queryset.count()}')
         
         if select_across:
             # Пользователь выбрал "Выбрать все" - получаем ВСЕ товары
+            # ВАЖНО: Игнорируем переданный queryset, так как он содержит только товары с текущей страницы
             full_queryset = self.get_queryset(request)
             selected_ids = []  # Не передаем ID, так как удаляем все
             total_count = full_queryset.count()
+            logger.info(f'DEBUG delete_selected (confirmation page): select_across=1, получаем ВСЕ товары. Всего: {total_count}')
         else:
             # Получаем выбранные ID из POST
             selected_ids = request.POST.getlist(helpers.ACTION_CHECKBOX_NAME)
