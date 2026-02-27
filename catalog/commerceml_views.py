@@ -983,16 +983,43 @@ def process_commerceml_file(file_path, filename, request=None):
                 processed_marker = f"{file_path}.processed"
                 if os.path.exists(processed_marker):
                     # Файл уже обрабатывался - проверяем, изменился ли он
+                    # ВАЖНО: Используем file_mtime из маркера, а не время создания маркера
                     try:
-                        marker_mtime = os.path.getmtime(processed_marker)
+                        # Получаем текущее время файла
                         file_mtime = os.path.getmtime(file_path)
-                        # Если файл изменен после обработки - это новый обмен, скрываем товары
-                        if file_mtime > marker_mtime:
-                            should_hide_products = True
-                            logger.info(f"Файл import.xml изменен после последней обработки (файл: {datetime.fromtimestamp(file_mtime)}, маркер: {datetime.fromtimestamp(marker_mtime)}) - скрываем товары, не пришедшие в обмене")
+                        file_mtime_dt = datetime.fromtimestamp(file_mtime)
+                        
+                        # Пытаемся прочитать время файла из маркера (если оно там сохранено)
+                        file_mtime_from_marker = None
+                        try:
+                            with open(processed_marker, 'r') as f:
+                                for line in f:
+                                    if line.startswith('file_mtime:'):
+                                        file_mtime_from_marker = datetime.fromisoformat(line.split(':', 1)[1].strip())
+                                        break
+                        except Exception:
+                            pass
+                        
+                        # Если время файла сохранено в маркере, используем его
+                        # Иначе используем время маркера (старая логика для обратной совместимости)
+                        if file_mtime_from_marker:
+                            # Сравниваем текущее время файла с временем из маркера
+                            if file_mtime_dt > file_mtime_from_marker:
+                                should_hide_products = True
+                                logger.info(f"Файл import.xml изменен после последней обработки (файл: {file_mtime_dt}, маркер: {file_mtime_from_marker}) - скрываем товары, не пришедшие в обмене")
+                            else:
+                                should_hide_products = False
+                                logger.info(f"Файл import.xml НЕ изменился с последней обработки (файл: {file_mtime_dt}, маркер: {file_mtime_from_marker}) - НЕ скрываем товары")
                         else:
-                            should_hide_products = False
-                            logger.info(f"Файл import.xml НЕ изменился с последней обработки (файл: {datetime.fromtimestamp(file_mtime)}, маркер: {datetime.fromtimestamp(marker_mtime)}) - НЕ скрываем товары")
+                            # Старая логика - сравниваем с временем маркера (для обратной совместимости)
+                            marker_mtime = os.path.getmtime(processed_marker)
+                            marker_mtime_dt = datetime.fromtimestamp(marker_mtime)
+                            if file_mtime_dt > marker_mtime_dt:
+                                should_hide_products = True
+                                logger.info(f"Файл import.xml изменен после последней обработки (файл: {file_mtime_dt}, маркер: {marker_mtime_dt}) - скрываем товары, не пришедшие в обмене")
+                            else:
+                                should_hide_products = False
+                                logger.info(f"Файл import.xml НЕ изменился с последней обработки (файл: {file_mtime_dt}, маркер: {marker_mtime_dt}) - НЕ скрываем товары")
                     except Exception as e:
                         # Если не удалось проверить - НЕ скрываем товары (безопаснее)
                         should_hide_products = False
@@ -2288,18 +2315,21 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
                 quantity = 0
         
         # Определяем наличие и активность
-        # ВАЖНО: В обоих каталогах (розничном и оптовом) товары должны быть активны, если есть остаток ИЛИ есть цена
-        # Это обеспечивает идентичное количество активных товаров в обоих каталогах
+        # ВАЖНО: Товары из import.xml создаются АКТИВНЫМИ по умолчанию
+        # Цены и количество придут из offers.xml и обновят статус товара
+        # Это гарантирует, что все товары будут видны после обработки import.xml
         if catalog_type == 'wholesale':
             # В оптовом каталоге товар активен, если есть остаток ИЛИ есть оптовая цена
             # Используем price как оптовую цену (она будет установлена в wholesale_price)
             availability = 'in_stock' if quantity > 0 else ('order' if price > 0 else 'out_of_stock')
-            is_active = quantity > 0 or price > 0
+            # ВАЖНО: Создаем товар активным по умолчанию (цены/количество придут из offers.xml)
+            is_active = True  # Всегда активен при создании из import.xml
         else:
             # В розничном каталоге товар активен, если есть цена (может быть под заказ) или есть остаток
             # ВАЖНО: Товар должен быть активен, если есть остаток ИЛИ есть цена (даже если остаток 0)
             availability = 'in_stock' if quantity > 0 else ('order' if price > 0 else 'out_of_stock')
-            is_active = quantity > 0 or price > 0
+            # ВАЖНО: Создаем товар активным по умолчанию (цены/количество придут из offers.xml)
+            is_active = True  # Всегда активен при создании из import.xml
         
         # Ищем товар по external_id (приоритет) или по артикулу в нужном типе каталога
         product = None
@@ -2351,22 +2381,15 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
                 else:
                     product.price = price
             
-            # ВАЖНО: Если товар создан из import.xml без цены, но потом придет цена из offers.xml,
-            # нужно убедиться, что товар активируется после установки цены
+            # ВАЖНО: При обновлении из import.xml НЕ меняем is_active
+            # Товар должен оставаться активным, если он уже был активен
+            # Цены и количество придут из offers.xml и обновят статус
+            # Это гарантирует, что товары не деактивируются при обновлении из import.xml
             product.quantity = quantity
             product.availability = availability
-            # ВАЖНО: Обновляем is_active в зависимости от остатка и цены
-            # В оптовом каталоге товар активен только если есть остаток
-            # ВАЖНО: В обоих каталогах товар активен, если есть остаток ИЛИ есть цена
-            # Это обеспечивает идентичное количество активных товаров в обоих каталогах
-            if catalog_type == 'wholesale':
-                # В оптовом каталоге: активен если есть остаток ИЛИ есть оптовая цена
-                current_price = product.wholesale_price
-                product.is_active = quantity > 0 or (current_price and current_price > 0)
-            else:
-                # В розничном каталоге: активен если есть остаток ИЛИ есть цена
-                current_price = product.price
-                product.is_active = quantity > 0 or (current_price and current_price > 0)
+            # НЕ меняем is_active при обновлении из import.xml - оставляем существующее значение
+            # Если товар был активен, он останется активным
+            # Если товар был неактивен, он останется неактивным (возможно, был скрыт вручную)
             if category:
                 product.category = category
         

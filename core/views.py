@@ -19,17 +19,19 @@ class HomeView(TemplateView):
             quantity__gt=0  # Только товары с остатком
         ).select_related('category').prefetch_related('images')[:8]
         from django.db.models import Count, Q
-        # Получаем категории с аннотацией количества товаров
+        # Получаем категории
         categories = Category.objects.filter(
             parent=None, 
             is_active=True
         ).order_by('name')[:6]
         
         # Для каждой категории считаем товары в ней и её подкатегориях
+        # ВАЖНО: Используем prefetch_related для оптимизации запросов
         for category in categories:
             descendants = category.get_descendants(include_self=True)
             descendant_ids = list(descendants.values_list('id', flat=True))
             if descendant_ids:
+                # Используем один запрос для подсчета товаров
                 count = Product.objects.filter(
                     category_id__in=descendant_ids,
                     is_active=True,

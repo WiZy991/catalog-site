@@ -172,14 +172,23 @@ class Command(BaseCommand):
                             self.stdout.write(f'Пропускаем файл (не изменился): {filename} (маркер {marker_mtime.strftime("%Y-%m-%d %H:%M:%S")}, файл {file_mtime.strftime("%Y-%m-%d %H:%M:%S")})')
                             continue
                     
-                    # Файл изменился - обрабатываем снова
-                    if options['all'] or recent_minutes > 0:
+                    # Файл изменился - обрабатываем снова ТОЛЬКО если явно указано --all
+                    # ВАЖНО: Для крона (без --all) НЕ обрабатываем файлы повторно, даже если они изменились
+                    # Это предотвращает постоянную обработку файлов и изменения количества товаров
+                    if options['all']:
                         if recent_minutes > 0 and file_mtime < cutoff_time:
                             self.stdout.write(f'Пропускаем старый файл: {filename} (изменен {file_mtime.strftime("%Y-%m-%d %H:%M:%S")})')
                             continue
-                        self.stdout.write(f'Файл изменен после обработки, обрабатываем снова: {filename}')
+                        self.stdout.write(f'Файл изменен после обработки, обрабатываем снова (--all): {filename}')
+                    elif recent_minutes > 0:
+                        # Если указан --recent, обрабатываем только недавно измененные файлы
+                        if file_mtime < cutoff_time:
+                            self.stdout.write(f'Пропускаем старый файл: {filename} (изменен {file_mtime.strftime("%Y-%m-%d %H:%M:%S")})')
+                            continue
+                        self.stdout.write(f'Файл изменен недавно, обрабатываем снова (--recent): {filename}')
                     else:
-                        # Без --all и --recent пропускаем измененные файлы (для безопасности)
+                        # Без --all и --recent пропускаем измененные файлы (для безопасности и производительности)
+                        # Это предотвращает постоянную обработку файлов в кроне
                         self.stdout.write(f'Пропускаем уже обработанный файл (используйте --all для повторной обработки): {filename}')
                         continue
                 except Exception as e:
