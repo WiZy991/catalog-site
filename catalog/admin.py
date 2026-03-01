@@ -193,7 +193,7 @@ class FarpostExportMixin:
         writer = csv.writer(output, delimiter=';')
         # Заголовки для Farpost
         writer.writerow([
-            'Заголовок', 'Цена', 'Описание', 'Артикул', 'Бренд',
+            'Заголовок', 'Название', 'Цена', 'Описание', 'Артикул', 'Бренд',
             'Состояние', 'Наличие', 'Количество', 'Характеристики', 'Применимость',
             'Кросс-номера', 'Фото1', 'Фото2', 'Фото3', 'Фото4', 'Фото5',
             'Ссылка на сайт', 'Категория'
@@ -223,6 +223,7 @@ class FarpostExportMixin:
             
             writer.writerow([
                 title,
+                product.name or '',
                 str(product.price),
                 description,
                 product.article or '',

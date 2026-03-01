@@ -1544,7 +1544,7 @@ def generate_farpost_api_file(products, file_format='xls', request=None):
         
         # Заголовки (адаптируйте под формат Farpost)
         writer.writerow([
-            'Название', 'Цена', 'Описание', 'Артикул', 'Бренд',
+            'Заголовок', 'Название', 'Цена', 'Описание', 'Артикул', 'Бренд',
             'Состояние', 'Наличие', 'Количество', 'Характеристики', 'Применимость',
             'Кросс-номера', 'Фото1', 'Фото2', 'Фото3', 'Фото4', 'Фото5',
             'Ссылка на сайт', 'Категория'
@@ -1570,6 +1570,7 @@ def generate_farpost_api_file(products, file_format='xls', request=None):
             
             writer.writerow([
                 title,
+                product.name or '',
                 str(product.price),
                 description,
                 product.article or '',
@@ -1604,7 +1605,7 @@ def generate_farpost_api_file(products, file_format='xls', request=None):
         
         # Заголовки
         headers = [
-            'Название', 'Цена', 'Описание', 'Артикул', 'Бренд',
+            'Заголовок', 'Название', 'Цена', 'Описание', 'Артикул', 'Бренд',
             'Состояние', 'Наличие', 'Количество', 'Характеристики', 'Применимость',
             'Кросс-номера', 'Фото1', 'Фото2', 'Фото3', 'Фото4', 'Фото5',
             'Ссылка на сайт', 'Категория'
@@ -1632,6 +1633,7 @@ def generate_farpost_api_file(products, file_format='xls', request=None):
             
             ws.append([
                 title,
+                product.name or '',
                 float(product.price),
                 description,
                 product.article or '',
@@ -1681,7 +1683,11 @@ def generate_farpost_api_file(products, file_format='xls', request=None):
             description = generate_farpost_description(product, site_url)
             photo_urls = generate_farpost_images(product, request)
             
-            SubElement(offer_elem, 'name').text = title
+            # Название товара (оригинальное название)
+            SubElement(offer_elem, 'name').text = product.name or title
+            # Заголовок (сгенерированный) добавляем в отдельный тег, если нужно
+            if title != product.name:
+                SubElement(offer_elem, 'title').text = title
             SubElement(offer_elem, 'price').text = str(product.price)
             SubElement(offer_elem, 'currencyId').text = 'RUR'
             SubElement(offer_elem, 'quantity').text = str(quantity)
