@@ -16,6 +16,7 @@
     /* Prevent page shift */
     body {
         overflow-x: hidden;
+        overflow-y: auto;
         max-width: 100vw;
     }
     
@@ -137,6 +138,7 @@
         padding-bottom: 4rem;
         width: 100%;
         overflow-x: hidden;
+        overflow-y: visible;
     }
     
     .catalog-page .container {
@@ -1223,10 +1225,11 @@
         
         .products-table-wrapper {
             overflow-x: auto;
+            overflow-y: visible;
             -webkit-overflow-scrolling: touch;
             width: 100%;
             display: block;
-            touch-action: pan-x;
+            touch-action: pan-x pan-y;
             margin: 0 -1rem;
             padding: 0 1rem;
         }
@@ -1506,10 +1509,11 @@
         
         .products-table-wrapper {
             overflow-x: auto;
+            overflow-y: visible;
             -webkit-overflow-scrolling: touch;
             width: 100%;
             display: block;
-            touch-action: pan-x;
+            touch-action: pan-x pan-y;
             margin: 0 -0.75rem;
             padding: 0 0.75rem;
         }
