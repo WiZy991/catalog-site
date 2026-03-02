@@ -457,9 +457,21 @@
         padding: 0.75rem 0.75rem !important;
     }
     
+    /* ИСКЛЮЧЕНИЕ: колонка Количество выравнивается по верху */
+    .products-table tbody tr td:nth-child(6) {
+        vertical-align: top !important;
+        padding-top: 0.75rem !important;
+    }
+    
     .products-table thead tr th {
         vertical-align: middle !important;
         padding: 0.75rem 0.75rem !important;
+    }
+    
+    /* ИСКЛЮЧЕНИЕ: заголовок Количество выравнивается по верху */
+    .products-table thead tr th:nth-child(6) {
+        vertical-align: top !important;
+        padding-top: 0.75rem !important;
     }
     
     /* Выравнивание содержимого внутри ячеек */
@@ -569,19 +581,30 @@
         min-width: 250px;
     } /* Количество + Заказ */
     
-    /* Выравнивание колонки Количество по верху */
-    .products-table th:nth-child(6) {
-        vertical-align: top !important;
-        padding-top: 0.75rem !important;
-    }
-    
-    .products-table td:nth-child(6) {
-        vertical-align: top !important;
-        padding-top: 0.75rem !important;
-    }
-    
+    /* Выравнивание колонки Количество по верху - ПРИНУДИТЕЛЬНО */
+    .products-table th:nth-child(6),
+    .products-table td:nth-child(6),
     .products-table__quantity {
         vertical-align: top !important;
+        padding-top: 0.75rem !important;
+    }
+    
+    /* Выравнивание элементов в колонке Количество по верху */
+    .products-table td:nth-child(6) .quantity-control-wrapper,
+    .products-table__quantity .quantity-control-wrapper {
+        justify-content: flex-start !important;
+        align-items: center !important;
+        margin-top: 0 !important;
+        margin-bottom: 0 !important;
+        padding-top: 0 !important;
+        padding-bottom: 0 !important;
+    }
+    
+    /* Убираем все отступы сверху для элементов в колонке */
+    .products-table td:nth-child(6) > *,
+    .products-table__quantity > * {
+        margin-top: 0 !important;
+        padding-top: 0 !important;
     }
     
     /* Выравнивание элементов в колонке Количество по верху */
@@ -843,6 +866,7 @@
     .products-table__quantity {
         white-space: nowrap;
         text-align: center;
+        vertical-align: top !important;
     }
     
     .btn--sm {
@@ -979,7 +1003,17 @@
         .products-table th:nth-child(5),
         .products-table td:nth-child(5) { width: 10%; min-width: 70px; }
         .products-table th:nth-child(6),
-        .products-table td:nth-child(6) { width: 27%; min-width: 200px; }
+        .products-table td:nth-child(6) { 
+            width: 27%; 
+            min-width: 200px;
+            vertical-align: top !important;
+        }
+        
+        .products-table td:nth-child(6) .quantity-control-wrapper {
+            justify-content: flex-start !important;
+            margin-top: 0 !important;
+            padding-top: 0 !important;
+        }
         
         .quantity-btn {
             width: 24px;
