@@ -6,8 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     
     <!-- Primary Meta Tags -->
-    <title>{% block title %}{{ SITE_NAME }}{% endblock %}</title>
-    <meta name="title" content="{% block meta_title %}{% block title %}{{ SITE_NAME }}{% endblock %}{% endblock %}">
+    {% block title %}<title>{{ SITE_NAME }}</title>{% endblock %}
+    <meta name="title" content="{% block meta_title %}{{ SITE_NAME }}{% endblock %}">
     <meta name="description" content="{% block meta_description %}{{ SITE_DESCRIPTION }}{% endblock %}">
     <meta name="keywords" content="{% block meta_keywords %}{{ SEO_KEYWORDS }}{% endblock %}">
     <meta name="author" content="{{ COMPANY_NAME }}">
@@ -37,7 +37,7 @@
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="{% block og_type %}{{ SEO_OG_TYPE|default:'website' }}{% endblock %}">
     <meta property="og:url" content="{% block og_url %}{{ SEO_CANONICAL_URL }}{% endblock %}">
-    <meta property="og:title" content="{% block og_title %}{% block title %}{{ SITE_NAME }}{% endblock %}{% endblock %}">
+    <meta property="og:title" content="{% block og_title %}{{ SITE_NAME }}{% endblock %}">
     <meta property="og:description" content="{% block og_description %}{% block meta_description %}{{ SITE_DESCRIPTION }}{% endblock %}{% endblock %}">
     <meta property="og:image" content="{% block og_image %}{{ SEO_OG_IMAGE }}{% endblock %}">
     <meta property="og:image:width" content="1200">
@@ -50,7 +50,7 @@
     <meta name="twitter:card" content="{% block twitter_card %}{{ SEO_TWITTER_CARD|default:'summary_large_image' }}{% endblock %}">
     {% if SEO_TWITTER_SITE %}<meta name="twitter:site" content="{{ SEO_TWITTER_SITE }}">{% endif %}
     <meta name="twitter:url" content="{% block twitter_url %}{{ SEO_CANONICAL_URL }}{% endblock %}">
-    <meta name="twitter:title" content="{% block twitter_title %}{% block title %}{{ SITE_NAME }}{% endblock %}{% endblock %}">
+    <meta name="twitter:title" content="{% block twitter_title %}{{ SITE_NAME }}{% endblock %}">
     <meta name="twitter:description" content="{% block twitter_description %}{% block meta_description %}{{ SITE_DESCRIPTION }}{% endblock %}{% endblock %}">
     <meta name="twitter:image" content="{% block twitter_image %}{{ SEO_OG_IMAGE }}{% endblock %}">
     <meta name="twitter:image:alt" content="{% block twitter_image_alt %}{{ COMPANY_NAME|default:SITE_NAME }}{% endblock %}">
