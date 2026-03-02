@@ -416,6 +416,25 @@
         z-index: 10;
     }
     
+    /* Дополнительное выравнивание для sticky заголовков */
+    .products-table thead tr {
+        display: table-row;
+    }
+    
+    .products-table thead tr th {
+        display: table-cell;
+        vertical-align: middle !important;
+    }
+    
+    .products-table tbody tr {
+        display: table-row;
+    }
+    
+    .products-table tbody tr td {
+        display: table-cell;
+        vertical-align: middle !important;
+    }
+    
     /* Убеждаемся, что заголовки и ячейки выровнены */
     .products-table th,
     .products-table td {
@@ -426,6 +445,32 @@
         border-right: none !important;
         word-wrap: break-word;
         overflow-wrap: break-word;
+    }
+    
+    /* Принудительное выравнивание для всех строк */
+    .products-table tbody tr {
+        height: auto;
+    }
+    
+    .products-table tbody tr td {
+        vertical-align: middle !important;
+        padding: 0.75rem 0.75rem !important;
+    }
+    
+    .products-table thead tr th {
+        vertical-align: middle !important;
+        padding: 0.75rem 0.75rem !important;
+    }
+    
+    /* Выравнивание содержимого внутри ячеек */
+    .products-table td > *,
+    .products-table th > * {
+        vertical-align: middle;
+    }
+    
+    /* Для ячеек с flex-контейнерами */
+    .products-table td .quantity-control-wrapper {
+        margin: 0;
     }
     
     .products-table thead th {
@@ -463,12 +508,19 @@
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
-        height: auto;
-        line-height: 1.4;
+        padding: 0.75rem 0.75rem !important;
+        vertical-align: middle !important;
     }
     
     .products-table thead th {
         border-bottom: 2px solid var(--color-gray-200);
+        padding: 0.75rem 0.75rem !important;
+        vertical-align: middle !important;
+    }
+    
+    .products-table tbody td {
+        padding: 0.75rem 0.75rem !important;
+        vertical-align: middle !important;
     }
     
     .products-table td {
