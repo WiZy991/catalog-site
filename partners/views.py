@@ -625,36 +625,54 @@ class PartnerCatalogView(PartnerRequiredMixin, ListView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         # Получаем корневые категории с подкатегориями
+        # Показываем ВСЕ активные корневые категории
         root_categories = Category.objects.filter(
             parent=None, 
             is_active=True
         ).order_by('order', 'name').prefetch_related('children')
         
-        # Для каждой категории проверяем наличие товаров в оптовом каталоге
-        # Показываем все активные категории, даже если в них пока нет товаров
         categories_list = []
         for category in root_categories:
             # Получаем активные подкатегории
             category.active_children = category.children.filter(is_active=True).order_by('order', 'name')
             
-            # Проверяем, есть ли товары в категории или её подкатегориях (только wholesale)
-            descendants = category.get_descendants(include_self=True)
-            descendant_ids = list(descendants.values_list('id', flat=True))
-            if descendant_ids:
-                # Считаем товары в оптовом каталоге (более мягкая фильтрация)
-                product_count = Product.objects.filter(
-                    category_id__in=descendant_ids,
+            # Пытаемся посчитать товары в оптовом каталоге (для отображения счетчика)
+            product_count = 0
+            try:
+                # Используем более простой способ - проверяем товары напрямую в категории и подкатегориях
+                from django.db.models import Count
+                
+                # Сначала проверяем товары в самой категории
+                direct_count = Product.objects.filter(
+                    category=category,
                     is_active=True,
                     catalog_type='wholesale'
                 ).filter(
                     Q(quantity__gt=0) | Q(wholesale_price__gt=0) | Q(availability__in=['in_stock', 'order'])
                 ).count()
-            else:
+                
+                # Затем проверяем товары в подкатегориях
+                if category.active_children.exists():
+                    subcategory_ids = list(category.active_children.values_list('id', flat=True))
+                    if subcategory_ids:
+                        subcategory_count = Product.objects.filter(
+                            category_id__in=subcategory_ids,
+                            is_active=True,
+                            catalog_type='wholesale'
+                        ).filter(
+                            Q(quantity__gt=0) | Q(wholesale_price__gt=0) | Q(availability__in=['in_stock', 'order'])
+                        ).count()
+                        product_count = direct_count + subcategory_count
+                    else:
+                        product_count = direct_count
+                else:
+                    product_count = direct_count
+            except Exception as e:
+                # Если что-то пошло не так, просто ставим 0
                 product_count = 0
             
-            # Показываем категорию, даже если в ней нет товаров
-            # Но помечаем количество товаров для отображения
-                category.wholesale_product_count = product_count
+            # Всегда добавляем категорию в список, даже если товаров нет
+            category.wholesale_product_count = product_count
             categories_list.append(category)
         
         context['categories'] = categories_list
