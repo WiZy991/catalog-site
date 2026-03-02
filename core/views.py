@@ -267,3 +267,14 @@ Crawl-delay: 10
     )
     return HttpResponse(content, content_type='text/plain; charset=utf-8')
 
+
+def yandex_verification(request):
+    """Файл верификации Яндекс.Вебмастер."""
+    content = """<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+</head>
+<body>Verification: a7cbaaadf29ce5db</body>
+</html>"""
+    return HttpResponse(content, content_type='text/html; charset=utf-8')
+

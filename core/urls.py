@@ -13,5 +13,6 @@ urlpatterns = [
     path('consent/', views.ConsentView.as_view(), name='consent'),
     path('wholesale/', views.WholesaleView.as_view(), name='wholesale'),
     path('robots.txt', views.robots_txt, name='robots'),
+    path('yandex_a7cbaaadf29ce5db.html', views.yandex_verification, name='yandex_verification'),
 ]
 
