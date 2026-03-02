@@ -14,7 +14,7 @@ SECRET_KEY = 'django-insecure-change-this-in-production-abc123xyz789'
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['*', 'onesimus.ru', 'www.onesimus.ru', 'onesim8n.beget.tech']
+ALLOWED_HOSTS = ['*', 'onesimus25.ru', 'www.onesimus25.ru', 'onesim8n.beget.tech']
 
 # Application definition
 INSTALLED_APPS = [
@@ -68,6 +68,7 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'catalog.context_processors.categories_processor',
+                'core.context_processors.seo_processor',
             ],
         },
     },
@@ -181,6 +182,35 @@ COMPANY_OGRN = '319253600080189'
 # Logo settings
 SITE_LOGO = 'images/лого.jpg'  # Путь к логотипу относительно static
 SITE_LOGO_WIDTH = 200  # Ширина логотипа в пикселях (для alt и размеров)
+
+# SEO Settings - Домены
+SITE_DOMAIN = 'onesimus25.ru'  # Основной домен (канонический)
+SITE_DOMAIN_WWW = 'www.onesimus25.ru'  # Домен с www
+SITE_DOMAIN_TEMP = 'onesim8n.beget.tech'  # Временный домен (если используется)
+
+# SEO Keywords (основные ключевые слова сайта)
+SITE_KEYWORDS = 'автозапчасти, запчасти для автомобилей, купить автозапчасти, автозапчасти Уссурийск, доставка автозапчастей, каталог автозапчастей, запчасти Приморский край'
+
+# Open Graph и Social Media
+SITE_OG_TYPE = 'website'
+SITE_TWITTER_CARD = 'summary_large_image'
+SITE_TWITTER_SITE = ''  # Если есть Twitter аккаунт, укажите здесь
+
+# Дополнительная информация для SEO
+SITE_LOCALE = 'ru_RU'
+SITE_LANGUAGE = 'ru'
+
+# Поисковые системы - Verification коды
+# Яндекс.Вебмастер: https://webmaster.yandex.ru/
+# Получите код верификации в Яндекс.Вебмастер и вставьте сюда
+YANDEX_VERIFICATION = ''  # Пример: 'abc123def456'
+
+# Google Search Console: https://search.google.com/search-console
+# Получите код верификации в Google Search Console и вставьте сюда
+GOOGLE_VERIFICATION = ''  # Пример: 'abc123def4567890'
+
+# Яндекс.Метрика (опционально)
+YANDEX_METRICA_ID = ''  # ID счетчика Яндекс.Метрики (если используется)
 
 # Ссылки на мессенджеры
 WHATSAPP_URL = 'https://wa.me/message/5ILUQN5XFXQJM1'

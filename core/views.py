@@ -163,21 +163,107 @@ class WholesaleView(TemplateView):
 
 
 def robots_txt(request):
-    """Генерация robots.txt."""
-    content = """User-agent: *
+    """Генерация robots.txt с поддержкой обоих доменов и оптимизацией для Яндекс и Google."""
+    from django.conf import settings
+    
+    # Определяем канонический домен для sitemap
+    host = request.get_host()
+    if 'beget.tech' in host:
+        canonical_host = settings.SITE_DOMAIN_TEMP
+    else:
+        # Убираем www для единообразия (или оставляем, в зависимости от настроек)
+        if host.startswith('www.'):
+            canonical_host = settings.SITE_DOMAIN_WWW
+        else:
+            canonical_host = settings.SITE_DOMAIN
+    
+    content = """# robots.txt для {site_name}
+# Основной домен: {canonical_domain}
+# Домен с www: {www_domain}
+# Временный домен: {temp_domain}
+
+User-agent: *
 Allow: /
+Allow: /catalog/
+Allow: /catalog/*/
+Allow: /*/product/
 
-Sitemap: {scheme}://{host}/sitemap.xml
-
+# Запрещаем индексацию служебных разделов
 Disallow: /admin/
+Disallow: /admin/*
 Disallow: /media/
 Disallow: /static/
 Disallow: /partners/
-Disallow: /partners/catalog/
-Disallow: /partners/browse/
-Disallow: /partners/login/
-Disallow: /partners/register/
-Disallow: /partners/profile/
-""".format(scheme=request.scheme, host=request.get_host())
-    return HttpResponse(content, content_type='text/plain')
+Disallow: /partners/*
+Disallow: /cml/
+Disallow: /api/
+Disallow: /farpost/
+Disallow: /orders/cart/
+Disallow: /orders/checkout/
+Disallow: /*?*page=
+Disallow: /*?*sort=
+Disallow: /*?*filter=
+
+# Разрешаем основные страницы
+Allow: /
+Allow: /catalog/
+Allow: /about/
+Allow: /contacts/
+Allow: /payment-delivery/
+Allow: /wholesale/
+Allow: /privacy-policy/
+Allow: /consent/
+Allow: /public-offer/
+
+# Sitemap
+Sitemap: {scheme}://{canonical_host}/sitemap.xml
+
+# Для поисковых систем - Google
+User-agent: Googlebot
+Allow: /
+Allow: /catalog/
+Allow: /catalog/*/
+Allow: /*/product/
+
+# Для поисковых систем - Яндекс
+User-agent: Yandex
+Allow: /
+Allow: /catalog/
+Allow: /catalog/*/
+Allow: /*/product/
+Crawl-delay: 1
+
+# Яндекс - мобильный бот
+User-agent: YandexMobileBot
+Allow: /
+Allow: /catalog/
+Allow: /catalog/*/
+Allow: /*/product/
+Crawl-delay: 1
+
+# Для поисковых систем - Bing
+User-agent: Bingbot
+Allow: /
+Allow: /catalog/
+Allow: /catalog/*/
+Allow: /*/product/
+
+# Блокируем плохих ботов
+User-agent: AhrefsBot
+Crawl-delay: 10
+
+User-agent: SemrushBot
+Crawl-delay: 10
+
+User-agent: MJ12bot
+Crawl-delay: 10
+""".format(
+        site_name=settings.SITE_NAME,
+        canonical_domain=settings.SITE_DOMAIN,
+        www_domain=settings.SITE_DOMAIN_WWW,
+        temp_domain=settings.SITE_DOMAIN_TEMP,
+        scheme=request.scheme,
+        canonical_host=canonical_host
+    )
+    return HttpResponse(content, content_type='text/plain; charset=utf-8')
 
