@@ -492,7 +492,7 @@
         flex-direction: column;
         gap: 0.5rem;
         align-items: center;
-        justify-content: center;
+        justify-content: flex-start;
         width: 100%;
     }
     
@@ -568,6 +568,28 @@
         width: 27%;
         min-width: 250px;
     } /* Количество + Заказ */
+    
+    /* Выравнивание колонки Количество по верху */
+    .products-table th:nth-child(6) {
+        vertical-align: top !important;
+        padding-top: 0.75rem !important;
+    }
+    
+    .products-table td:nth-child(6) {
+        vertical-align: top !important;
+        padding-top: 0.75rem !important;
+    }
+    
+    .products-table__quantity {
+        vertical-align: top !important;
+    }
+    
+    /* Выравнивание элементов в колонке Количество по верху */
+    .products-table td:nth-child(6) .quantity-control-wrapper {
+        justify-content: flex-start !important;
+        margin-top: 0 !important;
+        padding-top: 0 !important;
+    }
     
     .products-table th:first-child {
         border-top-left-radius: var(--radius-lg);
