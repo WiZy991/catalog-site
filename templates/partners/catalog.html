@@ -421,6 +421,8 @@
     .products-table th,
     .products-table td {
         box-sizing: border-box;
+        padding: 0.75rem 0.75rem;
+        vertical-align: middle;
     }
     
     .quantity-control-wrapper {
@@ -435,7 +437,6 @@
     }
     
     .products-table th {
-        padding: 0.75rem 0.75rem;
         text-align: left;
         font-weight: 600;
         color: var(--color-gray-900);
@@ -447,8 +448,7 @@
     }
     
     .products-table td {
-        padding: 0.75rem 0.75rem;
-        vertical-align: top;
+        text-align: left;
     }
     
     .products-table th:nth-child(1),
@@ -1271,12 +1271,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     <table class="products-table">
                         <thead>
                             <tr>
-                                <th style="width: 8%; min-width: 100px; max-width: 120px;">Применимость</th>
-                                <th style="width: 10%; min-width: 120px; max-width: 150px;">Код детали</th>
-                                <th style="width: 30%; min-width: 250px;">Описание</th>
-                                <th style="width: 15%; min-width: 140px; max-width: 180px;">Наличие</th>
-                                <th style="width: 10%; min-width: 100px; max-width: 120px;">Цена</th>
-                                <th style="width: 27%; min-width: 250px;">Количество</th>
+                                <th>Применимость</th>
+                                <th>Код детали</th>
+                                <th>Описание</th>
+                                <th>Наличие</th>
+                                <th>Цена</th>
+                                <th>Количество</th>
                             </tr>
                         </thead>
                         <tbody>
