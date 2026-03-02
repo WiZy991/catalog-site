@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% load static %}
 
-{% block title %}{{ product.get_meta_title }} - {{ SITE_NAME }}{% endblock %}
+{% block title %}<title>{{ product.get_meta_title }} - {{ SITE_NAME }}</title>{% endblock %}
 {% block meta_description %}{{ product.get_meta_description }}{% endblock %}
 {% block meta_keywords %}{{ product.brand }}, {{ product.article }}, {{ product.name }}, автозапчасти, купить{% endblock %}
 
