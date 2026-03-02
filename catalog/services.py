@@ -1464,21 +1464,27 @@ def clean_product_name(name):
     if not name:
         return ''
     
-    cleaned = str(name).strip()
+    # Преобразуем в строку
+    cleaned = str(name)
     
-    # Находим первую открывающую скобку и удаляем всё начиная с неё до конца строки
-    # Это более надежный способ, который работает даже если скобки не закрыты
-    bracket_pos = cleaned.find('(')
-    if bracket_pos != -1:
-        cleaned = cleaned[:bracket_pos].strip()
+    # Находим первую открывающую скобку (обычную или квадратную)
+    pos_round = cleaned.find('(')
+    pos_square = cleaned.find('[')
     
-    # Также проверяем квадратные скобки
-    bracket_pos = cleaned.find('[')
-    if bracket_pos != -1:
-        cleaned = cleaned[:bracket_pos].strip()
+    # Определяем позицию первой скобки
+    if pos_round >= 0 and pos_square >= 0:
+        # Если есть оба типа, берем самую раннюю
+        first_pos = min(pos_round, pos_square)
+    elif pos_round >= 0:
+        first_pos = pos_round
+    elif pos_square >= 0:
+        first_pos = pos_square
+    else:
+        # Нет скобок - возвращаем как есть, только обрезаем пробелы
+        return cleaned.strip()
     
-    # Удаляем лишние пробелы
-    cleaned = re.sub(r'\s+', ' ', cleaned.strip())
+    # Обрезаем до первой скобки и убираем пробелы
+    cleaned = cleaned[:first_pos].strip()
     
     return cleaned
 
