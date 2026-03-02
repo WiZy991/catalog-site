@@ -74,10 +74,12 @@
         gap: 0.5rem;
         transition: all var(--transition-fast);
         min-width: 120px;
+        min-height: 38px;
         justify-content: center;
         font-weight: 500;
         border: none;
         cursor: pointer;
+        box-sizing: border-box;
     }
     
     .partner-header__btn--profile {
@@ -92,22 +94,10 @@
     }
     
     .partner-header__btn--order {
-        background: var(--color-brand-red) !important;
-        color: var(--color-brand-white) !important;
-        border: none !important;
-        font-weight: 600;
-        box-shadow: 0 2px 4px rgba(220, 38, 38, 0.3);
-    }
-    
-    .partner-header__btn--order:hover {
-        background: #c82333 !important;
-        box-shadow: 0 4px 8px rgba(220, 38, 38, 0.4);
-        transform: translateY(-1px);
-    }
-    
-    .partner-header__btn--order:active {
-        transform: translateY(0);
-        box-shadow: 0 2px 4px rgba(220, 38, 38, 0.3);
+        background: rgba(255,255,255,0.15);
+        color: var(--color-brand-white);
+        border: none;
+        font-weight: 500;
     }
     
     .partner-header__btn--orders {
@@ -117,6 +107,11 @@
     }
     
     .partner-header__btn:hover {
+        background: rgba(255,255,255,0.2);
+        color: var(--color-brand-white);
+    }
+    
+    .partner-header__btn--order:hover {
         background: rgba(255,255,255,0.2);
         color: var(--color-brand-white);
     }
@@ -475,16 +470,9 @@
     
     .products-table th:nth-child(6),
     .products-table td:nth-child(6) { 
-        width: 22%;
-        min-width: 200px;
+        width: 27%;
+        min-width: 250px;
     } /* Количество + Заказ */
-    
-    .products-table th:nth-child(7),
-    .products-table td:nth-child(7) { 
-        width: 5%;
-        min-width: 50px;
-        max-width: 80px;
-    } /* Пустая колонка */
     
     .products-table th:first-child {
         border-top-left-radius: var(--radius-lg);
@@ -749,13 +737,6 @@
         text-align: center;
     }
     
-    .products-table__order {
-        white-space: nowrap;
-        text-align: center;
-        padding: 0.4rem 0.25rem !important;
-        overflow: hidden;
-    }
-    
     .btn--sm {
         padding: 0.5rem 1rem;
         font-size: 0.9rem;
@@ -889,9 +870,7 @@
         .products-table th:nth-child(5),
         .products-table td:nth-child(5) { width: auto; min-width: 70px; }
         .products-table th:nth-child(6),
-        .products-table td:nth-child(6) { width: auto; min-width: 150px; }
-        .products-table th:nth-child(7),
-        .products-table td:nth-child(7) { width: auto; min-width: 40px; }
+        .products-table td:nth-child(6) { width: auto; min-width: 200px; }
         
         .quantity-btn {
             width: 24px;
@@ -1041,9 +1020,6 @@ document.addEventListener('DOMContentLoaded', function() {
                         btn.type = 'submit';
                         btn.className = 'partner-header__btn partner-header__btn--order';
                         btn.innerHTML = '<i class="bi bi-cart-check"></i> Заказать (' + data.cart_count + ')';
-                        btn.style.background = 'var(--color-brand-red)';
-                        btn.style.color = 'var(--color-brand-white)';
-                        btn.style.border = 'none';
                         form.appendChild(btn);
                             
                             partnerHeaderActions.insertBefore(form, partnerHeaderActions.firstChild);
@@ -1108,9 +1084,6 @@ document.addEventListener('DOMContentLoaded', function() {
                         btn.type = 'submit';
                         btn.className = 'partner-header__btn partner-header__btn--order';
                         btn.innerHTML = '<i class="bi bi-cart-check"></i> Заказать (' + data.count + ')';
-                        btn.style.background = 'var(--color-brand-red)';
-                        btn.style.color = 'var(--color-brand-white)';
-                        btn.style.border = 'none';
                         form.appendChild(btn);
                         
                         partnerHeaderActions.insertBefore(form, partnerHeaderActions.firstChild);
@@ -1288,8 +1261,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                 <th style="width: 30%; min-width: 250px;">Описание</th>
                                 <th style="width: 15%; min-width: 140px; max-width: 180px;">Наличие</th>
                                 <th style="width: 10%; min-width: 100px; max-width: 120px;">Цена</th>
-                                <th style="width: 22%; min-width: 200px;">Количество</th>
-                                <th style="width: 5%; min-width: 50px; max-width: 80px;">Заказ</th>
+                                <th style="width: 27%; min-width: 250px;">Количество</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -1365,9 +1337,6 @@ document.addEventListener('DOMContentLoaded', function() {
                                             <i class="bi bi-cart-plus"></i> В корз.
                                         </button>
                                     </div>
-                                </td>
-                                <td class="products-table__order">
-                                    <!-- Кнопка заказа теперь в колонке Количество -->
                                 </td>
                             </tr>
                             {% endfor %}
