@@ -1456,6 +1456,22 @@ def generate_product_title(product):
     return ' '.join(parts)
 
 
+def clean_product_name(name):
+    """
+    Очищает название товара от информации в скобках.
+    Пример: "Лок/Хаб (TOYOTA, 43530-60042, HZJ70/HZJ80, MT/30SP)" -> "Лок/Хаб"
+    """
+    if not name:
+        return ''
+    # Удаляем всё содержимое в скобках (включая сами скобки)
+    # Обрабатываем как обычные скобки (), так и квадратные []
+    cleaned = re.sub(r'\([^)]*\)', '', name)  # Удаляем (содержимое)
+    cleaned = re.sub(r'\[[^\]]*\]', '', cleaned)  # Удаляем [содержимое]
+    # Удаляем лишние пробелы в начале и конце
+    cleaned = cleaned.strip()
+    return cleaned
+
+
 def generate_farpost_title(product):
     """
     Генерирует заголовок для Farpost согласно ТЗ.
@@ -1568,9 +1584,12 @@ def generate_farpost_api_file(products, file_format='xls', request=None):
             # Количество: если товар неактивен или снят с продажи — отправляем 0 (сигнал для удаления на Farpost)
             quantity = product.quantity if product.is_active else 0
             
+            # Очищаем название от информации в скобках
+            clean_name = clean_product_name(product.name) if product.name else ''
+            
             writer.writerow([
                 title,
-                product.name or '',
+                clean_name,
                 str(product.price),
                 description,
                 product.article or '',
@@ -1631,9 +1650,12 @@ def generate_farpost_api_file(products, file_format='xls', request=None):
             # Количество: если товар неактивен — отправляем 0 (сигнал для удаления на Farpost)
             quantity = product.quantity if product.is_active else 0
             
+            # Очищаем название от информации в скобках
+            clean_name = clean_product_name(product.name) if product.name else ''
+            
             ws.append([
                 title,
-                product.name or '',
+                clean_name,
                 float(product.price),
                 description,
                 product.article or '',
@@ -1683,8 +1705,9 @@ def generate_farpost_api_file(products, file_format='xls', request=None):
             description = generate_farpost_description(product, site_url)
             photo_urls = generate_farpost_images(product, request)
             
-            # Название товара (оригинальное название)
-            SubElement(offer_elem, 'name').text = product.name or title
+            # Название товара (очищенное от информации в скобках)
+            clean_name = clean_product_name(product.name) if product.name else ''
+            SubElement(offer_elem, 'name').text = clean_name or title
             # Заголовок (сгенерированный) добавляем в отдельный тег, если нужно
             if title != product.name:
                 SubElement(offer_elem, 'title').text = title

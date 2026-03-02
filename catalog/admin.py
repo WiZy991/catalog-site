@@ -186,6 +186,7 @@ class FarpostExportMixin:
             generate_farpost_title,
             generate_farpost_description,
             generate_farpost_images,
+            clean_product_name,
         )
         import io as _io
         
@@ -221,9 +222,12 @@ class FarpostExportMixin:
             if not product.price or product.price == 0:
                 zero_price_count += 1
             
+            # Очищаем название от информации в скобках
+            clean_name = clean_product_name(product.name) if product.name else ''
+            
             writer.writerow([
                 title,
-                product.name or '',
+                clean_name,
                 str(product.price),
                 description,
                 product.article or '',
