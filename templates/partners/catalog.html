@@ -92,10 +92,22 @@
     }
     
     .partner-header__btn--order {
-        background: var(--color-brand-red);
-        color: var(--color-brand-white);
-        border: none;
+        background: var(--color-brand-red) !important;
+        color: var(--color-brand-white) !important;
+        border: none !important;
         font-weight: 600;
+        box-shadow: 0 2px 4px rgba(220, 38, 38, 0.3);
+    }
+    
+    .partner-header__btn--order:hover {
+        background: #c82333 !important;
+        box-shadow: 0 4px 8px rgba(220, 38, 38, 0.4);
+        transform: translateY(-1px);
+    }
+    
+    .partner-header__btn--order:active {
+        transform: translateY(0);
+        box-shadow: 0 2px 4px rgba(220, 38, 38, 0.3);
     }
     
     .partner-header__btn--orders {
@@ -107,10 +119,6 @@
     .partner-header__btn:hover {
         background: rgba(255,255,255,0.2);
         color: var(--color-brand-white);
-    }
-    
-    .partner-header__btn--order:hover {
-        background: #c82333;
     }
     
     .catalog-page {
@@ -1029,11 +1037,14 @@ document.addEventListener('DOMContentLoaded', function() {
                             csrfInput.value = getCookie('csrftoken');
                             form.appendChild(csrfInput);
                             
-                            const btn = document.createElement('button');
-                            btn.type = 'submit';
-                            btn.className = 'partner-header__btn partner-header__btn--order';
-                            btn.innerHTML = '<i class="bi bi-cart-check"></i> Заказать (' + data.cart_count + ')';
-                            form.appendChild(btn);
+                        const btn = document.createElement('button');
+                        btn.type = 'submit';
+                        btn.className = 'partner-header__btn partner-header__btn--order';
+                        btn.innerHTML = '<i class="bi bi-cart-check"></i> Заказать (' + data.cart_count + ')';
+                        btn.style.background = 'var(--color-brand-red)';
+                        btn.style.color = 'var(--color-brand-white)';
+                        btn.style.border = 'none';
+                        form.appendChild(btn);
                             
                             partnerHeaderActions.insertBefore(form, partnerHeaderActions.firstChild);
                         }
@@ -1097,6 +1108,9 @@ document.addEventListener('DOMContentLoaded', function() {
                         btn.type = 'submit';
                         btn.className = 'partner-header__btn partner-header__btn--order';
                         btn.innerHTML = '<i class="bi bi-cart-check"></i> Заказать (' + data.count + ')';
+                        btn.style.background = 'var(--color-brand-red)';
+                        btn.style.color = 'var(--color-brand-white)';
+                        btn.style.border = 'none';
                         form.appendChild(btn);
                         
                         partnerHeaderActions.insertBefore(form, partnerHeaderActions.firstChild);
@@ -1153,12 +1167,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     </button>
                 </form>
                 {% endif %}
-                <a href="{% url 'partners:cart' %}" class="partner-header__btn partner-header__btn--orders">
-                    <i class="bi bi-cart"></i> Корзина
-                    {% if cart_count > 0 %}
-                        <span class="cart-badge">{{ cart_count }}</span>
-                    {% endif %}
-                </a>
                 <a href="{% url 'partners:orders' %}" class="partner-header__btn partner-header__btn--orders">
                     <i class="bi bi-bag"></i> Мои заказы
                 </a>
