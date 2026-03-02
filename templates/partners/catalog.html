@@ -1016,18 +1016,23 @@
     
     @media (max-width: 992px) {
         .catalog-content-wrapper {
-            flex-direction: column;
+            flex-direction: column !important;
+            display: flex !important;
         }
         
         .catalog-sidebar {
             position: static !important;
             width: 100% !important;
             display: block !important;
+            visibility: visible !important;
+            opacity: 1 !important;
             margin-bottom: 2rem;
+            order: 1 !important;
         }
         
         .catalog-main {
             width: 100%;
+            order: 2 !important;
         }
     }
     
@@ -1079,12 +1084,18 @@
             width: 100%;
         }
         
+        .catalog-content-wrapper {
+            flex-direction: column !important;
+            display: flex !important;
+        }
+        
         .catalog-sidebar {
             margin-bottom: 2rem !important;
             display: block !important;
             visibility: visible !important;
             opacity: 1 !important;
             width: 100% !important;
+            max-width: 100% !important;
             position: static !important;
             order: 1 !important;
             padding: 1rem !important;
@@ -1092,6 +1103,7 @@
             border-radius: var(--radius-lg) !important;
             background: var(--color-white) !important;
             text-align: center !important;
+            flex-shrink: 0 !important;
         }
         
         .sidebar-title {
@@ -1332,19 +1344,31 @@
             font-size: 0.9rem;
         }
         
+        .catalog-content-wrapper {
+            flex-direction: column !important;
+            display: flex !important;
+        }
+        
         .catalog-sidebar {
             display: block !important;
             visibility: visible !important;
             opacity: 1 !important;
             width: 100% !important;
+            max-width: 100% !important;
             position: static !important;
             margin-bottom: 1.5rem;
-            order: 1;
+            order: 1 !important;
             padding: 1rem !important;
             border: 2px solid var(--color-gray-200) !important;
             border-radius: var(--radius-lg) !important;
             background: var(--color-white) !important;
             text-align: center !important;
+            flex-shrink: 0 !important;
+        }
+        
+        .catalog-main {
+            order: 2 !important;
+            width: 100% !important;
         }
         
         .sidebar-title {
@@ -1860,21 +1884,23 @@ document.addEventListener('DOMContentLoaded', function() {
         
         <div class="catalog-content-wrapper">
             <!-- Sidebar -->
-            <aside class="catalog-sidebar">
+            <aside class="catalog-sidebar" style="display: block !important; visibility: visible !important;">
                 <h3 class="sidebar-title">Категории</h3>
-                <ul class="category-list">
-                    <li class="category-list__item">
+                <ul class="category-list" style="display: block !important; visibility: visible !important;">
+                    <li class="category-list__item" style="display: block !important; visibility: visible !important;">
                         <a href="{% url 'partners:catalog' %}" 
-                           class="category-list__link {% if not current_category %}category-list__link--active{% endif %}">
+                           class="category-list__link {% if not current_category %}category-list__link--active{% endif %}"
+                           style="display: inline-flex !important; visibility: visible !important;">
                             Все товары
                         </a>
                     </li>
                     {% if categories %}
                         {% for category in categories %}
-                        <li class="category-list__item {% if category.active_children %}category-list__item--has-children{% endif %}">
-                            <div class="category-list__header">
+                        <li class="category-list__item {% if category.active_children %}category-list__item--has-children{% endif %}" style="display: block !important; visibility: visible !important;">
+                            <div class="category-list__header" style="display: flex !important; visibility: visible !important;">
                                 <a href="{% url 'partners:catalog_category' category.slug %}" 
-                                   class="category-list__link {% if current_category and current_category.pk == category.pk %}category-list__link--active{% elif current_category and current_category.parent and current_category.parent.pk == category.pk %}category-list__link--active{% endif %}">
+                                   class="category-list__link {% if current_category and current_category.pk == category.pk %}category-list__link--active{% elif current_category and current_category.parent and current_category.parent.pk == category.pk %}category-list__link--active{% endif %}"
+                                   style="display: inline-flex !important; visibility: visible !important;">
                                     {{ category.name }}
                                 </a>
                                 {% if category.active_children %}
