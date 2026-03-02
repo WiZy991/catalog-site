@@ -589,10 +589,10 @@
         padding-top: 0.75rem !important;
     }
     
-    /* Сдвигаем заголовок "Количество" правее */
+    /* Сдвигаем заголовок "Количество" правее (немного) */
     .products-table th:nth-child(6) {
         text-align: right !important;
-        padding-right: 1.5rem !important;
+        padding-right: 0.5rem !important;
     }
     
     .products-table th:nth-child(6)::before {
@@ -979,7 +979,13 @@
         }
         
         .catalog-sidebar {
-            position: static;
+            position: static !important;
+            width: 100% !important;
+            display: block !important;
+            margin-bottom: 2rem;
+        }
+        
+        .catalog-main {
             width: 100%;
         }
     }
@@ -1026,15 +1032,22 @@
             display: block !important;
             width: 100% !important;
             position: static !important;
+            order: 1;
         }
         
         .sidebar-title {
             font-size: 1.1rem;
             margin-bottom: 1rem;
+            text-align: center;
         }
         
         .category-list {
             margin-bottom: 1.5rem;
+        }
+        
+        .catalog-main {
+            order: 2;
+            width: 100%;
         }
         
         .products-table-wrapper {
@@ -1042,13 +1055,26 @@
             -webkit-overflow-scrolling: touch;
             width: 100%;
             display: block;
+            touch-action: pan-x;
         }
         
         .products-table {
             font-size: 0.75rem;
-            min-width: 800px;
+            min-width: 600px;
             width: 100%;
             display: table;
+        }
+        
+        /* Улучшаем интерактивность на мобильных */
+        .products-table th,
+        .products-table td {
+            touch-action: manipulation;
+        }
+        
+        .quantity-btn,
+        .add-to-cart-btn {
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: rgba(0,0,0,0.1);
         }
         
         .products-table th,
@@ -1162,15 +1188,22 @@
             width: 100% !important;
             position: static !important;
             margin-bottom: 1.5rem;
+            order: 1;
         }
         
         .sidebar-title {
             font-size: 1rem;
             margin-bottom: 0.75rem;
+            text-align: center;
         }
         
         .category-list {
             margin-bottom: 1rem;
+        }
+        
+        .catalog-main {
+            order: 2;
+            width: 100%;
         }
         
         .products-table-wrapper {
@@ -1178,13 +1211,28 @@
             -webkit-overflow-scrolling: touch;
             width: 100%;
             display: block;
+            touch-action: pan-x;
         }
         
         .products-table {
             font-size: 0.7rem;
-            min-width: 700px;
+            min-width: 500px;
             width: 100%;
             display: table;
+        }
+        
+        /* Улучшаем интерактивность на мобильных */
+        .products-table th,
+        .products-table td {
+            touch-action: manipulation;
+        }
+        
+        .quantity-btn,
+        .add-to-cart-btn {
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: rgba(0,0,0,0.1);
+            min-height: 44px;
+            min-width: 44px;
         }
         
         .products-table th,
