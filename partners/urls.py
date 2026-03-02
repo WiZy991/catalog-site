@@ -38,6 +38,7 @@ urlpatterns = [
     path('orders/export/', views.partner_orders_export_xls, name='orders_export'),
     
     # Корзина партнёра
+    path('cart/', views.partner_cart_view, name='cart'),
     path('cart/add/<int:product_id>/', views.partner_cart_add, name='cart_add'),
     path('cart/update/<int:product_id>/', views.partner_cart_update, name='cart_update'),
     path('cart/count/', views.partner_cart_count, name='cart_count'),

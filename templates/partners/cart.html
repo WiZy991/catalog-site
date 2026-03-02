@@ -1,0 +1,496 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Корзина партнёра - {{ SITE_NAME }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .partner-header {
+        background: var(--color-brand-black);
+        color: var(--color-brand-white);
+        padding: 1.5rem 0;
+        margin-bottom: 2rem;
+    }
+    
+    .partner-header__inner {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 1rem;
+    }
+    
+    .partner-header__info {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+    }
+    
+    .partner-header__avatar {
+        width: 50px;
+        height: 50px;
+        background: rgba(255,255,255,0.1);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    .partner-header__avatar i {
+        font-size: 1.5rem;
+    }
+    
+    .partner-header__name {
+        font-weight: 600;
+        font-size: 1.1rem;
+    }
+    
+    .partner-header__badge {
+        background: rgba(220, 38, 38, 0.2);
+        color: var(--color-brand-red);
+        padding: 0.25rem 0.75rem;
+        border-radius: 20px;
+        font-size: 0.85rem;
+    }
+    
+    .partner-header__actions {
+        display: flex;
+        gap: 0.75rem;
+    }
+    
+    .partner-header__btn {
+        padding: 0.5rem 1rem;
+        border-radius: var(--radius-md);
+        text-decoration: none;
+        font-size: 0.9rem;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        transition: all var(--transition-fast);
+        min-width: 120px;
+        justify-content: center;
+        font-weight: 500;
+        border: none;
+        cursor: pointer;
+    }
+    
+    .partner-header__btn--profile {
+        background: rgba(255,255,255,0.1);
+        color: var(--color-brand-white);
+    }
+    
+    .partner-header__btn--logout {
+        background: transparent;
+        color: rgba(255,255,255,0.7);
+        border: 1px solid rgba(255,255,255,0.3);
+    }
+    
+    .partner-header__btn--order {
+        background: var(--color-brand-red);
+        color: var(--color-brand-white);
+        border: none;
+        font-weight: 600;
+    }
+    
+    .partner-header__btn--orders {
+        background: rgba(255,255,255,0.15);
+        color: var(--color-brand-white);
+        position: relative;
+    }
+    
+    .partner-header__btn:hover {
+        background: rgba(255,255,255,0.2);
+        color: var(--color-brand-white);
+    }
+    
+    .partner-header__btn--order:hover {
+        background: #c82333;
+    }
+    
+    .cart-badge {
+        background: var(--color-brand-red);
+        color: var(--color-brand-white);
+        border-radius: 12px;
+        padding: 0.2rem 0.5rem;
+        font-size: 0.7rem;
+        font-weight: 600;
+        min-width: 20px;
+        text-align: center;
+        line-height: 1.2;
+        position: absolute;
+        top: -8px;
+        right: -8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        display: inline-block;
+    }
+    
+    .cart-section {
+        padding: 2rem 0;
+    }
+    
+    .cart-wrapper {
+        display: grid;
+        grid-template-columns: 1fr 350px;
+        gap: 2rem;
+        margin-top: 2rem;
+    }
+    
+    .cart-items {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
+    
+    .cart-item {
+        display: grid;
+        grid-template-columns: 100px 1fr 150px 120px 50px;
+        gap: 1rem;
+        padding: 1rem;
+        background: var(--color-white);
+        border-radius: var(--radius-md);
+        border: 1px solid var(--color-gray-200);
+        align-items: center;
+    }
+    
+    .cart-item__image img {
+        width: 100%;
+        height: auto;
+        border-radius: var(--radius-sm);
+    }
+    
+    .cart-item__title {
+        font-size: 1rem;
+        margin: 0 0 0.5rem 0;
+    }
+    
+    .cart-item__title a {
+        color: var(--color-gray-900);
+        text-decoration: none;
+    }
+    
+    .cart-item__title a:hover {
+        color: var(--color-brand-red);
+    }
+    
+    .cart-item__article {
+        font-size: 0.85rem;
+        color: var(--color-gray-600);
+    }
+    
+    .cart-item__quantity {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+    
+    .cart-item__quantity label {
+        font-size: 0.85rem;
+        color: var(--color-gray-700);
+    }
+    
+    .quantity-controls {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    
+    .quantity-btn {
+        width: 30px;
+        height: 30px;
+        border: 1px solid var(--color-gray-300);
+        background: var(--color-white);
+        border-radius: var(--radius-sm);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    .quantity-input {
+        width: 60px;
+        height: 30px;
+        border: 1px solid var(--color-gray-300);
+        border-radius: var(--radius-sm);
+        text-align: center;
+    }
+    
+    .cart-item__price {
+        text-align: right;
+    }
+    
+    .cart-item__price-unit {
+        font-size: 0.9rem;
+        color: var(--color-gray-600);
+    }
+    
+    .cart-item__price-total {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: var(--color-brand-red);
+    }
+    
+    .btn-remove {
+        background: transparent;
+        border: none;
+        color: var(--color-gray-400);
+        cursor: pointer;
+        font-size: 1.2rem;
+        padding: 0.5rem;
+    }
+    
+    .btn-remove:hover {
+        color: var(--color-brand-red);
+    }
+    
+    .cart-summary {
+        background: var(--color-white);
+        border-radius: var(--radius-lg);
+        padding: 1.5rem;
+        border: 2px solid var(--color-gray-200);
+        height: fit-content;
+        position: sticky;
+        top: 20px;
+    }
+    
+    .cart-summary__row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1rem 0;
+        font-size: 1.2rem;
+    }
+    
+    .cart-total {
+        font-size: 1.5rem;
+        color: var(--color-brand-red);
+    }
+    
+    .cart-summary__actions {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+        margin-top: 1.5rem;
+    }
+    
+    .cart-empty {
+        text-align: center;
+        padding: 4rem 2rem;
+    }
+    
+    .cart-empty i {
+        font-size: 5rem;
+        color: var(--color-gray-300);
+        margin-bottom: 1rem;
+    }
+    
+    @media (max-width: 992px) {
+        .cart-wrapper {
+            grid-template-columns: 1fr;
+        }
+        
+        .cart-item {
+            grid-template-columns: 80px 1fr;
+            gap: 1rem;
+        }
+        
+        .cart-item__quantity,
+        .cart-item__price {
+            grid-column: 1 / -1;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block breadcrumbs %}{% endblock %}
+
+{% block content %}
+<!-- Partner Header -->
+<div class="partner-header">
+    <div class="container">
+        <div class="partner-header__inner">
+            <div class="partner-header__info">
+                <div class="partner-header__avatar">
+                    <i class="bi bi-briefcase"></i>
+                </div>
+                <div>
+                    <div class="partner-header__name">{{ partner.full_name }}</div>
+                    <span class="partner-header__badge">
+                        <i class="bi bi-patch-check"></i> Партнёр
+                    </span>
+                </div>
+            </div>
+            <div class="partner-header__actions">
+                <a href="{% url 'partners:catalog' %}" class="partner-header__btn partner-header__btn--orders">
+                    <i class="bi bi-arrow-left"></i> В каталог
+                </a>
+                <a href="{% url 'partners:orders' %}" class="partner-header__btn partner-header__btn--orders">
+                    <i class="bi bi-bag"></i> Мои заказы
+                </a>
+                <a href="{% url 'partners:profile' %}" class="partner-header__btn partner-header__btn--profile">
+                    <i class="bi bi-person"></i> Профиль
+                </a>
+                <a href="{% url 'partners:logout' %}" class="partner-header__btn partner-header__btn--logout">
+                    <i class="bi bi-box-arrow-right"></i> Выход
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<section class="cart-section">
+    <div class="container">
+        <h1 class="page-title">Корзина партнёра</h1>
+        
+        {% if cart_items %}
+        <div class="cart-wrapper">
+            <div class="cart-items">
+                {% for item in cart_items %}
+                <div class="cart-item" data-product-id="{{ item.product.id }}">
+                    <div class="cart-item__image">
+                        {% with main_image=item.product.get_main_image %}
+                        {% if main_image %}
+                        <img src="{{ main_image.image.url }}" alt="{{ item.product.name }}">
+                        {% else %}
+                        <div class="cart-item__placeholder">
+                            <i class="bi bi-image"></i>
+                        </div>
+                        {% endif %}
+                        {% endwith %}
+                    </div>
+                    
+                    <div class="cart-item__info">
+                        <h3 class="cart-item__title">
+                            <a href="{% url 'partners:product' item.product.slug %}">{{ item.product.name }}</a>
+                        </h3>
+                        {% if item.product.article %}
+                        <div class="cart-item__article">Кросс-номер: {{ item.product.article }}</div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="cart-item__quantity">
+                        <label>Количество:</label>
+                        <div class="quantity-controls">
+                            <button class="quantity-btn quantity-btn--minus" data-product-id="{{ item.product.id }}">-</button>
+                            <input type="number" class="quantity-input" value="{{ item.quantity }}" min="1" data-product-id="{{ item.product.id }}">
+                            <button class="quantity-btn quantity-btn--plus" data-product-id="{{ item.product.id }}">+</button>
+                        </div>
+                    </div>
+                    
+                    <div class="cart-item__price">
+                        <div class="cart-item__price-unit">{{ item.price|floatformat:0 }} ₽</div>
+                        <div class="cart-item__price-total">{{ item.total|floatformat:0 }} ₽</div>
+                    </div>
+                    
+                    <div class="cart-item__remove">
+                        <button class="btn-remove" data-product-id="{{ item.product.id }}" title="Удалить">
+                            <i class="bi bi-x-lg"></i>
+                        </button>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            
+            <div class="cart-summary">
+                <div class="cart-summary__block">
+                    <div class="cart-summary__row">
+                        <span>Итого:</span>
+                        <strong class="cart-total">{{ total|floatformat:0 }} ₽</strong>
+                    </div>
+                </div>
+                
+                <div class="cart-summary__actions">
+                    <form action="{% url 'partners:order_create' %}" method="post">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn--primary btn--lg btn--block">
+                            <i class="bi bi-cart-check"></i> Оформить заказ
+                        </button>
+                    </form>
+                    <a href="{% url 'partners:catalog' %}" class="btn btn--outline btn--block">
+                        Продолжить покупки
+                    </a>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <div class="cart-empty">
+            <i class="bi bi-cart-x"></i>
+            <h2>Корзина пуста</h2>
+            <p>Добавьте товары в корзину, чтобы оформить заказ</p>
+            <a href="{% url 'partners:catalog' %}" class="btn btn--primary">
+                Перейти в каталог
+            </a>
+        </div>
+        {% endif %}
+    </div>
+</section>
+
+<script>
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Обновление количества
+    document.querySelectorAll('.quantity-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            const productId = this.dataset.productId;
+            const input = document.querySelector('.quantity-input[data-product-id="' + productId + '"]');
+            let quantity = parseInt(input.value);
+            
+            if (this.classList.contains('quantity-btn--minus')) {
+                quantity = Math.max(1, quantity - 1);
+            } else {
+                quantity += 1;
+            }
+            
+            input.value = quantity;
+            updateCartItem(productId, quantity);
+        });
+    });
+    
+    // Удаление товара
+    document.querySelectorAll('.btn-remove').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            const productId = this.dataset.productId;
+            if (confirm('Удалить товар из корзины?')) {
+                removeCartItem(productId);
+            }
+        });
+    });
+    
+    function updateCartItem(productId, quantity) {
+        const formData = new FormData();
+        formData.append('quantity', quantity);
+        
+        fetch('{% url "partners:cart_update" 0 %}'.replace('0', productId), {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken')
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            }
+        });
+    }
+    
+    function removeCartItem(productId) {
+        updateCartItem(productId, 0);
+    }
+});
+</script>
+{% endblock %}

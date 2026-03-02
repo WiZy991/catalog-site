@@ -533,9 +533,11 @@ class PartnerCatalogView(PartnerRequiredMixin, ListView):
     
     def get_queryset(self):
         # ТОЛЬКО товары из партнёрского каталога с остатком!
+        # Исключаем товары не в наличии
         queryset = Product.objects.filter(
             is_active=True,
-            catalog_type='wholesale'
+            catalog_type='wholesale',
+            availability__in=['in_stock', 'order']  # Только в наличии или под заказ
         ).filter(
             Q(quantity__gt=0) | Q(wholesale_price__gt=0)  # Товары с остатком ИЛИ оптовой ценой
         ).select_related('category').prefetch_related('images')
@@ -740,6 +742,43 @@ def partner_cart_count(request):
     cart = get_partner_cart(request)
     count = sum(item['quantity'] for item in cart.values())
     return JsonResponse({'count': count})
+
+
+@login_required
+def partner_cart_view(request):
+    """Просмотр корзины партнёра."""
+    if not hasattr(request.user, 'partner_profile') and not request.user.is_staff:
+        messages.error(request, 'Недостаточно прав')
+        return redirect('partners:catalog')
+    
+    cart = get_partner_cart(request)
+    cart_items = []
+    total = 0
+    
+    for product_id, item_data in cart.items():
+        try:
+            product = Product.objects.get(id=int(product_id), is_active=True)
+            quantity = item_data['quantity']
+            price = float(item_data['price'])
+            item_total = quantity * price
+            
+            cart_items.append({
+                'product': product,
+                'quantity': quantity,
+                'price': price,
+                'total': item_total,
+            })
+            total += item_total
+        except (Product.DoesNotExist, ValueError, KeyError):
+            continue
+    
+    context = {
+        'cart_items': cart_items,
+        'total': total,
+        'partner': get_partner_or_none(request.user),
+    }
+    
+    return render(request, 'partners/cart.html', context)
 
 
 class PartnerOrdersView(PartnerRequiredMixin, ListView):
