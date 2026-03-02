@@ -1464,25 +1464,20 @@ def clean_product_name(name):
     if not name:
         return ''
     
-    cleaned = str(name)
+    cleaned = str(name).strip()
     
-    # Удаляем всё содержимое в скобках (включая сами скобки)
-    # Обрабатываем как обычные скобки (), так и квадратные []
-    # Используем цикл для обработки множественных скобок
+    # Находим первую открывающую скобку и удаляем всё начиная с неё до конца строки
+    # Это более надежный способ, который работает даже если скобки не закрыты
+    bracket_pos = cleaned.find('(')
+    if bracket_pos != -1:
+        cleaned = cleaned[:bracket_pos].strip()
     
-    # Удаляем содержимое в обычных скобках - повторяем до тех пор, пока есть скобки
-    prev_cleaned = ''
-    while prev_cleaned != cleaned:
-        prev_cleaned = cleaned
-        cleaned = re.sub(r'\([^()]*\)', '', cleaned)
+    # Также проверяем квадратные скобки
+    bracket_pos = cleaned.find('[')
+    if bracket_pos != -1:
+        cleaned = cleaned[:bracket_pos].strip()
     
-    # Удаляем содержимое в квадратных скобках
-    prev_cleaned = ''
-    while prev_cleaned != cleaned:
-        prev_cleaned = cleaned
-        cleaned = re.sub(r'\[[^\[\]]*\]', '', cleaned)
-    
-    # Удаляем лишние пробелы (двойные, тройные и т.д.) и обрезаем по краям
+    # Удаляем лишние пробелы
     cleaned = re.sub(r'\s+', ' ', cleaned.strip())
     
     return cleaned
