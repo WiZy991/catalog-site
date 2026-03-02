@@ -631,7 +631,8 @@ class PartnerCatalogView(PartnerRequiredMixin, ListView):
         ).order_by('order', 'name').prefetch_related('children')
         
         # Для каждой категории проверяем наличие товаров в оптовом каталоге
-        categories_with_products = []
+        # Показываем все активные категории, даже если в них пока нет товаров
+        categories_list = []
         for category in root_categories:
             # Получаем активные подкатегории
             category.active_children = category.children.filter(is_active=True).order_by('order', 'name')
@@ -640,21 +641,23 @@ class PartnerCatalogView(PartnerRequiredMixin, ListView):
             descendants = category.get_descendants(include_self=True)
             descendant_ids = list(descendants.values_list('id', flat=True))
             if descendant_ids:
+                # Считаем товары в оптовом каталоге (более мягкая фильтрация)
                 product_count = Product.objects.filter(
                     category_id__in=descendant_ids,
                     is_active=True,
                     catalog_type='wholesale'
                 ).filter(
-                    Q(quantity__gt=0) | Q(wholesale_price__gt=0)
+                    Q(quantity__gt=0) | Q(wholesale_price__gt=0) | Q(availability__in=['in_stock', 'order'])
                 ).count()
             else:
                 product_count = 0
             
-            if product_count > 0:
+            # Показываем категорию, даже если в ней нет товаров
+            # Но помечаем количество товаров для отображения
                 category.wholesale_product_count = product_count
-                categories_with_products.append(category)
+            categories_list.append(category)
         
-        context['categories'] = categories_with_products
+        context['categories'] = categories_list
         context['current_category'] = getattr(self, 'current_category', None)
         context['search_query'] = getattr(self, 'search_query', '')
         context['current_sort'] = self.request.GET.get('sort', 'name')
