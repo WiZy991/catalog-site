@@ -61,7 +61,15 @@
     
     .partner-header__actions {
         display: flex;
+        align-items: center;
         gap: 0.75rem;
+    }
+    
+    .partner-header__actions form {
+        display: inline-flex;
+        align-items: center;
+        margin: 0;
+        padding: 0;
     }
     
     .partner-header__btn {
@@ -74,12 +82,13 @@
         gap: 0.5rem;
         transition: all var(--transition-fast);
         min-width: 120px;
-        min-height: 38px;
+        height: 38px;
         justify-content: center;
         font-weight: 500;
         border: none;
         cursor: pointer;
         box-sizing: border-box;
+        line-height: 1;
     }
     
     .partner-header__btn--profile {
@@ -1008,7 +1017,6 @@ document.addEventListener('DOMContentLoaded', function() {
                             const orderCreateUrl = partnerHeaderActions.getAttribute('data-order-create-url') || '/partners/orders/create/';
                             form.action = orderCreateUrl;
                             form.method = 'post';
-                            form.style.display = 'inline';
                             
                             const csrfInput = document.createElement('input');
                             csrfInput.type = 'hidden';
@@ -1072,7 +1080,6 @@ document.addEventListener('DOMContentLoaded', function() {
                         const orderCreateUrl = partnerHeaderActions.getAttribute('data-order-create-url') || '/partners/orders/create/';
                         form.action = orderCreateUrl;
                         form.method = 'post';
-                        form.style.display = 'inline';
                         
                         const csrfInput = document.createElement('input');
                         csrfInput.type = 'hidden';
@@ -1133,7 +1140,7 @@ document.addEventListener('DOMContentLoaded', function() {
             </div>
             <div class="partner-header__actions" data-order-create-url="{% url 'partners:order_create' %}">
                 {% if cart_count > 0 %}
-                <form action="{% url 'partners:order_create' %}" method="post" style="display: inline;">
+                <form action="{% url 'partners:order_create' %}" method="post">
                     {% csrf_token %}
                     <button type="submit" class="partner-header__btn partner-header__btn--order">
                         <i class="bi bi-cart-check"></i> Заказать ({{ cart_count }})
