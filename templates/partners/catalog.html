@@ -1149,7 +1149,7 @@
             border: 2px solid var(--color-gray-200) !important;
             border-radius: var(--radius-lg) !important;
             background: var(--color-white) !important;
-            text-align: center !important;
+            text-align: left !important;
             flex-shrink: 0 !important;
             float: none !important;
             clear: both !important;
@@ -1159,7 +1159,7 @@
         .sidebar-title {
             font-size: 1.1rem;
             margin-bottom: 1rem;
-            text-align: center !important;
+            text-align: left !important;
             display: block !important;
             visibility: visible !important;
             font-weight: 600;
@@ -1168,21 +1168,19 @@
         
         .category-list {
             margin-bottom: 1.5rem;
-            display: flex !important;
-            flex-direction: column !important;
+            display: block !important;
             visibility: visible !important;
             list-style: none;
             padding: 0;
             margin: 0;
-            text-align: center !important;
-            align-items: center !important;
+            text-align: left !important;
         }
         
         .category-list__item {
             display: block !important;
             visibility: visible !important;
             margin-bottom: 0.5rem;
-            text-align: center !important;
+            text-align: left !important;
             width: 100%;
             max-width: 100%;
         }
@@ -1191,31 +1189,33 @@
             display: flex !important;
             visibility: visible !important;
             align-items: center;
-            justify-content: center !important;
+            justify-content: flex-start !important;
             width: 100%;
-            margin: 0 auto;
+            margin: 0;
         }
         
         .category-list__link {
-            display: inline-flex !important;
+            display: flex !important;
             visibility: visible !important;
-            padding: 0.75rem 1.5rem !important;
+            padding: 0.75rem 1rem !important;
             font-size: 0.95rem !important;
             min-height: 44px;
             align-items: center;
-            justify-content: center !important;
-            text-align: center !important;
-            margin: 0 auto !important;
+            justify-content: flex-start !important;
+            text-align: left !important;
+            margin: 0 !important;
+            width: 100%;
         }
         
         .category-list__link--sub {
-            display: inline-flex !important;
+            display: flex !important;
             visibility: visible !important;
             padding: 0.6rem 1.2rem !important;
             font-size: 0.9rem !important;
-            justify-content: center !important;
-            text-align: center !important;
-            margin: 0 auto !important;
+            justify-content: flex-start !important;
+            text-align: left !important;
+            margin: 0 !important;
+            width: 100%;
         }
         
         .category-list__toggle {
@@ -1229,13 +1229,11 @@
         }
         
         .category-list--nested {
-            text-align: center !important;
+            text-align: left !important;
             margin-left: 0 !important;
             padding-left: 0 !important;
-            display: flex !important;
-            flex-direction: column !important;
+            display: block !important;
             visibility: visible !important;
-            align-items: center !important;
         }
         
         .catalog-main {
@@ -1435,7 +1433,7 @@
             border: 2px solid var(--color-gray-200) !important;
             border-radius: var(--radius-lg) !important;
             background: var(--color-white) !important;
-            text-align: center !important;
+            text-align: left !important;
             flex-shrink: 0 !important;
             float: none !important;
             clear: both !important;
@@ -1450,7 +1448,7 @@
         .sidebar-title {
             font-size: 1rem;
             margin-bottom: 0.75rem;
-            text-align: center !important;
+            text-align: left !important;
             display: block !important;
             visibility: visible !important;
             font-weight: 600;
@@ -1459,21 +1457,19 @@
         
         .category-list {
             margin-bottom: 1rem;
-            display: flex !important;
-            flex-direction: column !important;
+            display: block !important;
             visibility: visible !important;
             list-style: none;
             padding: 0;
             margin: 0;
-            text-align: center !important;
-            align-items: center !important;
+            text-align: left !important;
         }
         
         .category-list__item {
             display: block !important;
             visibility: visible !important;
             margin-bottom: 0.5rem;
-            text-align: center !important;
+            text-align: left !important;
             width: 100%;
             max-width: 100%;
         }
@@ -1482,31 +1478,33 @@
             display: flex !important;
             visibility: visible !important;
             align-items: center;
-            justify-content: center !important;
+            justify-content: flex-start !important;
             width: 100%;
-            margin: 0 auto;
+            margin: 0;
         }
         
         .category-list__link {
-            display: inline-flex !important;
+            display: flex !important;
             visibility: visible !important;
-            padding: 0.7rem 1.3rem !important;
+            padding: 0.7rem 1rem !important;
             font-size: 0.9rem !important;
             min-height: 44px;
             align-items: center;
-            justify-content: center !important;
-            text-align: center !important;
-            margin: 0 auto !important;
+            justify-content: flex-start !important;
+            text-align: left !important;
+            margin: 0 !important;
+            width: 100%;
         }
         
         .category-list__link--sub {
-            display: inline-flex !important;
+            display: flex !important;
             visibility: visible !important;
             padding: 0.6rem 1.1rem !important;
             font-size: 0.85rem !important;
-            justify-content: center !important;
-            text-align: center !important;
-            margin: 0 auto !important;
+            justify-content: flex-start !important;
+            text-align: left !important;
+            margin: 0 !important;
+            width: 100%;
         }
         
         .category-list__toggle {
@@ -1521,14 +1519,12 @@
         }
         
         .category-list--nested {
-            display: flex !important;
-            flex-direction: column !important;
+            display: block !important;
             visibility: visible !important;
-            text-align: center !important;
+            text-align: left !important;
             margin-left: 0 !important;
             padding-left: 0 !important;
             border-left: none !important;
-            align-items: center !important;
         }
         
         .catalog-main {
@@ -1979,38 +1975,38 @@ document.addEventListener('DOMContentLoaded', function() {
                         </a>
                     </li>
                     {% if categories %}
-                        {% for category in categories %}
+                    {% for category in categories %}
                         <li class="category-list__item {% if category.active_children %}category-list__item--has-children{% endif %}" style="display: block !important; visibility: visible !important;">
                             <div class="category-list__header" style="display: flex !important; visibility: visible !important;">
-                                <a href="{% url 'partners:catalog_category' category.slug %}" 
+                            <a href="{% url 'partners:catalog_category' category.slug %}" 
                                    class="category-list__link {% if current_category and current_category.pk == category.pk %}category-list__link--active{% elif current_category and current_category.parent and current_category.parent.pk == category.pk %}category-list__link--active{% endif %}"
                                    style="display: inline-flex !important; visibility: visible !important;">
-                                    {{ category.name }}
-                                </a>
-                                {% if category.active_children %}
-                                <button type="button" 
-                                        class="category-list__toggle {% if current_category and current_category.parent and current_category.parent.pk == category.pk %}category-list__toggle--expanded{% endif %}" 
-                                        data-category-id="{{ category.pk }}"
-                                        aria-label="Развернуть подкатегории">
-                                    <i class="bi bi-chevron-right"></i>
-                                </button>
-                                {% endif %}
-                            </div>
+                                {{ category.name }}
+                            </a>
                             {% if category.active_children %}
-                            <ul class="category-list category-list--nested {% if current_category and current_category.parent and current_category.parent.pk == category.pk %}expanded{% endif %}" 
-                                id="subcategories-{{ category.pk }}">
-                                {% for subcategory in category.active_children %}
-                                <li class="category-list__item">
-                                    <a href="{% url 'partners:catalog_category' subcategory.slug %}" 
-                                       class="category-list__link category-list__link--sub {% if current_category and current_category.pk == subcategory.pk %}category-list__link--active{% endif %}">
-                                        {{ subcategory.name }}
-                                    </a>
-                                </li>
-                                {% endfor %}
-                            </ul>
+                            <button type="button" 
+                                    class="category-list__toggle {% if current_category and current_category.parent and current_category.parent.pk == category.pk %}category-list__toggle--expanded{% endif %}" 
+                                    data-category-id="{{ category.pk }}"
+                                    aria-label="Развернуть подкатегории">
+                                <i class="bi bi-chevron-right"></i>
+                            </button>
                             {% endif %}
-                        </li>
-                        {% endfor %}
+                        </div>
+                        {% if category.active_children %}
+                        <ul class="category-list category-list--nested {% if current_category and current_category.parent and current_category.parent.pk == category.pk %}expanded{% endif %}" 
+                            id="subcategories-{{ category.pk }}">
+                            {% for subcategory in category.active_children %}
+                            <li class="category-list__item">
+                                <a href="{% url 'partners:catalog_category' subcategory.slug %}" 
+                                   class="category-list__link category-list__link--sub {% if current_category and current_category.pk == subcategory.pk %}category-list__link--active{% endif %}">
+                                    {{ subcategory.name }}
+                                </a>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                        {% endif %}
+                    </li>
+                    {% endfor %}
                     {% else %}
                         <li class="category-list__item">
                             <span class="text-muted" style="padding: 0.5rem 0.75rem; display: block; font-size: 0.9rem; text-align: center;">

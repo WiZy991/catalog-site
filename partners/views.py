@@ -663,7 +663,7 @@ class PartnerCatalogView(PartnerRequiredMixin, ListView):
                             Q(quantity__gt=0) | Q(wholesale_price__gt=0) | Q(availability__in=['in_stock', 'order'])
                         ).count()
                         product_count = direct_count + subcategory_count
-                    else:
+            else:
                         product_count = direct_count
                 else:
                     product_count = direct_count
@@ -672,7 +672,7 @@ class PartnerCatalogView(PartnerRequiredMixin, ListView):
                 product_count = 0
             
             # Всегда добавляем категорию в список, даже если товаров нет
-            category.wholesale_product_count = product_count
+                category.wholesale_product_count = product_count
             categories_list.append(category)
         
         context['categories'] = categories_list
