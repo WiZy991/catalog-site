@@ -372,7 +372,7 @@
         
         {% if similar_products %}
         <div class="related-products">
-            <h2 class="section__title">Товары для этого автомобиля</h2>
+            <h2 class="section__title">Похожие товары</h2>
             <div class="products-grid">
                 {% for item in similar_products %}
                 {% include 'partners/includes/product_card.html' with product=item %}

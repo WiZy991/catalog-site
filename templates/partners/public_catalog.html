@@ -158,6 +158,18 @@
         font-weight: 600;
     }
     
+    .category-list--nested {
+        margin-left: 1rem;
+        margin-top: 0.25rem;
+        padding-left: 0.5rem;
+        border-left: 2px solid var(--color-gray-200);
+    }
+    
+    .category-list__link--sub {
+        font-size: 0.9rem;
+        padding: 0.4rem 0.5rem;
+    }
+    
     .catalog-main {
         min-height: 500px;
         flex: 1;
@@ -557,9 +569,21 @@
                     {% for category in categories %}
                     <li class="category-list__item">
                         <a href="{% url 'partners:public_catalog_category' category.slug %}" 
-                           class="category-list__link {% if current_category.pk == category.pk %}category-list__link--active{% endif %}">
+                           class="category-list__link {% if current_category and current_category.pk == category.pk %}category-list__link--active{% elif current_category and current_category.parent and current_category.parent.pk == category.pk %}category-list__link--active{% endif %}">
                             {{ category.name }}
                         </a>
+                        {% if category.active_children %}
+                        <ul class="category-list category-list--nested">
+                            {% for subcategory in category.active_children %}
+                            <li class="category-list__item">
+                                <a href="{% url 'partners:public_catalog_category' subcategory.slug %}" 
+                                   class="category-list__link category-list__link--sub {% if current_category and current_category.pk == subcategory.pk %}category-list__link--active{% endif %}">
+                                    {{ subcategory.name }}
+                                </a>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                        {% endif %}
                     </li>
                     {% endfor %}
                 </ul>
@@ -572,7 +596,7 @@
                     <table class="products-table">
                         <thead>
                             <tr>
-                                <th>Бренд</th>
+                                <th>Применимость</th>
                                 <th>Код детали</th>
                                 <th>Описание</th>
                                 <th>Цена</th>

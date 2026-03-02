@@ -434,10 +434,37 @@ class PublicPartnerCatalogView(ListView):
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['categories'] = Category.objects.filter(
+        # Получаем корневые категории с подкатегориями
+        root_categories = Category.objects.filter(
             parent=None, 
             is_active=True
-        ).order_by('order', 'name')
+        ).order_by('order', 'name').prefetch_related('children')
+        
+        # Для каждой категории проверяем наличие товаров в оптовом каталоге
+        categories_with_products = []
+        for category in root_categories:
+            # Получаем активные подкатегории
+            category.active_children = category.children.filter(is_active=True).order_by('order', 'name')
+            
+            # Проверяем, есть ли товары в категории или её подкатегориях (только wholesale)
+            descendants = category.get_descendants(include_self=True)
+            descendant_ids = list(descendants.values_list('id', flat=True))
+            if descendant_ids:
+                product_count = Product.objects.filter(
+                    category_id__in=descendant_ids,
+                    is_active=True,
+                    catalog_type='wholesale'
+                ).filter(
+                    Q(quantity__gt=0) | Q(wholesale_price__gt=0)
+                ).count()
+            else:
+                product_count = 0
+            
+            if product_count > 0:
+                category.wholesale_product_count = product_count
+                categories_with_products.append(category)
+        
+        context['categories'] = categories_with_products
         context['current_category'] = getattr(self, 'current_category', None)
         context['search_query'] = getattr(self, 'search_query', '')
         context['partner_settings'] = PartnerSettings.get_settings()
@@ -595,10 +622,37 @@ class PartnerCatalogView(PartnerRequiredMixin, ListView):
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['categories'] = Category.objects.filter(
+        # Получаем корневые категории с подкатегориями
+        root_categories = Category.objects.filter(
             parent=None, 
             is_active=True
-        ).order_by('order', 'name')
+        ).order_by('order', 'name').prefetch_related('children')
+        
+        # Для каждой категории проверяем наличие товаров в оптовом каталоге
+        categories_with_products = []
+        for category in root_categories:
+            # Получаем активные подкатегории
+            category.active_children = category.children.filter(is_active=True).order_by('order', 'name')
+            
+            # Проверяем, есть ли товары в категории или её подкатегориях (только wholesale)
+            descendants = category.get_descendants(include_self=True)
+            descendant_ids = list(descendants.values_list('id', flat=True))
+            if descendant_ids:
+                product_count = Product.objects.filter(
+                    category_id__in=descendant_ids,
+                    is_active=True,
+                    catalog_type='wholesale'
+                ).filter(
+                    Q(quantity__gt=0) | Q(wholesale_price__gt=0)
+                ).count()
+            else:
+                product_count = 0
+            
+            if product_count > 0:
+                category.wholesale_product_count = product_count
+                categories_with_products.append(category)
+        
+        context['categories'] = categories_with_products
         context['current_category'] = getattr(self, 'current_category', None)
         context['search_query'] = getattr(self, 'search_query', '')
         context['current_sort'] = self.request.GET.get('sort', 'name')

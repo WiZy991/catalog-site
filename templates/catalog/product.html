@@ -99,7 +99,7 @@
                     {% endif %}
                     {% if product.brand %}
                     <span class="product-meta__item">
-                        <strong>Бренд:</strong> {{ product.brand }}
+                        <strong>Применимость:</strong> {{ product.brand }}
                     </span>
                     {% endif %}
                 </div>
@@ -203,7 +203,7 @@
         <!-- Похожие товары -->
         {% if related_products %}
         <div class="related-products">
-            <h2 class="section__title">Товары для этого автомобиля</h2>
+            <h2 class="section__title">Похожие товары</h2>
             <div class="products-grid">
                 {% for product in related_products %}
                 {% include 'catalog/includes/product_card.html' %}
