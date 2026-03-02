@@ -485,7 +485,7 @@
     .products-table th,
     .products-table td {
         box-sizing: border-box !important;
-        padding: 0.5rem 0.6rem !important;
+        padding: 0.4rem 0.4rem !important;
         vertical-align: middle !important;
         border-left: none !important;
         border-right: none !important;
@@ -500,24 +500,32 @@
     
     .products-table tbody tr td {
         vertical-align: middle !important;
-        padding: 0.5rem 0.6rem !important;
+        padding: 0.4rem 0.4rem !important;
     }
     
     /* ИСКЛЮЧЕНИЕ: колонка Количество выравнивается по верху */
     .products-table tbody tr td:nth-child(6) {
         vertical-align: top !important;
-        padding-top: 0.5rem !important;
+        padding-top: 0.4rem !important;
+        padding-left: 0.3rem !important;
     }
     
     .products-table thead tr th {
         vertical-align: middle !important;
-        padding: 0.5rem 0.6rem !important;
+        padding: 0.4rem 0.4rem !important;
     }
     
     /* ИСКЛЮЧЕНИЕ: заголовок Количество выравнивается по верху */
     .products-table thead tr th:nth-child(6) {
         vertical-align: top !important;
-        padding-top: 0.5rem !important;
+        padding-top: 0.4rem !important;
+        padding-left: 0.3rem !important;
+    }
+    
+    /* Уменьшаем отступ справа у колонки Цена, чтобы Количество было ближе */
+    .products-table th:nth-child(5),
+    .products-table td:nth-child(5) {
+        padding-right: 0.2rem !important;
     }
     
     /* Выравнивание содержимого внутри ячеек */
@@ -548,7 +556,7 @@
     .quantity-control-wrapper {
         display: flex;
         flex-direction: column;
-        gap: 0.35rem;
+        gap: 0.25rem;
         align-items: center;
         justify-content: flex-start;
         width: 100%;
@@ -566,25 +574,25 @@
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
-        padding: 0.5rem 0.6rem !important;
+        padding: 0.4rem 0.4rem !important;
         vertical-align: middle !important;
     }
     
     .products-table thead th {
         border-bottom: 2px solid var(--color-gray-200);
-        padding: 0.5rem 0.6rem !important;
+        padding: 0.4rem 0.4rem !important;
         vertical-align: middle !important;
     }
     
     .products-table tbody td {
-        padding: 0.5rem 0.6rem !important;
+        padding: 0.4rem 0.4rem !important;
         vertical-align: middle !important;
     }
     
     .products-table td {
         text-align: left !important;
         height: auto;
-        line-height: 1.4;
+        line-height: 1.3;
     }
     
     .products-table th:nth-child(1),
@@ -603,7 +611,7 @@
     
     .products-table th:nth-child(3),
     .products-table td:nth-child(3) { 
-        width: 32%;
+        width: 35%;
         min-width: 250px;
     } /* Описание */
     
@@ -616,15 +624,17 @@
     
     .products-table th:nth-child(5),
     .products-table td:nth-child(5) { 
-        width: 10%;
-        min-width: 100px;
-        max-width: 120px;
+        width: 8%;
+        min-width: 80px;
+        max-width: 100px;
+        padding-right: 0.2rem !important;
     } /* Цена */
     
     .products-table th:nth-child(6),
     .products-table td:nth-child(6) { 
-        width: 25%;
-        min-width: 220px;
+        width: 24%;
+        min-width: 200px;
+        padding-left: 0.3rem !important;
     } /* Количество + Заказ */
     
     /* Выравнивание колонки Количество по верху - ПРИНУДИТЕЛЬНО */
@@ -638,8 +648,8 @@
     /* Центрируем заголовок "Количество" как и содержимое */
     .products-table th:nth-child(6) {
         text-align: center !important;
-        padding-left: 0.6rem !important;
-        padding-right: 0.6rem !important;
+        padding-left: 0.3rem !important;
+        padding-right: 0.4rem !important;
     }
     
     /* Выравнивание элементов в колонке Количество по верху и центру */
