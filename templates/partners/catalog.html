@@ -5,6 +5,14 @@
 
 {% block extra_css %}
 <style>
+    /* Скрываем розничную навигацию для партнёров */
+    .header__nav,
+    .header__search,
+    .header__cart,
+    .header__partners-btn {
+        display: none !important;
+    }
+    
     /* Prevent page shift */
     body {
         overflow-x: hidden;
@@ -1290,7 +1298,13 @@ document.addEventListener('DOMContentLoaded', function() {
                                 </td>
                                 <td class="products-table__description">
                                     <a href="{% url 'partners:product' product.slug %}" class="products-table__link">
-                                        {{ product.name }}
+                                        {% if product.name and product.name.strip %}
+                                            {{ product.name }}
+                                        {% elif product.article %}
+                                            {{ product.article }}
+                                        {% else %}
+                                            Товар #{{ product.id }}
+                                        {% endif %}
                                     </a>
                                     {% if product.get_applicability_list %}
                                     <div class="products-table__applicability">

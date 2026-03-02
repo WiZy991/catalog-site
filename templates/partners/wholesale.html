@@ -7,6 +7,14 @@
 
 {% block extra_css %}
 <style>
+    /* Скрываем розничную навигацию для партнёров */
+    .header__nav,
+    .header__search,
+    .header__cart,
+    .header__partners-btn {
+        display: none !important;
+    }
+    
     /* Breadcrumbs with buttons */
     .breadcrumbs--partners {
         display: flex;

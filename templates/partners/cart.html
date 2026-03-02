@@ -5,6 +5,14 @@
 
 {% block extra_css %}
 <style>
+    /* Скрываем розничную навигацию для партнёров */
+    .header__nav,
+    .header__search,
+    .header__cart,
+    .header__partners-btn {
+        display: none !important;
+    }
+    
     .partner-header {
         background: var(--color-brand-black);
         color: var(--color-brand-white);
