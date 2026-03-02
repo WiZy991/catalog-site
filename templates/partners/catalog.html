@@ -589,6 +589,18 @@
         padding-top: 0.75rem !important;
     }
     
+    /* Сдвигаем заголовок "Количество" правее */
+    .products-table th:nth-child(6) {
+        text-align: right !important;
+        padding-right: 1.5rem !important;
+    }
+    
+    .products-table th:nth-child(6)::before {
+        content: '';
+        display: inline-block;
+        width: 2rem;
+    }
+    
     /* Выравнивание элементов в колонке Количество по верху и центру */
     .products-table td:nth-child(6) .quantity-control-wrapper,
     .products-table__quantity .quantity-control-wrapper {
@@ -1011,16 +1023,32 @@
         
         .catalog-sidebar {
             margin-bottom: 2rem;
+            display: block !important;
+            width: 100% !important;
+            position: static !important;
+        }
+        
+        .sidebar-title {
+            font-size: 1.1rem;
+            margin-bottom: 1rem;
+        }
+        
+        .category-list {
+            margin-bottom: 1.5rem;
         }
         
         .products-table-wrapper {
             overflow-x: auto;
             -webkit-overflow-scrolling: touch;
+            width: 100%;
+            display: block;
         }
         
         .products-table {
             font-size: 0.75rem;
             min-width: 800px;
+            width: 100%;
+            display: table;
         }
         
         .products-table th,
@@ -1129,9 +1157,34 @@
             font-size: 0.9rem;
         }
         
+        .catalog-sidebar {
+            display: block !important;
+            width: 100% !important;
+            position: static !important;
+            margin-bottom: 1.5rem;
+        }
+        
+        .sidebar-title {
+            font-size: 1rem;
+            margin-bottom: 0.75rem;
+        }
+        
+        .category-list {
+            margin-bottom: 1rem;
+        }
+        
+        .products-table-wrapper {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            width: 100%;
+            display: block;
+        }
+        
         .products-table {
             font-size: 0.7rem;
             min-width: 700px;
+            width: 100%;
+            display: table;
         }
         
         .products-table th,
