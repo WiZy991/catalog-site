@@ -73,17 +73,11 @@ urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 # В production рекомендуется настроить веб-сервер (Nginx/Apache) для раздачи статики
 # Но Django тоже будет раздавать статику как fallback
 import os
-# Сначала пытаемся использовать STATIC_ROOT (если collectstatic выполнен)
+# Используем STATIC_ROOT (если collectstatic выполнен)
 static_root = settings.STATIC_ROOT
 if os.path.exists(static_root) and os.path.isdir(static_root):
-    try:
-        # Проверяем, есть ли хотя бы один файл в STATIC_ROOT
-        if any(os.scandir(static_root)):
-            urlpatterns += static(settings.STATIC_URL, document_root=static_root)
-    except (OSError, PermissionError):
-        pass
-
-# Если STATIC_ROOT не работает, используем STATICFILES_DIRS
+    urlpatterns += static(settings.STATIC_URL, document_root=static_root)
+# Также добавляем STATICFILES_DIRS как fallback
 if settings.STATICFILES_DIRS and len(settings.STATICFILES_DIRS) > 0:
     static_dir = settings.STATICFILES_DIRS[0]
     if os.path.exists(static_dir) and os.path.isdir(static_dir):
