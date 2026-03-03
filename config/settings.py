@@ -207,7 +207,7 @@ YANDEX_VERIFICATION = ''  # Пример: 'abc123def456'
 
 # Google Search Console: https://search.google.com/search-console
 # Получите код верификации в Google Search Console и вставьте сюда
-GOOGLE_VERIFICATION = ''  # Пример: 'abc123def4567890'
+GOOGLE_VERIFICATION = '6SUz-SXnfQfOtD_ccG7xrTjg-cnMacwIBMJOnfSOvbc'
 
 # Яндекс.Метрика (опционально)
 YANDEX_METRICA_ID = ''  # ID счетчика Яндекс.Метрики (если используется)
