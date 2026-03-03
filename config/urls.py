@@ -34,6 +34,9 @@ def serve_static_file(request, path):
     import logging
     logger = logging.getLogger(__name__)
     
+    # Логируем, что view вызван
+    logger.warning(f"=== SERVE_STATIC_FILE CALLED: path={path} ===")
+    
     # Пытаемся найти файл в STATIC_ROOT
     static_root = str(settings.STATIC_ROOT)
     file_path = os.path.join(static_root, path)
@@ -42,7 +45,7 @@ def serve_static_file(request, path):
     static_root = os.path.abspath(static_root)
     file_path = os.path.abspath(file_path)
     
-    logger.info(f"Serve static: path={path}, static_root={static_root}, file_path={file_path}, exists={os.path.exists(file_path)}")
+    logger.warning(f"Serve static: path={path}, static_root={static_root}, file_path={file_path}, exists={os.path.exists(file_path)}")
     
     # Проверяем существование файла
     if os.path.exists(file_path) and os.path.isfile(file_path):
@@ -109,11 +112,11 @@ def serve_static_file(request, path):
     raise Http404(f"File not found: {path}")
 
 urlpatterns = [
-    # Раздача статики через Django view (работает при DEBUG=True и DEBUG=False)
+    # Раздача статики через Django view (ОБЯЗАТЕЛЬНО ПЕРВЫМ!)
+    # Должен быть до всех остальных путей, чтобы обрабатывать запросы к /static/
     re_path(r'^static/(?P<path>.*)$', serve_static_file, name='serve_static'),
     
-    
-    # Тестовый endpoint для проверки доступности (ДО всех остальных!)
+    # Тестовый endpoint для проверки доступности
     path('cml/test/', lambda r: HttpResponse('OK - CommerceML endpoint доступен', content_type='text/plain; charset=utf-8'), name='commerceml_test'),
     
     # Стандартный протокол CommerceML 2 обмена с 1С (ОБЯЗАТЕЛЬНО ПЕРВЫМ!)
