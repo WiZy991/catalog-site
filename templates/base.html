@@ -237,7 +237,7 @@
     </script>
     
     <!-- Яндекс.Метрика (если настроена) -->
-    {% if YANDEX_METRICA_ID %}
+    {% if YANDEX_METRICA_ID and YANDEX_METRICA_ID|length > 0 %}
     <!-- Yandex.Metrika counter -->
     <script type="text/javascript">
        (function(m,e,t,r,i,k,a){m[i]=m[i]||function(){(m[i].a=m[i].a||[]).push(arguments)};
