@@ -30,7 +30,7 @@ sitemaps = {
 }
 
 def serve_static_file(request, path):
-    """Раздача статических файлов через Django view (обходит блокировку Nginx)"""
+    """Раздача статических файлов через Django view (работает при любом DEBUG)"""
     # Пытаемся найти файл в STATIC_ROOT
     static_root = settings.STATIC_ROOT
     file_path = os.path.join(static_root, path)
@@ -92,7 +92,7 @@ def serve_static_file(request, path):
     raise Http404("File not found")
 
 urlpatterns = [
-    # Раздача статики через Django view (ПЕРВЫМ, чтобы обойти блокировку Nginx)
+    # Раздача статики через Django view (работает при DEBUG=True и DEBUG=False)
     re_path(r'^static/(?P<path>.*)$', serve_static_file, name='serve_static'),
     
     
@@ -137,5 +137,5 @@ urlpatterns = [
 urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 
 # Статика раздается через view serve_static_file (см. выше в urlpatterns)
-# Это обходит блокировку Nginx на Beget для нового домена
+# Работает при любом значении DEBUG
 
