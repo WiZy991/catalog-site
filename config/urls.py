@@ -126,10 +126,35 @@ def serve_static_file(request, path):
     logger.warning(f"Static file not found: {path} (tried {os.path.join(static_root, path)} and {os.path.join(str(settings.STATICFILES_DIRS[0]), path) if settings.STATICFILES_DIRS else 'N/A'})")
     raise Http404(f"File not found: {path}")
 
+def serve_favicon(request):
+    """Обработка favicon.ico в корне сайта."""
+    # Используем logo.png как favicon
+    logo_path = os.path.join(settings.STATICFILES_DIRS[0] if settings.STATICFILES_DIRS else settings.STATIC_ROOT, 'images', 'logo.png')
+    if os.path.exists(logo_path):
+        try:
+            response = FileResponse(open(logo_path, 'rb'), content_type='image/png')
+            response['Cache-Control'] = 'public, max-age=31536000'
+            return response
+        except Exception:
+            pass
+    # Если logo.png не найден, пробуем favicon.svg
+    favicon_path = os.path.join(settings.STATICFILES_DIRS[0] if settings.STATICFILES_DIRS else settings.STATIC_ROOT, 'images', 'favicon.svg')
+    if os.path.exists(favicon_path):
+        try:
+            response = FileResponse(open(favicon_path, 'rb'), content_type='image/svg+xml')
+            response['Cache-Control'] = 'public, max-age=31536000'
+            return response
+        except Exception:
+            pass
+    raise Http404("Favicon not found")
+
 urlpatterns = [
     # ВАЖНО: Статика должна быть ПЕРВОЙ, чтобы не перехватывалась другими паттернами
     # Это особенно важно при DEBUG=False, когда используется кастомный view
     # (при DEBUG=True staticfiles_urlpatterns добавляется в конец, но имеет приоритет)
+    
+    # Favicon в корне
+    path('favicon.ico', serve_favicon, name='favicon'),
     
     # Стандартный протокол CommerceML 2 обмена с 1С (ОБЯЗАТЕЛЬНО ПЕРВЫМ после статики!)
     # ВАЖНО: Эти пути должны быть в самом начале списка для правильной работы

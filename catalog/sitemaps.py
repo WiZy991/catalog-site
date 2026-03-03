@@ -32,7 +32,7 @@ class CategorySitemap(Sitemap):
 
 class StaticViewSitemap(Sitemap):
     """Sitemap для статических страниц."""
-    priority = 1.0
+    priority = 1.0  # Высокий приоритет для статических страниц - они должны показываться в поиске для общих запросов
     changefreq = 'monthly'
 
     def items(self):

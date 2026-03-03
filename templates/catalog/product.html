@@ -8,11 +8,13 @@
 {% block canonical_url %}{{ SEO_BASE_URL }}{{ product.get_absolute_url }}{% endblock %}
 
 {% block og_type %}product{% endblock %}
+{% block og_url %}{{ SEO_BASE_URL }}{{ product.get_absolute_url }}{% endblock %}
 {% block og_title %}{{ product.get_meta_title }} - {{ SITE_NAME }}{% endblock %}
 {% block og_description %}{{ product.get_meta_description }}{% endblock %}
 {% block og_image %}{% if product.get_main_image %}{{ SEO_BASE_URL }}{{ product.get_main_image.image.url }}{% else %}{{ SEO_OG_IMAGE }}{% endif %}{% endblock %}
 {% block og_image_alt %}{{ product.name }}{% endblock %}
 
+{% block twitter_url %}{{ SEO_BASE_URL }}{{ product.get_absolute_url }}{% endblock %}
 {% block twitter_title %}{{ product.get_meta_title }} - {{ SITE_NAME }}{% endblock %}
 {% block twitter_description %}{{ product.get_meta_description }}{% endblock %}
 {% block twitter_image %}{% if product.get_main_image %}{{ SEO_BASE_URL }}{{ product.get_main_image.image.url }}{% else %}{{ SEO_OG_IMAGE }}{% endif %}{% endblock %}

@@ -3,6 +3,10 @@
 
 {% block title %}Оптовые продажи - {{ SITE_NAME }}{% endblock %}
 {% block meta_description %}Оптовые продажи автозапчастей {{ SITE_NAME }}. Выгодные условия для оптовых покупателей.{% endblock %}
+{% block canonical_url %}{{ SEO_BASE_URL }}{% url 'core:wholesale' %}{% endblock %}
+{% block og_url %}{{ SEO_BASE_URL }}{% url 'core:wholesale' %}{% endblock %}
+{% block og_title %}Оптовые продажи - {{ SITE_NAME }}{% endblock %}
+{% block og_description %}Оптовые продажи автозапчастей {{ SITE_NAME }}. Выгодные условия для оптовых покупателей.{% endblock %}
 
 {% block breadcrumbs %}
 <nav class="breadcrumbs" aria-label="Хлебные крошки">

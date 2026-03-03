@@ -7,11 +7,13 @@
 
 {% block canonical_url %}{{ SEO_BASE_URL }}{{ category.get_absolute_url }}{% endblock %}
 
+{% block og_url %}{{ SEO_BASE_URL }}{{ category.get_absolute_url }}{% endblock %}
 {% block og_title %}{{ category.get_meta_title }} - {{ SITE_NAME }}{% endblock %}
 {% block og_description %}{{ category.get_meta_description }}{% endblock %}
 {% block og_image %}{% if category.image %}{{ SEO_BASE_URL }}{{ category.image.url }}{% else %}{{ SEO_OG_IMAGE }}{% endif %}{% endblock %}
 {% block og_image_alt %}{{ category.name }}{% endblock %}
 
+{% block twitter_url %}{{ SEO_BASE_URL }}{{ category.get_absolute_url }}{% endblock %}
 {% block twitter_title %}{{ category.get_meta_title }} - {{ SITE_NAME }}{% endblock %}
 {% block twitter_description %}{{ category.get_meta_description }}{% endblock %}
 {% block twitter_image %}{% if category.image %}{{ SEO_BASE_URL }}{{ category.image.url }}{% else %}{{ SEO_OG_IMAGE }}{% endif %}{% endblock %}

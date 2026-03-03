@@ -3,6 +3,10 @@
 
 {% block title %}О компании - {{ SITE_NAME }}{% endblock %}
 {% block meta_description %}О компании {{ SITE_NAME }}. Надёжный поставщик автозапчастей.{% endblock %}
+{% block canonical_url %}{{ SEO_BASE_URL }}{% url 'core:about' %}{% endblock %}
+{% block og_url %}{{ SEO_BASE_URL }}{% url 'core:about' %}{% endblock %}
+{% block og_title %}О компании - {{ SITE_NAME }}{% endblock %}
+{% block og_description %}О компании {{ SITE_NAME }}. Надёжный поставщик автозапчастей.{% endblock %}
 
 {% block breadcrumbs %}
 <nav class="breadcrumbs" aria-label="Хлебные крошки">

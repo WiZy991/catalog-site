@@ -7,6 +7,7 @@
 
 {% block canonical_url %}{{ SEO_BASE_URL }}{% url 'core:home' %}{% endblock %}
 
+{% block og_url %}{{ SEO_BASE_URL }}{% url 'core:home' %}{% endblock %}
 {% block og_title %}{{ SITE_NAME }} - Каталог автозапчастей{% endblock %}
 {% block og_description %}{{ SITE_DESCRIPTION }}{% endblock %}
 

@@ -89,6 +89,12 @@ class CategoryView(ListView):
 
     def get_queryset(self):
         self.category = self.get_category()
+        if not self.category:
+            # Если категория не найдена, возвращаем пустой queryset
+            # Это вызовет 404 через get_object_or_404 в get_category
+            from django.core.exceptions import Http404
+            raise Http404("Категория не найдена")
+        
         descendants = self.category.get_descendants(include_self=True)
         queryset = Product.objects.filter(
             category__in=descendants,
@@ -103,6 +109,10 @@ class CategoryView(ListView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        if not self.category:
+            from django.core.exceptions import Http404
+            raise Http404("Категория не найдена")
+        
         context['category'] = self.category
         context['breadcrumbs'] = self.category.get_ancestors(include_self=True)
         # Получаем подкатегории через related_name 'children'
