@@ -34,9 +34,15 @@ def serve_static_file(request, path):
     """
     Раздача статических файлов через Django view (для DEBUG=False).
     Работает как fallback, если nginx не настроен.
+    Query string параметры (например, ?v=2.7) игнорируются - они используются только для кеширования.
     """
     import logging
     logger = logging.getLogger(__name__)
+    
+    # Убираем query string из path, если он есть (Django обычно передает path без query string)
+    # Но на всякий случай проверяем
+    if '?' in path:
+        path = path.split('?')[0]
     
     # Пытаемся найти файл в STATIC_ROOT
     static_root = str(settings.STATIC_ROOT)
@@ -46,24 +52,33 @@ def serve_static_file(request, path):
     static_root = os.path.abspath(static_root)
     file_path = os.path.abspath(file_path)
     
+    logger.info(f"Serving static file: path={path}, file_path={file_path}, exists={os.path.exists(file_path)}")
+    
     # Проверяем существование файла
     if os.path.exists(file_path) and os.path.isfile(file_path):
         # Проверяем безопасность пути
         if not file_path.startswith(static_root):
-            logger.warning(f"Invalid path attempt: {file_path}")
+            logger.warning(f"Invalid path attempt: {file_path} (not in {static_root})")
             raise Http404("Invalid path")
         
         # Определяем MIME type
         content_type, _ = mimetypes.guess_type(file_path)
         if not content_type:
-            content_type = 'application/octet-stream'
+            # Определяем по расширению вручную
+            if path.endswith('.css'):
+                content_type = 'text/css; charset=utf-8'
+            elif path.endswith('.js'):
+                content_type = 'application/javascript; charset=utf-8'
+            else:
+                content_type = 'application/octet-stream'
         
         try:
             response = FileResponse(open(file_path, 'rb'), content_type=content_type)
             response['Cache-Control'] = 'public, max-age=31536000'
+            logger.info(f"Successfully serving file: {file_path} (Content-Type: {content_type})")
             return response
         except Exception as e:
-            logger.error(f"Error serving file {file_path}: {e}")
+            logger.error(f"Error serving file {file_path}: {e}", exc_info=True)
             raise Http404(f"Error serving file: {path}")
     
     # Если не нашли в STATIC_ROOT, пробуем STATICFILES_DIRS
@@ -73,26 +88,35 @@ def serve_static_file(request, path):
         static_dir = os.path.abspath(static_dir)
         file_path = os.path.abspath(file_path)
         
+        logger.info(f"Trying STATICFILES_DIRS: path={path}, file_path={file_path}, exists={os.path.exists(file_path)}")
+        
         # Проверяем существование файла
         if os.path.exists(file_path) and os.path.isfile(file_path):
             # Проверяем безопасность пути
             if not file_path.startswith(static_dir):
-                logger.warning(f"Invalid path attempt: {file_path}")
+                logger.warning(f"Invalid path attempt: {file_path} (not in {static_dir})")
                 raise Http404("Invalid path")
             
             content_type, _ = mimetypes.guess_type(file_path)
             if not content_type:
-                content_type = 'application/octet-stream'
+                # Определяем по расширению вручную
+                if path.endswith('.css'):
+                    content_type = 'text/css; charset=utf-8'
+                elif path.endswith('.js'):
+                    content_type = 'application/javascript; charset=utf-8'
+                else:
+                    content_type = 'application/octet-stream'
             
             try:
                 response = FileResponse(open(file_path, 'rb'), content_type=content_type)
                 response['Cache-Control'] = 'public, max-age=31536000'
+                logger.info(f"Successfully serving file from STATICFILES_DIRS: {file_path} (Content-Type: {content_type})")
                 return response
             except Exception as e:
-                logger.error(f"Error serving file {file_path}: {e}")
+                logger.error(f"Error serving file {file_path}: {e}", exc_info=True)
                 raise Http404(f"Error serving file: {path}")
     
-    logger.warning(f"Static file not found: {path}")
+    logger.warning(f"Static file not found: {path} (tried {os.path.join(static_root, path)} and {os.path.join(str(settings.STATICFILES_DIRS[0]), path) if settings.STATICFILES_DIRS else 'N/A'})")
     raise Http404(f"File not found: {path}")
 
 urlpatterns = [
@@ -147,7 +171,7 @@ else:
     # Этот view работает как fallback, если nginx не настроен или не работает
     urlpatterns += [
         re_path(r'^static/(?P<path>.*)$', serve_static_file, name='serve_static'),
-    ]
+]
 
 # Раздача медиа-файлов (работает и на продакшене)
 urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

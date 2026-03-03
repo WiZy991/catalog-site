@@ -423,6 +423,12 @@ LOGGING = {
             'level': 'INFO',
             'propagate': False,
         },
+        # Логгер для раздачи статики
+        'config.urls': {
+            'handlers': ['file', 'console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
         # Корневой логгер для всех запросов
         'django': {
             'handlers': ['file', 'console'],
