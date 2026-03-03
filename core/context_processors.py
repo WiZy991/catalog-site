@@ -72,7 +72,7 @@ def seo_processor(request):
             scheme = request.scheme
             base_url = f"{scheme}://{host}"
         except Exception:
-            base_url = 'https://onesim8n.beget.tech'
+            base_url = "https://onesimus25.ru/"
         
         return {
             'SEO_BASE_URL': base_url,
