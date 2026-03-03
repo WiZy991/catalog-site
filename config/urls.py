@@ -20,6 +20,7 @@ from partners.admin_views import (
 )
 from catalog import commerceml_views
 from catalog import farpost_views
+from catalog import views as catalog_views
 
 sitemaps = {
     'products': ProductSitemap,
@@ -60,12 +61,20 @@ urlpatterns = [
     path('orders/', include('orders.urls')),
     path('partners/', include('partners.urls')),
     path('sitemap.xml', sitemap, {'sitemaps': sitemaps}, name='django.contrib.sitemaps.views.sitemap'),
+    
+    # Редирект со старых URL /items/ на новые /catalog/product/
+    re_path(r'^items/(?P<slug>[\w-]+)/$', catalog_views.redirect_old_item_url, name='redirect_old_item'),
 ]
 
 # Раздача медиа-файлов (работает и на продакшене)
 urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 
+# Раздача статических файлов
+# В production рекомендуется настроить веб-сервер (Nginx/Apache) для раздачи статики
 if settings.DEBUG:
-    # Раздача статических файлов через Django (только в режиме разработки)
+    # В режиме разработки используем STATICFILES_DIRS
     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATICFILES_DIRS[0])
+else:
+    # В production используем STATIC_ROOT (после collectstatic)
+    urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
 

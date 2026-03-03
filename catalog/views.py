@@ -1,9 +1,10 @@
 from django.shortcuts import render, get_object_or_404
 from django.views.generic import ListView, DetailView
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponseRedirect
 from django.template.loader import render_to_string
 from django.db.models import Q, Min, Max
 from django.core.paginator import Paginator
+from django.urls import reverse
 from django.conf import settings
 from .models import Category, Product
 from .filters import ProductFilter, get_brand_choices
@@ -599,4 +600,16 @@ def search_products(request):
         'products': products_page,
         'paginator': paginator,
     })
+
+
+def redirect_old_item_url(request, slug):
+    """Редирект со старых URL /items/ на новые URL товаров."""
+    try:
+        # Пытаемся найти товар по slug
+        product = Product.objects.get(slug=slug, is_active=True)
+        # Редиректим на правильный URL товара
+        return HttpResponseRedirect(product.get_absolute_url())
+    except Product.DoesNotExist:
+        # Если товар не найден, редиректим на каталог
+        return HttpResponseRedirect(reverse('catalog:index'))
 
