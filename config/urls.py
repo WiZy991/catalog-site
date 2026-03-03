@@ -31,9 +31,6 @@ sitemaps = {
 
 def serve_static_file(request, path):
     """Раздача статических файлов через Django view (работает при любом DEBUG)"""
-    import logging
-    logger = logging.getLogger(__name__)
-    
     # Пытаемся найти файл в STATIC_ROOT
     static_root = str(settings.STATIC_ROOT)
     file_path = os.path.join(static_root, path)
@@ -42,7 +39,11 @@ def serve_static_file(request, path):
     static_root = os.path.abspath(static_root)
     file_path = os.path.abspath(file_path)
     
-    if file_path.startswith(static_root) and os.path.exists(file_path) and os.path.isfile(file_path):
+    # Проверяем существование файла
+    if os.path.exists(file_path) and os.path.isfile(file_path):
+        # Проверяем безопасность пути
+        if not file_path.startswith(static_root):
+            raise Http404("Invalid path")
         # Определяем MIME type
         content_type = 'application/octet-stream'
         if path.endswith('.css'):
@@ -73,7 +74,11 @@ def serve_static_file(request, path):
         static_dir = os.path.abspath(static_dir)
         file_path = os.path.abspath(file_path)
         
-        if file_path.startswith(static_dir) and os.path.exists(file_path) and os.path.isfile(file_path):
+        # Проверяем существование файла
+        if os.path.exists(file_path) and os.path.isfile(file_path):
+            # Проверяем безопасность пути
+            if not file_path.startswith(static_dir):
+                raise Http404("Invalid path")
             content_type = 'application/octet-stream'
             if path.endswith('.css'):
                 content_type = 'text/css'
