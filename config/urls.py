@@ -39,10 +39,17 @@ def serve_static_file(request, path):
     import logging
     logger = logging.getLogger(__name__)
     
+    # Логируем начало обработки запроса
+    logger.info(f"=== STATIC FILE REQUEST: {request.path} ===")
+    logger.info(f"Original path parameter: {path}")
+    logger.info(f"Request method: {request.method}")
+    logger.info(f"DEBUG setting: {settings.DEBUG}")
+    
     # Убираем query string из path, если он есть (Django обычно передает path без query string)
     # Но на всякий случай проверяем
     if '?' in path:
         path = path.split('?')[0]
+        logger.info(f"Removed query string, new path: {path}")
     
     # Пытаемся найти файл в STATIC_ROOT
     static_root = str(settings.STATIC_ROOT)
@@ -120,14 +127,18 @@ def serve_static_file(request, path):
     raise Http404(f"File not found: {path}")
 
 urlpatterns = [
-    # Тестовый endpoint для проверки доступности
-    path('cml/test/', lambda r: HttpResponse('OK - CommerceML endpoint доступен', content_type='text/plain; charset=utf-8'), name='commerceml_test'),
+    # ВАЖНО: Статика должна быть ПЕРВОЙ, чтобы не перехватывалась другими паттернами
+    # Это особенно важно при DEBUG=False, когда используется кастомный view
+    # (при DEBUG=True staticfiles_urlpatterns добавляется в конец, но имеет приоритет)
     
-    # Стандартный протокол CommerceML 2 обмена с 1С (ОБЯЗАТЕЛЬНО ПЕРВЫМ!)
+    # Стандартный протокол CommerceML 2 обмена с 1С (ОБЯЗАТЕЛЬНО ПЕРВЫМ после статики!)
     # ВАЖНО: Эти пути должны быть в самом начале списка для правильной работы
     path('cml/exchange/', commerceml_views.commerceml_exchange, name='commerceml_exchange'),
     path('cml/exchange', commerceml_views.commerceml_exchange, name='commerceml_exchange_no_slash'),  # Без слэша для совместимости
     path('1c_exchange.php', commerceml_views.commerceml_exchange, name='commerceml_exchange_php'),
+    
+    # Тестовый endpoint для проверки доступности
+    path('cml/test/', lambda r: HttpResponse('OK - CommerceML endpoint доступен', content_type='text/plain; charset=utf-8'), name='commerceml_test'),
     
     # API для 1С
     path('api/1c/', include('catalog.api_urls')),
@@ -160,18 +171,21 @@ urlpatterns = [
 # Раздача статических файлов
 # При DEBUG=True используем стандартный механизм Django (django.contrib.staticfiles)
 # При DEBUG=False используем кастомный view (fallback, если nginx не настроен)
+# ВАЖНО: Паттерн для статики должен быть ПЕРВЫМ в списке, чтобы не перехватывался другими маршрутами
 if settings.DEBUG:
     # DEBUG=True: используем стандартный механизм Django для разработки
     # Это автоматически обрабатывает STATICFILES_DIRS и STATIC_ROOT
     from django.contrib.staticfiles.urls import staticfiles_urlpatterns
-    urlpatterns += staticfiles_urlpatterns()
+    # Добавляем в начало, чтобы иметь приоритет
+    urlpatterns = staticfiles_urlpatterns() + urlpatterns
 else:
     # DEBUG=False: используем кастомный view для продакшена (если nginx не настроен)
     # ВАЖНО: В продакшене предпочтительно использовать nginx для раздачи статики
     # Этот view работает как fallback, если nginx не настроен или не работает
-    urlpatterns += [
+    # ВАЖНО: Добавляем в НАЧАЛО списка для приоритета!
+    urlpatterns = [
         re_path(r'^static/(?P<path>.*)$', serve_static_file, name='serve_static'),
-]
+    ] + urlpatterns
 
 # Раздача медиа-файлов (работает и на продакшене)
 urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
