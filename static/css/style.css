@@ -1516,13 +1516,6 @@ h1, h2, h3, h4, h5, h6 {
 .footer__desc {
     font-size: 0.9375rem;
     line-height: 1.6;
-    /* Скрываем для пользователей, но оставляем для SEO */
-    display: none;
-    visibility: hidden;
-    height: 0;
-    margin: 0;
-    padding: 0;
-    overflow: hidden;
 }
 
 .footer__title {
