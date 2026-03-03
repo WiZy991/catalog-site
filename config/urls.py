@@ -6,7 +6,8 @@ from django.urls import path, include, re_path
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib.sitemaps.views import sitemap
-from django.http import HttpResponse
+from django.http import HttpResponse, FileResponse, Http404
+import os
 from catalog.sitemaps import ProductSitemap, CategorySitemap, StaticViewSitemap
 from catalog.admin_views import (
     bulk_image_upload, 
@@ -28,7 +29,71 @@ sitemaps = {
     'static': StaticViewSitemap,
 }
 
+def serve_static_file(request, path):
+    """Раздача статических файлов через Django view (обходит блокировку Nginx)"""
+    # Пытаемся найти файл в STATIC_ROOT
+    static_root = settings.STATIC_ROOT
+    file_path = os.path.join(static_root, path)
+    
+    # Нормализуем пути
+    static_root = os.path.abspath(static_root)
+    file_path = os.path.abspath(file_path)
+    
+    if file_path.startswith(static_root) and os.path.exists(file_path) and os.path.isfile(file_path):
+        # Определяем MIME type
+        content_type = 'application/octet-stream'
+        if path.endswith('.css'):
+            content_type = 'text/css'
+        elif path.endswith('.js'):
+            content_type = 'application/javascript'
+        elif path.endswith('.png'):
+            content_type = 'image/png'
+        elif path.endswith('.jpg') or path.endswith('.jpeg'):
+            content_type = 'image/jpeg'
+        elif path.endswith('.svg'):
+            content_type = 'image/svg+xml'
+        elif path.endswith('.webp'):
+            content_type = 'image/webp'
+        elif path.endswith('.woff') or path.endswith('.woff2'):
+            content_type = 'font/woff2'
+        elif path.endswith('.ico'):
+            content_type = 'image/x-icon'
+        
+        response = FileResponse(open(file_path, 'rb'), content_type=content_type)
+        response['Cache-Control'] = 'public, max-age=31536000'
+        return response
+    
+    # Если не нашли в STATIC_ROOT, пробуем STATICFILES_DIRS
+    if settings.STATICFILES_DIRS and len(settings.STATICFILES_DIRS) > 0:
+        static_dir = settings.STATICFILES_DIRS[0]
+        file_path = os.path.join(static_dir, path)
+        static_dir = os.path.abspath(static_dir)
+        file_path = os.path.abspath(file_path)
+        
+        if file_path.startswith(static_dir) and os.path.exists(file_path) and os.path.isfile(file_path):
+            content_type = 'application/octet-stream'
+            if path.endswith('.css'):
+                content_type = 'text/css'
+            elif path.endswith('.js'):
+                content_type = 'application/javascript'
+            elif path.endswith('.png'):
+                content_type = 'image/png'
+            elif path.endswith('.jpg') or path.endswith('.jpeg'):
+                content_type = 'image/jpeg'
+            elif path.endswith('.svg'):
+                content_type = 'image/svg+xml'
+            elif path.endswith('.webp'):
+                content_type = 'image/webp'
+            
+            response = FileResponse(open(file_path, 'rb'), content_type=content_type)
+            response['Cache-Control'] = 'public, max-age=31536000'
+            return response
+    
+    raise Http404("File not found")
+
 urlpatterns = [
+    # Раздача статики через Django view (ПЕРВЫМ, чтобы обойти блокировку Nginx)
+    re_path(r'^static/(?P<path>.*)$', serve_static_file, name='serve_static'),
     
     
     # Тестовый endpoint для проверки доступности (ДО всех остальных!)
@@ -71,23 +136,6 @@ urlpatterns = [
 # Раздача медиа-файлов (работает и на продакшене)
 urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 
-# Раздача статических файлов (ВСЕГДА, независимо от DEBUG)
-# Настроено для работы как при DEBUG=True, так и при DEBUG=False
-import os
-if settings.DEBUG:
-    # В режиме разработки раздаем из STATICFILES_DIRS
-    if settings.STATICFILES_DIRS and len(settings.STATICFILES_DIRS) > 0:
-        static_dir = settings.STATICFILES_DIRS[0]
-        if os.path.exists(static_dir) and os.path.isdir(static_dir):
-            urlpatterns += static(settings.STATIC_URL, document_root=static_dir)
-else:
-    # В production раздаем из STATIC_ROOT (после collectstatic)
-    static_root = settings.STATIC_ROOT
-    if os.path.exists(static_root) and os.path.isdir(static_root):
-        urlpatterns += static(settings.STATIC_URL, document_root=static_root)
-    # Также добавляем STATICFILES_DIRS как fallback
-    if settings.STATICFILES_DIRS and len(settings.STATICFILES_DIRS) > 0:
-        static_dir = settings.STATICFILES_DIRS[0]
-        if os.path.exists(static_dir) and os.path.isdir(static_dir):
-            urlpatterns += static(settings.STATIC_URL, document_root=static_dir)
+# Статика раздается через view serve_static_file (см. выше в urlpatterns)
+# Это обходит блокировку Nginx на Beget для нового домена
 
