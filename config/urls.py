@@ -6,7 +6,8 @@ from django.urls import path, include, re_path
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib.sitemaps.views import sitemap
-from django.http import HttpResponse
+from django.http import HttpResponse, FileResponse
+import os
 from catalog.sitemaps import ProductSitemap, CategorySitemap, StaticViewSitemap
 from catalog.admin_views import (
     bulk_image_upload, 
@@ -28,7 +29,17 @@ sitemaps = {
     'static': StaticViewSitemap,
 }
 
+def test_static_file(request):
+    """Тестовый endpoint для проверки, может ли Django раздать статику"""
+    static_file = os.path.join(settings.STATIC_ROOT, 'css', 'style.css')
+    if os.path.exists(static_file):
+        return FileResponse(open(static_file, 'rb'), content_type='text/css')
+    return HttpResponse(f"File not found: {static_file}", status=404)
+
 urlpatterns = [
+    # Тестовый endpoint для проверки статики (для диагностики)
+    path('test-static-css/', test_static_file, name='test_static_css'),
+    
     # Тестовый endpoint для проверки доступности (ДО всех остальных!)
     path('cml/test/', lambda r: HttpResponse('OK - CommerceML endpoint доступен', content_type='text/plain; charset=utf-8'), name='commerceml_test'),
     
