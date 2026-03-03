@@ -1021,6 +1021,14 @@ h1, h2, h3, h4, h5, h6 {
     padding: 0 var(--space-md);
 }
 
+.hero-cta__title {
+    font-size: 0.9375rem;
+    font-weight: normal;
+    color: var(--color-gray-800);
+    margin: 0 0 var(--space-lg) 0;
+    line-height: 1.6;
+}
+
 .hero-cta__subtitle {
     display: none !important;
     visibility: hidden !important;
@@ -3011,6 +3019,11 @@ body > p:first-child:not(.header):not(.mobile-menu) {
     
     .hero__actions .btn {
         width: 100%;
+    }
+    
+    .hero-cta__title {
+        font-size: 0.9375rem;
+        margin-bottom: var(--space-md);
     }
     
     .hero-cta__subtitle {
