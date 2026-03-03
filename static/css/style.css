@@ -92,6 +92,18 @@
     padding: 0;
 }
 
+/* Скрываем любые элементы, которые могут отображать title как видимый текст */
+title {
+    display: none !important;
+    visibility: hidden !important;
+    position: absolute !important;
+    left: -9999px !important;
+    opacity: 0 !important;
+    height: 0 !important;
+    width: 0 !important;
+    overflow: hidden !important;
+}
+
 html {
     scroll-behavior: smooth;
     -webkit-text-size-adjust: 100%;
@@ -1578,6 +1590,34 @@ h1, h2, h3, h4, h5, h6 {
 .page-title {
     font-size: 2rem;
     margin-bottom: var(--space-xl);
+}
+
+/* Скрываем любые элементы, которые могут отображать title как видимый текст */
+title {
+    display: none !important;
+    visibility: hidden !important;
+    position: absolute !important;
+    left: -9999px !important;
+    opacity: 0 !important;
+    height: 0 !important;
+    width: 0 !important;
+    overflow: hidden !important;
+}
+
+/* Скрываем любые элементы с текстом заголовка страницы, которые могут появляться как полоска */
+body > title,
+html > title,
+[data-title],
+.title-bar,
+.page-header-bar {
+    display: none !important;
+    visibility: hidden !important;
+    position: absolute !important;
+    left: -9999px !important;
+    opacity: 0 !important;
+    height: 0 !important;
+    width: 0 !important;
+    overflow: hidden !important;
 }
 
 /* About Page */
