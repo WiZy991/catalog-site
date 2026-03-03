@@ -8,6 +8,7 @@ from django.conf.urls.static import static
 from django.contrib.sitemaps.views import sitemap
 from django.http import HttpResponse, FileResponse, Http404
 import os
+import mimetypes
 from catalog.sitemaps import ProductSitemap, CategorySitemap, StaticViewSitemap
 from catalog.admin_views import (
     bulk_image_upload, 
@@ -30,12 +31,12 @@ sitemaps = {
 }
 
 def serve_static_file(request, path):
-    """Раздача статических файлов через Django view (работает при любом DEBUG)"""
+    """
+    Раздача статических файлов через Django view (для DEBUG=False).
+    Работает как fallback, если nginx не настроен.
+    """
     import logging
     logger = logging.getLogger(__name__)
-    
-    # Логируем, что view вызван
-    logger.warning(f"=== SERVE_STATIC_FILE CALLED: path={path} ===")
     
     # Пытаемся найти файл в STATIC_ROOT
     static_root = str(settings.STATIC_ROOT)
@@ -45,39 +46,27 @@ def serve_static_file(request, path):
     static_root = os.path.abspath(static_root)
     file_path = os.path.abspath(file_path)
     
-    logger.warning(f"Serve static: path={path}, static_root={static_root}, file_path={file_path}, exists={os.path.exists(file_path)}")
-    
     # Проверяем существование файла
     if os.path.exists(file_path) and os.path.isfile(file_path):
         # Проверяем безопасность пути
         if not file_path.startswith(static_root):
+            logger.warning(f"Invalid path attempt: {file_path}")
             raise Http404("Invalid path")
-        # Определяем MIME type
-        content_type = 'application/octet-stream'
-        if path.endswith('.css'):
-            content_type = 'text/css'
-        elif path.endswith('.js'):
-            content_type = 'application/javascript'
-        elif path.endswith('.png'):
-            content_type = 'image/png'
-        elif path.endswith('.jpg') or path.endswith('.jpeg'):
-            content_type = 'image/jpeg'
-        elif path.endswith('.svg'):
-            content_type = 'image/svg+xml'
-        elif path.endswith('.webp'):
-            content_type = 'image/webp'
-        elif path.endswith('.woff') or path.endswith('.woff2'):
-            content_type = 'font/woff2'
-        elif path.endswith('.ico'):
-            content_type = 'image/x-icon'
         
-        logger.info(f"Found file in STATIC_ROOT: {file_path}")
-        response = FileResponse(open(file_path, 'rb'), content_type=content_type)
-        response['Cache-Control'] = 'public, max-age=31536000'
-        return response
+        # Определяем MIME type
+        content_type, _ = mimetypes.guess_type(file_path)
+        if not content_type:
+            content_type = 'application/octet-stream'
+        
+        try:
+            response = FileResponse(open(file_path, 'rb'), content_type=content_type)
+            response['Cache-Control'] = 'public, max-age=31536000'
+            return response
+        except Exception as e:
+            logger.error(f"Error serving file {file_path}: {e}")
+            raise Http404(f"Error serving file: {path}")
     
     # Если не нашли в STATIC_ROOT, пробуем STATICFILES_DIRS
-    logger.info(f"File not found in STATIC_ROOT, trying STATICFILES_DIRS")
     if settings.STATICFILES_DIRS and len(settings.STATICFILES_DIRS) > 0:
         static_dir = str(settings.STATICFILES_DIRS[0])
         file_path = os.path.join(static_dir, path)
@@ -88,34 +77,25 @@ def serve_static_file(request, path):
         if os.path.exists(file_path) and os.path.isfile(file_path):
             # Проверяем безопасность пути
             if not file_path.startswith(static_dir):
+                logger.warning(f"Invalid path attempt: {file_path}")
                 raise Http404("Invalid path")
-            content_type = 'application/octet-stream'
-            if path.endswith('.css'):
-                content_type = 'text/css'
-            elif path.endswith('.js'):
-                content_type = 'application/javascript'
-            elif path.endswith('.png'):
-                content_type = 'image/png'
-            elif path.endswith('.jpg') or path.endswith('.jpeg'):
-                content_type = 'image/jpeg'
-            elif path.endswith('.svg'):
-                content_type = 'image/svg+xml'
-            elif path.endswith('.webp'):
-                content_type = 'image/webp'
             
-            logger.info(f"Found file in STATICFILES_DIRS: {file_path}")
-            response = FileResponse(open(file_path, 'rb'), content_type=content_type)
-            response['Cache-Control'] = 'public, max-age=31536000'
-            return response
+            content_type, _ = mimetypes.guess_type(file_path)
+            if not content_type:
+                content_type = 'application/octet-stream'
+            
+            try:
+                response = FileResponse(open(file_path, 'rb'), content_type=content_type)
+                response['Cache-Control'] = 'public, max-age=31536000'
+                return response
+            except Exception as e:
+                logger.error(f"Error serving file {file_path}: {e}")
+                raise Http404(f"Error serving file: {path}")
     
-    logger.error(f"File not found: {path} (tried {os.path.join(static_root, path)} and {os.path.join(str(settings.STATICFILES_DIRS[0]), path) if settings.STATICFILES_DIRS else 'N/A'})")
+    logger.warning(f"Static file not found: {path}")
     raise Http404(f"File not found: {path}")
 
 urlpatterns = [
-    # Раздача статики через Django view (ОБЯЗАТЕЛЬНО ПЕРВЫМ!)
-    # Должен быть до всех остальных путей, чтобы обрабатывать запросы к /static/
-    re_path(r'^static/(?P<path>.*)$', serve_static_file, name='serve_static'),
-    
     # Тестовый endpoint для проверки доступности
     path('cml/test/', lambda r: HttpResponse('OK - CommerceML endpoint доступен', content_type='text/plain; charset=utf-8'), name='commerceml_test'),
     
@@ -153,9 +133,22 @@ urlpatterns = [
     re_path(r'^items/(?P<slug>[\w-]+)/$', catalog_views.redirect_old_item_url, name='redirect_old_item'),
 ]
 
+# Раздача статических файлов
+# При DEBUG=True используем стандартный механизм Django (django.contrib.staticfiles)
+# При DEBUG=False используем кастомный view (fallback, если nginx не настроен)
+if settings.DEBUG:
+    # DEBUG=True: используем стандартный механизм Django для разработки
+    # Это автоматически обрабатывает STATICFILES_DIRS и STATIC_ROOT
+    from django.contrib.staticfiles.urls import staticfiles_urlpatterns
+    urlpatterns += staticfiles_urlpatterns()
+else:
+    # DEBUG=False: используем кастомный view для продакшена (если nginx не настроен)
+    # ВАЖНО: В продакшене предпочтительно использовать nginx для раздачи статики
+    # Этот view работает как fallback, если nginx не настроен или не работает
+    urlpatterns += [
+        re_path(r'^static/(?P<path>.*)$', serve_static_file, name='serve_static'),
+    ]
+
 # Раздача медиа-файлов (работает и на продакшене)
 urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
-
-# Статика раздается через view serve_static_file (см. выше в urlpatterns)
-# Работает при любом значении DEBUG
 
