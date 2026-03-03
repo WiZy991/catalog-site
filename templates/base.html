@@ -71,6 +71,112 @@
     <link rel="stylesheet" href="{% static 'css/style.css' %}?v={{ STATIC_VERSION|default:'1.0' }}">
     <link rel="stylesheet" href="{% static 'css/cart.css' %}?v={{ STATIC_VERSION|default:'1.0' }}">
     
+    <!-- Скрываем белую полоску с текстом заголовка сразу при загрузке -->
+    <style>
+        /* Скрываем элементы в начале body, которые могут быть белой полоской - СРАЗУ при загрузке */
+        body > *:first-child:not(header):not(script):not(style):not(.header):not(.mobile-menu) {
+            /* Проверяем через JavaScript */
+        }
+        
+        /* Скрываем все элементы div/span/p в начале body, которые могут быть белой полоской */
+        body > div:first-child:not(.header):not(.mobile-menu):not(header),
+        body > span:first-child:not(.header):not(.mobile-menu):not(header),
+        body > p:first-child:not(.header):not(.mobile-menu):not(header) {
+            /* Будет обработано через JavaScript */
+        }
+        
+        /* Скрываем элементы с белым фоном в начале body */
+        body > *:first-child:not(header):not(script):not(style):not(.header):not(.mobile-menu) {
+            /* Проверяем через JavaScript */
+        }
+    </style>
+    <script>
+        // Выполняем СРАЗУ, до загрузки body - скрываем белую полоску мгновенно
+        (function() {
+            // Функция для скрытия белой полоски
+            function hideSeoBar() {
+                var body = document.body;
+                if (!body) {
+                    setTimeout(hideSeoBar, 0);
+                    return;
+                }
+                
+                // Удаляем текстовые узлы в начале body
+                var node = body.firstChild;
+                while (node) {
+                    var next = node.nextSibling;
+                    if (node.nodeType === 3) {
+                        var text = node.textContent.trim();
+                        if (text && (text.includes('Каталог') || text.includes('Onesimus') || text.includes('товаров'))) {
+                            body.removeChild(node);
+                        }
+                    }
+                    node = next;
+                }
+                
+                // Скрываем элементы с белым фоном в начале body
+                var children = body.children;
+                for (var i = 0; i < Math.min(5, children.length); i++) {
+                    var element = children[i];
+                    if (element.tagName === 'HEADER' || element.tagName === 'SCRIPT' || 
+                        element.tagName === 'STYLE' || element.classList.contains('header') ||
+                        element.classList.contains('mobile-menu')) {
+                        continue;
+                    }
+                    
+                    var computedStyle = window.getComputedStyle(element);
+                    var bgColor = computedStyle.backgroundColor;
+                    var textContent = (element.textContent || '').trim();
+                    
+                    var isWhite = bgColor === 'rgb(255, 255, 255)' || bgColor === '#ffffff' || bgColor === 'white';
+                    var hasTitleText = textContent.includes('Каталог') || textContent.includes('Onesimus') ||
+                                      textContent.includes('товаров') || (textContent.includes(' - ') && textContent.length < 100);
+                    
+                    if (isWhite && hasTitleText) {
+                        element.style.cssText = 'display: none !important; visibility: hidden !important; height: 0 !important; overflow: hidden !important; margin: 0 !important; padding: 0 !important; position: absolute !important; left: -9999px !important;';
+                    }
+                }
+            }
+            
+            // Используем MutationObserver для отслеживания появления новых элементов
+            if (typeof MutationObserver !== 'undefined') {
+                var observer = new MutationObserver(function(mutations) {
+                    hideSeoBar();
+                });
+                
+                // Начинаем наблюдение, как только body появится
+                function startObserving() {
+                    if (document.body) {
+                        observer.observe(document.body, {
+                            childList: true,
+                            subtree: false
+                        });
+                        hideSeoBar();
+                    } else {
+                        setTimeout(startObserving, 0);
+                    }
+                }
+                startObserving();
+            }
+            
+            // Запускаем сразу при загрузке
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', hideSeoBar);
+            } else {
+                setTimeout(hideSeoBar, 0);
+            }
+            
+            // Также запускаем при полной загрузке
+            window.addEventListener('load', hideSeoBar);
+            
+            // Запускаем несколько раз для надежности
+            setTimeout(hideSeoBar, 0);
+            setTimeout(hideSeoBar, 10);
+            setTimeout(hideSeoBar, 50);
+            setTimeout(hideSeoBar, 100);
+        })();
+    </script>
+    
     {% block extra_css %}{% endblock %}
     
     <!-- Schema.org Structured Data -->
@@ -462,55 +568,6 @@
             {% endfor %}
         ];
         
-        // Скрываем текстовые узлы и белые полоски в начале body (для SEO)
-        (function() {
-            var body = document.body;
-            if (!body) return;
-            
-            // Удаляем текстовые узлы в начале body
-            var node = body.firstChild;
-            while (node) {
-                var next = node.nextSibling;
-                if (node.nodeType === 3) { // Текстовый узел
-                    var text = node.textContent.trim();
-                    if (text && (text.includes('Каталог') || text.includes('Onesimus') || text.includes('товаров'))) {
-                        body.removeChild(node);
-                    }
-                }
-                node = next;
-            }
-            
-            // Скрываем элементы с белым фоном в начале body, которые содержат текст заголовка
-            var children = body.children;
-            for (var i = 0; i < Math.min(3, children.length); i++) {
-                var element = children[i];
-                // Пропускаем header и другие важные элементы
-                if (element.tagName === 'HEADER' || element.tagName === 'SCRIPT' || 
-                    element.tagName === 'STYLE' || element.classList.contains('header') ||
-                    element.classList.contains('mobile-menu')) {
-                    continue;
-                }
-                
-                var computedStyle = window.getComputedStyle(element);
-                var bgColor = computedStyle.backgroundColor;
-                var textContent = (element.textContent || '').trim();
-                
-                // Проверяем, является ли элемент белой полоской с текстом заголовка
-                var isWhite = bgColor === 'rgb(255, 255, 255)' || bgColor === '#ffffff' || 
-                             bgColor === 'white' || bgColor === 'rgba(0, 0, 0, 0)';
-                var hasTitleText = textContent.includes('Каталог') || textContent.includes('Onesimus') ||
-                                  textContent.includes('товаров') || textContent.includes(' - ');
-                
-                if (isWhite && hasTitleText && textContent.length < 100) {
-                    element.style.display = 'none';
-                    element.style.visibility = 'hidden';
-                    element.style.height = '0';
-                    element.style.overflow = 'hidden';
-                    element.style.margin = '0';
-                    element.style.padding = '0';
-                }
-            }
-        })();
     </script>
     <script src="{% static 'js/main.js' %}?v={{ STATIC_VERSION|default:'1.0' }}"></script>
     {% block extra_js %}{% endblock %}
