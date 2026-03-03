@@ -10,6 +10,8 @@
 {% block og_url %}{{ SEO_BASE_URL }}{% url 'catalog:index' %}{% endblock %}
 {% block og_title %}Каталог товаров - {{ SITE_NAME }}{% endblock %}
 {% block og_description %}Каталог товаров {{ SITE_NAME }}. Автозапчасти с доставкой.{% endblock %}
+{% block og_image %}{{ SEO_BASE_URL }}{% static 'images/logo.png' %}{% endblock %}
+{% block og_image_alt %}Каталог товаров {{ SITE_NAME }}{% endblock %}
 
 {% block breadcrumbs %}
 <nav class="breadcrumbs" aria-label="Хлебные крошки">

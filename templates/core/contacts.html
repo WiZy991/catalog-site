@@ -7,6 +7,8 @@
 {% block og_url %}{{ SEO_BASE_URL }}{% url 'core:contacts' %}{% endblock %}
 {% block og_title %}Контакты - {{ SITE_NAME }}{% endblock %}
 {% block og_description %}Контакты {{ SITE_NAME }}. Телефон, адрес, email.{% endblock %}
+{% block og_image %}{{ SEO_BASE_URL }}{% static 'images/logo.png' %}{% endblock %}
+{% block og_image_alt %}Контакты {{ SITE_NAME }}{% endblock %}
 
 {% block breadcrumbs %}
 <nav class="breadcrumbs" aria-label="Хлебные крошки">

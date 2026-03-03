@@ -7,6 +7,8 @@
 {% block og_url %}{{ SEO_BASE_URL }}{% url 'core:payment_delivery' %}{% endblock %}
 {% block og_title %}Оплата и доставка - {{ SITE_NAME }}{% endblock %}
 {% block og_description %}Условия оплаты и доставки {{ SITE_NAME }}. Способы оплаты, транспортные компании, калькулятор доставки.{% endblock %}
+{% block og_image %}{{ SEO_BASE_URL }}{% static 'images/logo.png' %}{% endblock %}
+{% block og_image_alt %}Оплата и доставка {{ SITE_NAME }}{% endblock %}
 
 {% block breadcrumbs %}
 <nav class="breadcrumbs" aria-label="Хлебные крошки">

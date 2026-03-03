@@ -1,15 +1,17 @@
 {% extends 'base.html' %}
 {% load static %}
 
-{% block title %}<title>{{ SITE_NAME }} - Каталог автозапчастей</title>{% endblock %}
+{% block title %}<title>{{ SITE_NAME }} - Каталог автозапчастей с доставкой по России</title>{% endblock %}
 {% block meta_description %}{{ SITE_DESCRIPTION }}{% endblock %}
 {% block meta_keywords %}{{ SEO_KEYWORDS }}{% endblock %}
 
 {% block canonical_url %}{{ SEO_BASE_URL }}{% url 'core:home' %}{% endblock %}
 
 {% block og_url %}{{ SEO_BASE_URL }}{% url 'core:home' %}{% endblock %}
-{% block og_title %}{{ SITE_NAME }} - Каталог автозапчастей{% endblock %}
+{% block og_title %}{{ SITE_NAME }} - Каталог автозапчастей с доставкой по России{% endblock %}
 {% block og_description %}{{ SITE_DESCRIPTION }}{% endblock %}
+{% block og_image %}{{ SEO_BASE_URL }}{% static 'images/logo.png' %}{% endblock %}
+{% block og_image_alt %}{{ SITE_NAME }} - Каталог автозапчастей{% endblock %}
 
 {% block content %}
 <!-- Hero Section -->
@@ -28,7 +30,8 @@
 <section class="hero-cta">
     <div class="container">
         <div class="hero-cta__content">
-            <p class="hero-cta__subtitle">Каталог автозапчастей с доставкой</p>
+            <h1 class="hero-cta__title">{{ SITE_NAME }} - Каталог автозапчастей с доставкой по всей России</h1>
+            <p class="hero-cta__subtitle">Официальные представители бренда Onesimus. Большой выбор автозапчастей для всех марок автомобилей. Оптовые и розничные продажи.</p>
             <div class="hero-cta__actions">
                 <a href="{% url 'catalog:index' %}" class="btn btn--primary btn--lg">
                     <i class="bi bi-cart"></i> Перейти в каталог
