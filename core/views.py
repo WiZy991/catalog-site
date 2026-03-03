@@ -177,10 +177,13 @@ def robots_txt(request):
         else:
             canonical_host = settings.SITE_DOMAIN
     
-    content = """# robots.txt для {site_name}
-# Основной домен: {canonical_domain}
-# Домен с www: {www_domain}
-# Временный домен: {temp_domain}
+    # Формируем правильный URL для sitemap
+    sitemap_url = f"{request.scheme}://{canonical_host}/sitemap.xml"
+    
+    content = f"""# robots.txt для {settings.SITE_NAME}
+# Основной домен: {settings.SITE_DOMAIN}
+# Домен с www: {settings.SITE_DOMAIN_WWW}
+# Временный домен: {settings.SITE_DOMAIN_TEMP}
 
 User-agent: *
 Allow: /
@@ -216,7 +219,7 @@ Allow: /consent/
 Allow: /public-offer/
 
 # Sitemap
-Sitemap: {scheme}://{canonical_host}/sitemap.xml
+Sitemap: {sitemap_url}
 
 # Для поисковых систем - Google
 User-agent: Googlebot
@@ -257,14 +260,7 @@ Crawl-delay: 10
 
 User-agent: MJ12bot
 Crawl-delay: 10
-""".format(
-        site_name=settings.SITE_NAME,
-        canonical_domain=settings.SITE_DOMAIN,
-        www_domain=settings.SITE_DOMAIN_WWW,
-        temp_domain=settings.SITE_DOMAIN_TEMP,
-        scheme=request.scheme,
-        canonical_host=canonical_host
-    )
+"""
     return HttpResponse(content, content_type='text/plain; charset=utf-8')
 
 
