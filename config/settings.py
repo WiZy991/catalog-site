@@ -121,7 +121,8 @@ USE_I18N = True
 USE_TZ = True
 
 # Static files (CSS, JavaScript, Images)
-STATIC_URL = '/static/'
+# Используем /assets/ вместо /static/ чтобы обойти блокировку Nginx на Beget
+STATIC_URL = '/assets/'
 STATICFILES_DIRS = [BASE_DIR / 'static']
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
