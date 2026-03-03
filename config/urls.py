@@ -31,6 +31,9 @@ sitemaps = {
 
 def serve_static_file(request, path):
     """Раздача статических файлов через Django view (работает при любом DEBUG)"""
+    import logging
+    logger = logging.getLogger(__name__)
+    
     # Пытаемся найти файл в STATIC_ROOT
     static_root = str(settings.STATIC_ROOT)
     file_path = os.path.join(static_root, path)
@@ -38,6 +41,8 @@ def serve_static_file(request, path):
     # Нормализуем пути
     static_root = os.path.abspath(static_root)
     file_path = os.path.abspath(file_path)
+    
+    logger.info(f"Serve static: path={path}, static_root={static_root}, file_path={file_path}, exists={os.path.exists(file_path)}")
     
     # Проверяем существование файла
     if os.path.exists(file_path) and os.path.isfile(file_path):
@@ -63,11 +68,13 @@ def serve_static_file(request, path):
         elif path.endswith('.ico'):
             content_type = 'image/x-icon'
         
+        logger.info(f"Found file in STATIC_ROOT: {file_path}")
         response = FileResponse(open(file_path, 'rb'), content_type=content_type)
         response['Cache-Control'] = 'public, max-age=31536000'
         return response
     
     # Если не нашли в STATIC_ROOT, пробуем STATICFILES_DIRS
+    logger.info(f"File not found in STATIC_ROOT, trying STATICFILES_DIRS")
     if settings.STATICFILES_DIRS and len(settings.STATICFILES_DIRS) > 0:
         static_dir = str(settings.STATICFILES_DIRS[0])
         file_path = os.path.join(static_dir, path)
@@ -93,10 +100,12 @@ def serve_static_file(request, path):
             elif path.endswith('.webp'):
                 content_type = 'image/webp'
             
+            logger.info(f"Found file in STATICFILES_DIRS: {file_path}")
             response = FileResponse(open(file_path, 'rb'), content_type=content_type)
             response['Cache-Control'] = 'public, max-age=31536000'
             return response
     
+    logger.error(f"File not found: {path} (tried {os.path.join(static_root, path)} and {os.path.join(str(settings.STATICFILES_DIRS[0]), path) if settings.STATICFILES_DIRS else 'N/A'})")
     raise Http404(f"File not found: {path}")
 
 urlpatterns = [
