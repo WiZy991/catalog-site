@@ -6,7 +6,7 @@ from django.urls import path, include, re_path
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib.sitemaps.views import sitemap
-from django.http import HttpResponse, FileResponse, Http404
+from django.http import HttpResponse, FileResponse, Http404, HttpResponseRedirect
 import os
 import mimetypes
 from catalog.sitemaps import ProductSitemap, CategorySitemap, StaticViewSitemap
@@ -183,6 +183,13 @@ urlpatterns = [
     path('admin/partners/wholesale-template/', download_wholesale_template, name='admin_download_wholesale_template'),
     
     path('admin/', admin.site.urls),
+    
+    # Редиректы с транслитерации на правильные URL
+    re_path(r'^kontakty/$', lambda r: HttpResponseRedirect('/contacts/'), name='redirect_kontakty'),
+    re_path(r'^o-nas/$', lambda r: HttpResponseRedirect('/about/'), name='redirect_o_nas'),
+    re_path(r'^oplata-i-dostavka/$', lambda r: HttpResponseRedirect('/payment-delivery/'), name='redirect_payment_delivery'),
+    re_path(r'^optovyie-prodazhi/$', lambda r: HttpResponseRedirect('/wholesale/'), name='redirect_wholesale'),
+    
     path('', include('core.urls')),
     path('catalog/', include('catalog.urls')),
     path('orders/', include('orders.urls')),
