@@ -31,8 +31,11 @@ sitemaps = {
 
 def serve_static_file(request, path):
     """Раздача статических файлов через Django view (работает при любом DEBUG)"""
+    import logging
+    logger = logging.getLogger(__name__)
+    
     # Пытаемся найти файл в STATIC_ROOT
-    static_root = settings.STATIC_ROOT
+    static_root = str(settings.STATIC_ROOT)
     file_path = os.path.join(static_root, path)
     
     # Нормализуем пути
@@ -65,7 +68,7 @@ def serve_static_file(request, path):
     
     # Если не нашли в STATIC_ROOT, пробуем STATICFILES_DIRS
     if settings.STATICFILES_DIRS and len(settings.STATICFILES_DIRS) > 0:
-        static_dir = settings.STATICFILES_DIRS[0]
+        static_dir = str(settings.STATICFILES_DIRS[0])
         file_path = os.path.join(static_dir, path)
         static_dir = os.path.abspath(static_dir)
         file_path = os.path.abspath(file_path)
@@ -89,7 +92,7 @@ def serve_static_file(request, path):
             response['Cache-Control'] = 'public, max-age=31536000'
             return response
     
-    raise Http404("File not found")
+    raise Http404(f"File not found: {path}")
 
 urlpatterns = [
     # Раздача статики через Django view (работает при DEBUG=True и DEBUG=False)
