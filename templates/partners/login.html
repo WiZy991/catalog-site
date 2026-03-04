@@ -234,9 +234,12 @@
                             {{ form.username }}
                         </div>
                         
-                        <div class="form-group">
+                        <div class="form-group" style="position: relative;">
                             <label class="form-label" for="id_password">Пароль</label>
                             {{ form.password }}
+                            <button type="button" class="password-toggle" onclick="togglePassword('id_password', this)" style="position: absolute; right: 1rem; top: 2.5rem; background: none; border: none; color: var(--color-gray-500); cursor: pointer; font-size: 1.2rem; padding: 0.5rem; transition: color var(--transition-fast);">
+                                <i class="bi bi-eye"></i>
+                            </button>
                         </div>
                         
                         <button type="submit" class="btn-submit">
@@ -246,6 +249,10 @@
                 </div>
                 
                 <div class="login-footer">
+                    <a href="{% url 'partners:password_reset' %}" style="display: block; margin-bottom: 1rem; color: var(--color-brand-red); text-decoration: none; font-weight: 600;">
+                        <i class="bi bi-key"></i> Забыли пароль?
+                    </a>
+                    <div class="login-footer__divider"></div>
                     <p>Ещё нет аккаунта?</p>
                     <div class="login-footer__divider"></div>
                     <a href="{% url 'partners:register' %}" class="btn-register">
@@ -256,4 +263,21 @@
         </div>
     </div>
 </section>
+
+<script>
+function togglePassword(inputId, button) {
+    const input = document.getElementById(inputId);
+    const icon = button.querySelector('i');
+    
+    if (input.type === 'password') {
+        input.type = 'text';
+        icon.classList.remove('bi-eye');
+        icon.classList.add('bi-eye-slash');
+    } else {
+        input.type = 'password';
+        icon.classList.remove('bi-eye-slash');
+        icon.classList.add('bi-eye');
+    }
+}
+</script>
 {% endblock %}

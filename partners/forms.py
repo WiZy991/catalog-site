@@ -1,5 +1,5 @@
 from django import forms
-from django.contrib.auth.forms import AuthenticationForm
+from django.contrib.auth.forms import AuthenticationForm, PasswordResetForm, SetPasswordForm
 from django.contrib.auth.models import User
 from django.contrib.auth import password_validation
 from .models import PartnerRequest, Partner
@@ -173,24 +173,33 @@ class PartnerPasswordChangeForm(forms.Form):
         return self.user
 
 
-class PartnerPasswordChangeForm(forms.Form):
-    """Форма смены пароля для партнёра."""
-    old_password = forms.CharField(
-        label='Текущий пароль',
-        widget=forms.PasswordInput(attrs={
+class PartnerPasswordResetForm(PasswordResetForm):
+    """Форма восстановления пароля для партнёра."""
+    email = forms.EmailField(
+        label='Email',
+        widget=forms.EmailInput(attrs={
             'class': 'form-input',
-            'placeholder': 'Введите текущий пароль',
-        }),
-        required=True
+            'placeholder': 'Введите ваш email',
+            'autofocus': True,
+        })
     )
     
+    def get_users(self, email):
+        """Получить пользователей с указанным email, у которых есть партнёрский профиль."""
+        active_users = User.objects.filter(email__iexact=email, is_active=True)
+        # Фильтруем только тех, у кого есть партнёрский профиль
+        return [u for u in active_users if hasattr(u, 'partner_profile')]
+
+
+class PartnerSetPasswordForm(SetPasswordForm):
+    """Форма установки нового пароля."""
     new_password1 = forms.CharField(
         label='Новый пароль',
         widget=forms.PasswordInput(attrs={
             'class': 'form-input',
             'placeholder': 'Введите новый пароль',
+            'id': 'id_new_password1',
         }),
-        required=True,
         help_text=password_validation.password_validators_help_text_html()
     )
     
@@ -199,31 +208,6 @@ class PartnerPasswordChangeForm(forms.Form):
         widget=forms.PasswordInput(attrs={
             'class': 'form-input',
             'placeholder': 'Повторите новый пароль',
-        }),
-        required=True
+            'id': 'id_new_password2',
+        })
     )
-    
-    def __init__(self, user, *args, **kwargs):
-        self.user = user
-        super().__init__(*args, **kwargs)
-    
-    def clean_old_password(self):
-        old_password = self.cleaned_data.get('old_password')
-        if not self.user.check_password(old_password):
-            raise forms.ValidationError('Неверный текущий пароль.')
-        return old_password
-    
-    def clean_new_password2(self):
-        password1 = self.cleaned_data.get('new_password1')
-        password2 = self.cleaned_data.get('new_password2')
-        if password1 and password2:
-            if password1 != password2:
-                raise forms.ValidationError('Пароли не совпадают.')
-        password_validation.validate_password(password2, self.user)
-        return password2
-    
-    def save(self):
-        password = self.cleaned_data['new_password1']
-        self.user.set_password(password)
-        self.user.save()
-        return self.user

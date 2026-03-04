@@ -1,7 +1,7 @@
 import re
 from django.shortcuts import render, redirect, get_object_or_404
 from django.views.generic import TemplateView, ListView, DetailView, FormView, View
-from django.contrib.auth.views import LoginView, LogoutView
+from django.contrib.auth.views import LoginView, LogoutView, PasswordResetView, PasswordResetDoneView, PasswordResetConfirmView, PasswordResetCompleteView
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
@@ -13,7 +13,7 @@ from django.utils import timezone
 
 from catalog.models import Category, Product
 from .models import PartnerRequest, Partner, PartnerSettings, PartnerOrder, PartnerOrderItem
-from .forms import PartnerRequestForm, PartnerLoginForm, PartnerProfileForm, PartnerPasswordChangeForm
+from .forms import PartnerRequestForm, PartnerLoginForm, PartnerProfileForm, PartnerPasswordChangeForm, PartnerPasswordResetForm, PartnerSetPasswordForm
 from django.http import JsonResponse
 from django.db.models import Q
 from django.core.mail import EmailMessage
@@ -187,6 +187,52 @@ class PartnerLoginView(LoginView):
 class PartnerLogoutView(LogoutView):
     """Выход из партнёрского кабинета."""
     next_page = 'partners:wholesale'
+
+
+class PartnerPasswordResetView(PasswordResetView):
+    """Восстановление пароля для партнёра."""
+    template_name = 'partners/password_reset.html'
+    form_class = PartnerPasswordResetForm
+    email_template_name = 'partners/password_reset_email.html'
+    subject_template_name = 'partners/password_reset_subject.txt'
+    success_url = reverse_lazy('partners:password_reset_done')
+    
+    def form_valid(self, form):
+        # Проверяем, что пользователь с таким email существует и является партнёром
+        email = form.cleaned_data['email']
+        try:
+            user = User.objects.get(email__iexact=email, is_active=True)
+            if not hasattr(user, 'partner_profile'):
+                messages.error(
+                    self.request,
+                    'Пользователь с таким email не найден в системе партнёров.'
+                )
+                return self.form_invalid(form)
+        except User.DoesNotExist:
+            messages.error(
+                self.request,
+                'Пользователь с таким email не найден.'
+            )
+            return self.form_invalid(form)
+        
+        return super().form_valid(form)
+
+
+class PartnerPasswordResetDoneView(PasswordResetDoneView):
+    """Страница подтверждения отправки письма для восстановления пароля."""
+    template_name = 'partners/password_reset_done.html'
+
+
+class PartnerPasswordResetConfirmView(PasswordResetConfirmView):
+    """Страница установки нового пароля."""
+    template_name = 'partners/password_reset_confirm.html'
+    form_class = PartnerSetPasswordForm
+    success_url = reverse_lazy('partners:password_reset_complete')
+
+
+class PartnerPasswordResetCompleteView(PasswordResetCompleteView):
+    """Страница успешного восстановления пароля."""
+    template_name = 'partners/password_reset_complete.html'
 
 
 class PartnerProductView(PartnerRequiredMixin, DetailView):

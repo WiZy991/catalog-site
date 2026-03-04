@@ -15,6 +15,12 @@ urlpatterns = [
     path('login/', views.PartnerLoginView.as_view(), name='login'),
     path('logout/', views.PartnerLogoutView.as_view(), name='logout'),
     
+    # Восстановление пароля
+    path('password-reset/', views.PartnerPasswordResetView.as_view(), name='password_reset'),
+    path('password-reset/done/', views.PartnerPasswordResetDoneView.as_view(), name='password_reset_done'),
+    path('password-reset/confirm/<uidb64>/<token>/', views.PartnerPasswordResetConfirmView.as_view(), name='password_reset_confirm'),
+    path('password-reset/complete/', views.PartnerPasswordResetCompleteView.as_view(), name='password_reset_complete'),
+    
     # Профиль партнёра
     path('profile/', views.PartnerProfileView.as_view(), name='profile'),
     path('profile/edit/', views.PartnerProfileEditView.as_view(), name='profile_edit'),
