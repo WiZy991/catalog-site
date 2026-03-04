@@ -713,12 +713,29 @@ def process_commerceml_file(file_path, filename, request=None):
             logger.info("=" * 80)
             result_wholesale = process_offers_file(root, namespaces, filename, request, catalog_type='wholesale')
             
+            # ВАЖНО: Сохраняем processed_external_ids из offers.xml для использования в логике скрытия
+            # Это нужно, чтобы товары из offers.xml не скрывались при обработке import.xml
+            offers_processed_external_ids = set()
+            if isinstance(result_retail.get('processed_external_ids'), set):
+                offers_processed_external_ids.update(result_retail.get('processed_external_ids', set()))
+            if isinstance(result_wholesale.get('processed_external_ids'), set):
+                offers_processed_external_ids.update(result_wholesale.get('processed_external_ids', set()))
+            
+            # Сохраняем в request для использования в process_commerceml_file
+            if request:
+                if not hasattr(request, '_offers_processed_external_ids'):
+                    request._offers_processed_external_ids = {}
+                request._offers_processed_external_ids['retail'] = result_retail.get('processed_external_ids', set())
+                request._offers_processed_external_ids['wholesale'] = result_wholesale.get('processed_external_ids', set())
+                logger.info(f"Сохранено {len(offers_processed_external_ids)} external_id из offers.xml для использования в логике скрытия")
+            
             # Объединяем результаты
             return {
                 'status': 'success' if result_retail.get('status') == 'success' and result_wholesale.get('status') == 'success' else 'partial',
                 'processed': result_retail.get('processed', 0) + result_wholesale.get('processed', 0),
                 'updated': result_retail.get('updated', 0) + result_wholesale.get('updated', 0),
-                'errors': result_retail.get('errors', []) + result_wholesale.get('errors', [])
+                'errors': result_retail.get('errors', []) + result_wholesale.get('errors', []),
+                'processed_external_ids': offers_processed_external_ids  # Объединенные ID из обоих каталогов
             }
         
         # Ищем каталог товаров
@@ -920,18 +937,17 @@ def process_commerceml_file(file_path, filename, request=None):
             logger.info("=" * 80)
             logger.info(f"ОБРАБОТКА ДЛЯ КАТАЛОГА: {current_catalog_type.upper()}")
             logger.info("=" * 80)
-        
-        # Обрабатываем товары - используем bulk операции для производительности
-        # ВАЖНО: Скрытие товаров происходит ТОЛЬКО в конце обработки всех каталогов
-        # Это предотвращает ситуацию, когда товары скрываются/показываются во время обработки
-        processed_count = 0
-        created_count = 0
-        updated_count = 0
-        errors = []
-        # ВАЖНО: Собираем external_id только из успешно обработанных товаров для текущего типа каталога
-        processed_external_ids = set()
-        
-        logger.info(f"Начало обработки {len(products_data)} товаров для каталога {current_catalog_type} (оптимизированная обработка)")
+            
+            # ВАЖНО: Сбрасываем счетчики для каждого каталога
+            # Иначе данные из retail будут смешиваться с данными из wholesale
+            processed_count = 0
+            created_count = 0
+            updated_count = 0
+            errors = []
+            # ВАЖНО: Собираем external_id только из успешно обработанных товаров для текущего типа каталога
+            processed_external_ids = set()
+            
+            logger.info(f"Начало обработки {len(products_data)} товаров для каталога {current_catalog_type} (оптимизированная обработка)")
         
         # ВАЖНО: Обрабатываем товары батчами для производительности
         # Но все равно в отдельных транзакциях для надежности
@@ -1001,7 +1017,7 @@ def process_commerceml_file(file_path, filename, request=None):
                 'created': created_count,
                 'updated': updated_count,
                 'deleted': 0,  # Будет обновлено после скрытия товаров
-                'errors': errors,
+                'errors': errors.copy(),  # Копируем список ошибок
                 'processed_external_ids': processed_external_ids.copy()  # Сохраняем для скрытия товаров
             }
             
@@ -1095,10 +1111,33 @@ def process_commerceml_file(file_path, filename, request=None):
                 catalog_results = results.get(current_catalog_type, {})
                 processed_external_ids = catalog_results.get('processed_external_ids', set())
                 processed_count = catalog_results.get('processed', 0)
+                errors_count = len(catalog_results.get('errors', []))
+                
+                # ВАЖНО: Объединяем processed_external_ids из import.xml и offers.xml
+                # Товары из offers.xml тоже должны учитываться при логике скрытия
+                # Это критично, потому что:
+                # - import.xml содержит информацию о товарах (названия, характеристики)
+                # - offers.xml содержит цены и количества
+                # - Оба файла обрабатываются параллельно, и товары должны быть видны, если они есть хотя бы в одном из них
+                import_ids_count = len(processed_external_ids)
+                if request and hasattr(request, '_offers_processed_external_ids'):
+                    offers_ids = request._offers_processed_external_ids.get(current_catalog_type, set())
+                    if offers_ids:
+                        processed_external_ids = processed_external_ids.union(offers_ids)
+                        logger.info(f"✓ Объединено {len(offers_ids)} external_id из offers.xml с {import_ids_count} из import.xml для каталога {current_catalog_type} (всего: {len(processed_external_ids)})")
+                    else:
+                        logger.info(f"⚠ Нет external_id из offers.xml для каталога {current_catalog_type} (возможно, offers.xml еще не обработан)")
+                else:
+                    logger.info(f"⚠ Нет сохраненных external_id из offers.xml (request=None или offers.xml не обработан)")
                 
                 # ВАЖНО: Скрываем товары ТОЛЬКО если были обработаны товары для этого типа каталога (processed_count > 0)
+                # И если количество ошибок не слишком большое (более 50% ошибок - не скрываем товары для безопасности)
                 # Это предотвращает скрытие всех товаров, если в обмене не было товаров для этого типа каталога
-                if processed_external_ids and processed_count > 0:
+                # или если было много ошибок обработки (например, "database is locked")
+                total_attempts = processed_count + errors_count
+                error_rate = errors_count / total_attempts if total_attempts > 0 else 0
+                
+                if processed_external_ids and processed_count > 0 and error_rate < 0.5:
                     # Ищем товары, которые:
                     # 1. Имеют external_id (были импортированы из 1С)
                     # 2. Принадлежат к текущему типу каталога (retail или wholesale)
@@ -1131,6 +1170,8 @@ def process_commerceml_file(file_path, filename, request=None):
                         logger.info(f"Все товары из 1С присутствуют в обмене для каталога {current_catalog_type}, скрывать нечего")
                 elif processed_count == 0:
                     logger.warning(f"⚠ В обмене нет товаров для каталога {current_catalog_type} (processed_count=0) - НЕ скрываем товары (предотвращает случайное скрытие всех товаров)")
+                elif error_rate >= 0.5:
+                    logger.warning(f"⚠ Слишком много ошибок обработки для каталога {current_catalog_type} (ошибок: {errors_count}, обработано: {processed_count}, процент ошибок: {error_rate*100:.1f}%) - НЕ скрываем товары для безопасности (могут быть пропущены из-за ошибок)")
                 else:
                     logger.warning(f"⚠ В обмене нет товаров с external_id для каталога {current_catalog_type} - невозможно определить удаленные товары")
         elif not should_hide_products:
@@ -1646,6 +1687,9 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
     processed_count = 0
     updated_count = 0
     errors = []
+    # ВАЖНО: Собираем external_id обработанных товаров для логики скрытия
+    # Это нужно, чтобы товары из offers.xml не скрывались при обработке import.xml
+    processed_external_ids = set()
     
     # Получаем namespace из словаря
     namespace = namespaces.get('', namespaces.get('cml', namespaces.get('cml2', None)))
@@ -2335,6 +2379,14 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                 
                 product.save()
                 
+                # ВАЖНО: Добавляем external_id в список обработанных для логики скрытия
+                # Это предотвращает скрытие товаров из offers.xml при обработке import.xml
+                if product.external_id:
+                    processed_external_ids.add(str(product.external_id).strip())
+                elif product_id:
+                    # Если external_id не установлен, используем product_id из offers.xml
+                    processed_external_ids.add(str(product_id).strip())
+                
                 # ВАЖНО: НЕ инвалидируем кеш при обновлении товаров из offers.xml
                 # Это предотвращает изменение количества при каждом обновлении страницы
                 # Кеш будет обновляться автоматически через 30 минут
@@ -2387,6 +2439,8 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
     processing_time = (timezone.now() - start_time).total_seconds()
     request_ip = get_client_ip(request) if request else None
     
+    logger.info(f"Обработано товаров в offers.xml для каталога {catalog_type}: {len(processed_external_ids)} с external_id")
+    
     # ВАЖНО: Статус 'success' только если товары действительно обработаны
     if processed_count == 0:
         status = 'failure'
@@ -2434,7 +2488,8 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
         'processed': processed_count,
         'created': 0,
         'updated': updated_count,
-        'errors': len(errors)
+        'errors': len(errors),
+        'processed_external_ids': processed_external_ids.copy()  # Сохраняем для возможного использования
     }
 
 
