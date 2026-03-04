@@ -16,6 +16,26 @@ DEBUG = True
 
 ALLOWED_HOSTS = ['*', 'onesimus25.ru', 'www.onesimus25.ru', 'onesim8n.beget.tech']
 
+# CSRF settings
+CSRF_TRUSTED_ORIGINS = [
+    'https://onesimus25.ru',
+    'https://www.onesimus25.ru',
+    'http://onesimus25.ru',
+    'http://www.onesimus25.ru',
+    'https://onesim8n.beget.tech',
+    'http://onesim8n.beget.tech',
+]
+
+# CSRF cookie settings
+CSRF_COOKIE_SECURE = False  # Установить True если используется HTTPS
+CSRF_COOKIE_HTTPONLY = False
+CSRF_USE_SESSIONS = False
+
+# Session cookie settings
+SESSION_COOKIE_SECURE = False  # Установить True если используется HTTPS
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = 'Lax'
+
 # Application definition
 INSTALLED_APPS = [
     'jazzmin',
