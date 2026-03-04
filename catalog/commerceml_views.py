@@ -6,6 +6,7 @@ import os
 import json
 import logging
 import re
+import time
 import xml.etree.ElementTree as ET
 from io import BytesIO
 from datetime import datetime
@@ -985,77 +986,84 @@ def process_commerceml_file(file_path, filename, request=None):
             logger.info(f"Обработка для {current_catalog_type} завершена: обработано={processed_count}, создано={created_count}, обновлено={updated_count}, ошибок={len(errors)}")
             logger.info(f"Обработано товаров в обмене: {len(processed_external_ids)} с external_id для каталога {current_catalog_type}")
             
-            # ВАЖНО: Скрываем товары ТОЛЬКО если файл действительно новый/измененный
-            # Проверяем, есть ли маркер обработанного файла
-            # Если файл обрабатывается повторно без изменений, НЕ скрываем товары
+            # ВАЖНО: Скрываем товары ТОЛЬКО при обработке через веб-интерфейс (когда 1С загружает файлы напрямую)
+            # При обработке через скрипт (request=None) НЕ скрываем товары - это может быть повторная обработка
             deleted_count = 0
             # file_path доступен из параметров функции process_commerceml_file
             
-            # ВАЖНО: Скрываем товары ТОЛЬКО если файл действительно новый/измененный
-            # И ТОЛЬКО для файла import.xml (каталога товаров), НЕ для offers.xml
-            # offers.xml обновляет только цены и остатки, не должен скрывать товары
+            # ВАЖНО: Скрываем товары ТОЛЬКО если:
+            # 1. Обработка через веб-интерфейс (request не None) - это новая загрузка из 1С
+            # 2. Файл действительно новый/измененный
+            # 3. Это файл import.xml (каталога товаров), НЕ offers.xml
+            # При обработке через скрипт (request=None) НЕ скрываем товары вообще
             should_hide_products = False
             
-            # Проверяем тип файла - скрываем товары только для import.xml
-            filename_lower = filename.lower() if filename else ''
-            is_import_file = 'import' in filename_lower and 'offers' not in filename_lower
-            
-            if is_import_file and file_path and os.path.exists(file_path):
-                processed_marker = f"{file_path}.processed"
-                if os.path.exists(processed_marker):
-                    # Файл уже обрабатывался - проверяем, изменился ли он
-                    # ВАЖНО: Используем file_mtime из маркера, а не время создания маркера
-                    try:
-                        # Получаем текущее время файла
-                        file_mtime = os.path.getmtime(file_path)
-                        file_mtime_dt = datetime.fromtimestamp(file_mtime)
-                        
-                        # Пытаемся прочитать время файла из маркера (если оно там сохранено)
-                        file_mtime_from_marker = None
-                        try:
-                            with open(processed_marker, 'r') as f:
-                                for line in f:
-                                    if line.startswith('file_mtime:'):
-                                        file_mtime_from_marker = datetime.fromisoformat(line.split(':', 1)[1].strip())
-                                        break
-                        except Exception:
-                            pass
-                        
-                        # Если время файла сохранено в маркере, используем его
-                        # Иначе используем время маркера (старая логика для обратной совместимости)
-                        if file_mtime_from_marker:
-                            # Сравниваем текущее время файла с временем из маркера
-                            if file_mtime_dt > file_mtime_from_marker:
-                                should_hide_products = True
-                                logger.info(f"Файл import.xml изменен после последней обработки (файл: {file_mtime_dt}, маркер: {file_mtime_from_marker}) - скрываем товары, не пришедшие в обмене")
-                            else:
-                                should_hide_products = False
-                                logger.info(f"Файл import.xml НЕ изменился с последней обработки (файл: {file_mtime_dt}, маркер: {file_mtime_from_marker}) - НЕ скрываем товары")
-                        else:
-                            # Старая логика - сравниваем с временем маркера (для обратной совместимости)
-                            marker_mtime = os.path.getmtime(processed_marker)
-                            marker_mtime_dt = datetime.fromtimestamp(marker_mtime)
-                            if file_mtime_dt > marker_mtime_dt:
-                                should_hide_products = True
-                                logger.info(f"Файл import.xml изменен после последней обработки (файл: {file_mtime_dt}, маркер: {marker_mtime_dt}) - скрываем товары, не пришедшие в обмене")
-                            else:
-                                should_hide_products = False
-                                logger.info(f"Файл import.xml НЕ изменился с последней обработки (файл: {file_mtime_dt}, маркер: {marker_mtime_dt}) - НЕ скрываем товары")
-                    except Exception as e:
-                        # Если не удалось проверить - НЕ скрываем товары (безопаснее)
-                        should_hide_products = False
-                        logger.warning(f"Не удалось проверить время изменения файла: {e}, НЕ скрываем товары для безопасности")
-                else:
-                    # Файл новый (нет маркера) - скрываем товары
-                    should_hide_products = True
-                    logger.info(f"Файл import.xml новый (нет маркера) - скрываем товары, не пришедшие в обмене")
-            else:
-                # Для offers.xml или если не можем определить файл - НЕ скрываем товары
+            # Если обработка через скрипт (request=None), НЕ скрываем товары вообще
+            if request is None:
+                logger.info(f"Обработка через скрипт (request=None) - НЕ скрываем товары для безопасности (предотвращает случайное скрытие при повторной обработке)")
                 should_hide_products = False
-                if not is_import_file:
-                    logger.info(f"Файл {filename} - это offers.xml, НЕ скрываем товары (только обновляем цены и остатки)")
+            else:
+                # Обработка через веб-интерфейс - проверяем, нужно ли скрывать товары
+                # Проверяем тип файла - скрываем товары только для import.xml
+                filename_lower = filename.lower() if filename else ''
+                is_import_file = 'import' in filename_lower and 'offers' not in filename_lower
+                
+                if is_import_file and file_path and os.path.exists(file_path):
+                    processed_marker = f"{file_path}.processed"
+                    if os.path.exists(processed_marker):
+                        # Файл уже обрабатывался - проверяем, изменился ли он
+                        # ВАЖНО: Используем file_mtime из маркера, а не время создания маркера
+                        try:
+                            # Получаем текущее время файла
+                            file_mtime = os.path.getmtime(file_path)
+                            file_mtime_dt = datetime.fromtimestamp(file_mtime)
+                            
+                            # Пытаемся прочитать время файла из маркера (если оно там сохранено)
+                            file_mtime_from_marker = None
+                            try:
+                                with open(processed_marker, 'r') as f:
+                                    for line in f:
+                                        if line.startswith('file_mtime:'):
+                                            file_mtime_from_marker = datetime.fromisoformat(line.split(':', 1)[1].strip())
+                                            break
+                            except Exception:
+                                pass
+                            
+                            # Если время файла сохранено в маркере, используем его
+                            # Иначе используем время маркера (старая логика для обратной совместимости)
+                            if file_mtime_from_marker:
+                                # Сравниваем текущее время файла с временем из маркера
+                                if file_mtime_dt > file_mtime_from_marker:
+                                    should_hide_products = True
+                                    logger.info(f"Файл import.xml изменен после последней обработки (файл: {file_mtime_dt}, маркер: {file_mtime_from_marker}) - скрываем товары, не пришедшие в обмене")
+                                else:
+                                    should_hide_products = False
+                                    logger.info(f"Файл import.xml НЕ изменился с последней обработки (файл: {file_mtime_dt}, маркер: {file_mtime_from_marker}) - НЕ скрываем товары")
+                            else:
+                                # Старая логика - сравниваем с временем маркера (для обратной совместимости)
+                                marker_mtime = os.path.getmtime(processed_marker)
+                                marker_mtime_dt = datetime.fromtimestamp(marker_mtime)
+                                if file_mtime_dt > marker_mtime_dt:
+                                    should_hide_products = True
+                                    logger.info(f"Файл import.xml изменен после последней обработки (файл: {file_mtime_dt}, маркер: {marker_mtime_dt}) - скрываем товары, не пришедшие в обмене")
+                                else:
+                                    should_hide_products = False
+                                    logger.info(f"Файл import.xml НЕ изменился с последней обработки (файл: {file_mtime_dt}, маркер: {marker_mtime_dt}) - НЕ скрываем товары")
+                        except Exception as e:
+                            # Если не удалось проверить - НЕ скрываем товары (безопаснее)
+                            should_hide_products = False
+                            logger.warning(f"Не удалось проверить время изменения файла: {e}, НЕ скрываем товары для безопасности")
+                    else:
+                        # Файл новый (нет маркера) - скрываем товары (это новая загрузка из 1С через веб-интерфейс)
+                        should_hide_products = True
+                        logger.info(f"Файл import.xml новый (нет маркера) - скрываем товары, не пришедшие в обмене")
                 else:
-                    logger.warning(f"⚠ Не удалось определить путь к файлу или файл не существует - НЕ скрываем товары")
+                    # Для offers.xml или если не можем определить файл - НЕ скрываем товары
+                    should_hide_products = False
+                    if not is_import_file:
+                        logger.info(f"Файл {filename} - это offers.xml, НЕ скрываем товары (только обновляем цены и остатки)")
+                    else:
+                        logger.warning(f"⚠ Не удалось определить путь к файлу или файл не существует - НЕ скрываем товары")
         
         # Находим товары, которые были импортированы из 1С (имеют external_id),
         # но не пришли в текущем обмене
@@ -1127,20 +1135,52 @@ def process_commerceml_file(file_path, filename, request=None):
             status = 'success'
             message = f'Обработано товаров из файла {filename} для обоих каталогов'
         
-            # ВАЖНО: Проверяем существование таблицы SyncLog перед использованием
-            from django.db import connection
-            table_exists = False
-            try:
-                with connection.cursor() as cursor:
-                    if 'sqlite' in connection.vendor:
-                        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='catalog_synclog'")
-                    else:
-                        cursor.execute("SELECT table_name FROM information_schema.tables WHERE table_name='catalog_synclog'")
-                    table_exists = cursor.fetchone() is not None
-            except Exception:
-                pass
+        # ВАЖНО: Создаем маркер обработанного файла, чтобы скрипт не обрабатывал его повторно
+        # Это нужно как для прямого обмена, так и для обработки через скрипт
+        # Создаем маркер только если товары действительно обработаны
+        # ВАЖНО: Создаем маркер для оригинального файла (file_path), а не для распакованного (xml_file_path)
+        if total_processed > 0:
+            # Определяем, для какого файла создавать маркер
+            # Если это ZIP, создаем маркер для ZIP файла
+            # Если это XML, создаем маркер для XML файла
+            marker_file_path = file_path  # По умолчанию для оригинального файла
             
-            if table_exists:
+            if file_path and os.path.exists(file_path):
+                processed_marker = f"{marker_file_path}.processed"
+                try:
+                    file_mtime = os.path.getmtime(marker_file_path)
+                    file_mtime_iso = datetime.fromtimestamp(file_mtime).isoformat()
+                    with open(processed_marker, 'w') as f:
+                        f.write(f'processed\n')
+                        f.write(f'file_mtime: {file_mtime_iso}\n')  # Время изменения файла
+                        f.write(f'marker_time: {timezone.now().isoformat()}\n')  # Время создания маркера
+                        f.write(f'processed_count: {total_processed}\n')
+                        f.write(f'created: {total_created}\n')
+                        f.write(f'updated: {total_updated}\n')
+                        f.write(f'processed_by: {"web_interface" if request else "script"}\n')  # Кто обработал
+                    logger.info(f"✓ Создан маркер обработанного файла: {processed_marker}")
+                    logger.info(f"  Файл: {marker_file_path}, размер маркера: {os.path.getsize(processed_marker)} байт")
+                except Exception as marker_error:
+                    logger.error(f"✗ Не удалось создать маркер обработанного файла: {marker_error}", exc_info=True)
+            else:
+                logger.warning(f"⚠ Не могу создать маркер: file_path={file_path}, существует={os.path.exists(file_path) if file_path else False}")
+        else:
+            logger.warning(f"⚠ Маркер не создан: total_processed={total_processed} (товары не обработаны)")
+        
+        # ВАЖНО: Проверяем существование таблицы SyncLog перед использованием
+        from django.db import connection
+        table_exists = False
+        try:
+            with connection.cursor() as cursor:
+                if 'sqlite' in connection.vendor:
+                    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='catalog_synclog'")
+                else:
+                    cursor.execute("SELECT table_name FROM information_schema.tables WHERE table_name='catalog_synclog'")
+                table_exists = cursor.fetchone() is not None
+        except Exception:
+            pass
+        
+        if table_exists:
                 sync_log = SyncLog.objects.create(
                     operation_type='file_upload',
                     status=status,
@@ -1159,6 +1199,9 @@ def process_commerceml_file(file_path, filename, request=None):
         logger.info(f"Импорт завершен: обработано {total_processed}, создано {total_created}, обновлено {total_updated}, скрыто {total_deleted}, ошибок {len(all_errors)}")
         logger.info(f"  Розничный каталог: обработано={results['retail']['processed']}, создано={results['retail']['created']}, обновлено={results['retail']['updated']}")
         logger.info(f"  Оптовый каталог: обработано={results['wholesale']['processed']}, создано={results['wholesale']['created']}, обновлено={results['wholesale']['updated']}")
+        
+        # ВАЖНО: Логируем информацию о создании маркера для отладки
+        logger.info(f"Проверка создания маркера: total_processed={total_processed}, file_path={file_path}, exists={os.path.exists(file_path) if file_path else False}")
         
         return {
             'status': 'success',

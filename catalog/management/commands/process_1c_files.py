@@ -128,6 +128,19 @@ class Command(BaseCommand):
         
         self.stdout.write(f'Найдено файлов: {len(target_files)}')
         
+        # ВАЖНО: Сортируем файлы так, чтобы сначала обрабатывались import.xml, потом offers.xml
+        # Это гарантирует, что товары сначала создаются/обновляются, а потом обновляются цены и остатки
+        def sort_key(filename):
+            filename_lower = filename.lower()
+            if 'import' in filename_lower and 'offers' not in filename_lower:
+                return (0, filename)  # import.xml - приоритет 0 (обрабатываем первыми)
+            elif 'offers' in filename_lower:
+                return (1, filename)  # offers.xml - приоритет 1 (обрабатываем вторыми)
+            else:
+                return (2, filename)  # остальные файлы - приоритет 2
+        
+        target_files = sorted(target_files, key=sort_key)
+        
         # Определяем время для фильтрации недавних файлов
         recent_minutes = options.get('recent', 0)
         cutoff_time = None
@@ -135,7 +148,7 @@ class Command(BaseCommand):
             cutoff_time = datetime.now() - timedelta(minutes=recent_minutes)
             self.stdout.write(f'Обрабатываем файлы, измененные за последние {recent_minutes} минут')
         
-        for filename in sorted(target_files):  # Сортируем по имени для предсказуемости
+        for filename in target_files:  # Обрабатываем в правильном порядке
             file_path = os.path.join(EXCHANGE_DIR, filename)
             
             # ВАЖНО: Проверяем, не обработан ли уже файл (по наличию файла .processed)
