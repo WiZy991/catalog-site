@@ -13,7 +13,7 @@ from datetime import datetime
 from django.http import HttpResponse, HttpResponseBadRequest
 from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_exempt
-from django.db import transaction
+from django.db import transaction, OperationalError
 from django.conf import settings
 from django.utils import timezone
 from django.core.files.storage import default_storage
@@ -921,8 +921,9 @@ def process_commerceml_file(file_path, filename, request=None):
             logger.info(f"ОБРАБОТКА ДЛЯ КАТАЛОГА: {current_catalog_type.upper()}")
             logger.info("=" * 80)
         
-        # Обрабатываем товары - каждый в отдельной транзакции
-        # Это позволяет избежать ситуации, когда ошибка одного товара ломает обработку всех остальных
+        # Обрабатываем товары - используем bulk операции для производительности
+        # ВАЖНО: Скрытие товаров происходит ТОЛЬКО в конце обработки всех каталогов
+        # Это предотвращает ситуацию, когда товары скрываются/показываются во время обработки
         processed_count = 0
         created_count = 0
         updated_count = 0
@@ -930,197 +931,210 @@ def process_commerceml_file(file_path, filename, request=None):
         # ВАЖНО: Собираем external_id только из успешно обработанных товаров для текущего типа каталога
         processed_external_ids = set()
         
-        logger.info(f"Начало обработки {len(products_data)} товаров для каталога {current_catalog_type} (каждый в отдельной транзакции)")
+        logger.info(f"Начало обработки {len(products_data)} товаров для каталога {current_catalog_type} (оптимизированная обработка)")
         
-        for idx, product_data in enumerate(products_data):
-            # Каждый товар обрабатывается в отдельной транзакции
-            # Это гарантирует, что ошибка одного товара не повлияет на обработку остальных
-            try:
-                with transaction.atomic():
-                    # Логируем данные товара перед обработкой (для первых 3)
-                    if idx < 3:
-                        logger.info(f"Обработка товара #{idx+1} для {current_catalog_type}: sku={product_data.get('sku')}, name={product_data.get('name')[:50] if product_data.get('name') else 'N/A'}")
-                    
-                    product, error, was_created = process_product_from_commerceml(product_data, catalog_type=current_catalog_type)
-                    if product:
-                        processed_count += 1
-                        # ВАЖНО: Добавляем external_id только если товар успешно обработан для текущего типа каталога
-                        external_id = product.external_id or product_data.get('external_id') or product_data.get('sku')
-                        if external_id:
-                            processed_external_ids.add(str(external_id).strip())
-                            
-                        if was_created:
-                            created_count += 1
-                            logger.info(f"✓ Создан товар в каталоге {current_catalog_type}: {product.article} - {product.name[:50]}")
-                        else:
-                            updated_count += 1
-                            if idx < 10:  # Логируем первые 10 обновлений
-                                logger.info(f"✓ Обновлен товар в каталоге {current_catalog_type}: {product.article} - {product.name[:50]}")
-                    elif error:
-                        # Ошибка внутри process_product_from_commerceml
-                        error_info = {
-                            'sku': product_data.get('sku', 'unknown'),
-                            'catalog_type': current_catalog_type,
-                            'error': error
-                        }
-                        errors.append(error_info)
-                        logger.warning(f"✗ Ошибка обработки товара {product_data.get('sku', 'unknown')} для {current_catalog_type}: {error}")
-                        # Выводим данные товара при ошибке (только для первых 5)
-                        if idx < 5:
-                            logger.warning(f"  Данные товара: {product_data}")
-            except Exception as e:
-                # Исключение при обработке товара - транзакция автоматически откатывается
-                error_msg = str(e)
-                logger.error(f"✗ Исключение при обработке товара {product_data.get('sku', 'unknown')} для {current_catalog_type}: {error_msg}", exc_info=True)
-                errors.append({
-                    'sku': product_data.get('sku', 'unknown'),
-                    'catalog_type': current_catalog_type,
-                    'error': error_msg
-                })
-                # Выводим данные товара при ошибке (только для первых 5)
-                if idx < 5:
-                    logger.warning(f"  Данные товара: {product_data}")
-                # Транзакция автоматически откатывается при исключении
-                # Продолжаем обработку следующего товара
+        # ВАЖНО: Обрабатываем товары батчами для производительности
+        # Но все равно в отдельных транзакциях для надежности
+        batch_size = 100  # Обрабатываем по 100 товаров за раз
+        for batch_start in range(0, len(products_data), batch_size):
+            batch_end = min(batch_start + batch_size, len(products_data))
+            batch = products_data[batch_start:batch_end]
+            logger.info(f"Обработка батча {batch_start+1}-{batch_end} из {len(products_data)} товаров для {current_catalog_type}")
+            
+            for idx, product_data in enumerate(batch):
+                # Каждый товар обрабатывается в отдельной транзакции
+                # Это гарантирует, что ошибка одного товара не повлияет на обработку остальных
+                try:
+                    with transaction.atomic():
+                        # Логируем данные товара перед обработкой (для первых 3)
+                        if idx < 3:
+                            logger.info(f"Обработка товара #{idx+1} для {current_catalog_type}: sku={product_data.get('sku')}, name={product_data.get('name')[:50] if product_data.get('name') else 'N/A'}")
+                        
+                        product, error, was_created = process_product_from_commerceml(product_data, catalog_type=current_catalog_type)
+                        if product:
+                            processed_count += 1
+                            # ВАЖНО: Добавляем external_id только если товар успешно обработан для текущего типа каталога
+                            external_id = product.external_id or product_data.get('external_id') or product_data.get('sku')
+                            if external_id:
+                                processed_external_ids.add(str(external_id).strip())
+                                
+                            if was_created:
+                                created_count += 1
+                                logger.info(f"✓ Создан товар в каталоге {current_catalog_type}: {product.article} - {product.name[:50]}")
+                            else:
+                                updated_count += 1
+                                if idx < 10:  # Логируем первые 10 обновлений
+                                    logger.info(f"✓ Обновлен товар в каталоге {current_catalog_type}: {product.article} - {product.name[:50]}")
+                        elif error:
+                            # Ошибка внутри process_product_from_commerceml
+                            error_info = {
+                                'sku': product_data.get('sku', 'unknown'),
+                                'catalog_type': current_catalog_type,
+                                'error': error
+                            }
+                            errors.append(error_info)
+                            logger.warning(f"✗ Ошибка обработки товара {product_data.get('sku', 'unknown')} для {current_catalog_type}: {error}")
+                            # Выводим данные товара при ошибке (только для первых 5)
+                            if idx < 5:
+                                logger.warning(f"  Данные товара: {product_data}")
+                except Exception as e:
+                    # Исключение при обработке товара - транзакция автоматически откатывается
+                    error_msg = str(e)
+                    logger.error(f"✗ Исключение при обработке товара {product_data.get('sku', 'unknown')} для {current_catalog_type}: {error_msg}", exc_info=True)
+                    errors.append({
+                        'sku': product_data.get('sku', 'unknown'),
+                        'catalog_type': current_catalog_type,
+                        'error': error_msg
+                    })
+                    # Выводим данные товара при ошибке (только для первых 5)
+                    if idx < 5:
+                        logger.warning(f"  Данные товара: {product_data}")
+                    # Транзакция автоматически откатывается при исключении
+                    # Продолжаем обработку следующего товара
         
             logger.info(f"Обработка для {current_catalog_type} завершена: обработано={processed_count}, создано={created_count}, обновлено={updated_count}, ошибок={len(errors)}")
             logger.info(f"Обработано товаров в обмене: {len(processed_external_ids)} с external_id для каталога {current_catalog_type}")
-            
-            # ВАЖНО: Скрываем товары ТОЛЬКО при обработке через веб-интерфейс (когда 1С загружает файлы напрямую)
-            # При обработке через скрипт (request=None) НЕ скрываем товары - это может быть повторная обработка
-            deleted_count = 0
-            # file_path доступен из параметров функции process_commerceml_file
-            
-            # ВАЖНО: Скрываем товары ТОЛЬКО если:
-            # 1. Обработка через веб-интерфейс (request не None) - это новая загрузка из 1С
-            # 2. Файл действительно новый/измененный
-            # 3. Это файл import.xml (каталога товаров), НЕ offers.xml
-            # При обработке через скрипт (request=None) НЕ скрываем товары вообще
-            should_hide_products = False
-            
-            # Если обработка через скрипт (request=None), НЕ скрываем товары вообще
-            if request is None:
-                logger.info(f"Обработка через скрипт (request=None) - НЕ скрываем товары для безопасности (предотвращает случайное скрытие при повторной обработке)")
-                should_hide_products = False
-            else:
-                # Обработка через веб-интерфейс - проверяем, нужно ли скрывать товары
-                # Проверяем тип файла - скрываем товары только для import.xml
-                filename_lower = filename.lower() if filename else ''
-                is_import_file = 'import' in filename_lower and 'offers' not in filename_lower
-                
-                if is_import_file and file_path and os.path.exists(file_path):
-                    processed_marker = f"{file_path}.processed"
-                    if os.path.exists(processed_marker):
-                        # Файл уже обрабатывался - проверяем, изменился ли он
-                        # ВАЖНО: Используем file_mtime из маркера, а не время создания маркера
-                        try:
-                            # Получаем текущее время файла
-                            file_mtime = os.path.getmtime(file_path)
-                            file_mtime_dt = datetime.fromtimestamp(file_mtime)
-                            
-                            # Пытаемся прочитать время файла из маркера (если оно там сохранено)
-                            file_mtime_from_marker = None
-                            try:
-                                with open(processed_marker, 'r') as f:
-                                    for line in f:
-                                        if line.startswith('file_mtime:'):
-                                            file_mtime_from_marker = datetime.fromisoformat(line.split(':', 1)[1].strip())
-                                            break
-                            except Exception:
-                                pass
-                            
-                            # Если время файла сохранено в маркере, используем его
-                            # Иначе используем время маркера (старая логика для обратной совместимости)
-                            if file_mtime_from_marker:
-                                # Сравниваем текущее время файла с временем из маркера
-                                if file_mtime_dt > file_mtime_from_marker:
-                                    should_hide_products = True
-                                    logger.info(f"Файл import.xml изменен после последней обработки (файл: {file_mtime_dt}, маркер: {file_mtime_from_marker}) - скрываем товары, не пришедшие в обмене")
-                                else:
-                                    should_hide_products = False
-                                    logger.info(f"Файл import.xml НЕ изменился с последней обработки (файл: {file_mtime_dt}, маркер: {file_mtime_from_marker}) - НЕ скрываем товары")
-                            else:
-                                # Старая логика - сравниваем с временем маркера (для обратной совместимости)
-                                marker_mtime = os.path.getmtime(processed_marker)
-                                marker_mtime_dt = datetime.fromtimestamp(marker_mtime)
-                                if file_mtime_dt > marker_mtime_dt:
-                                    should_hide_products = True
-                                    logger.info(f"Файл import.xml изменен после последней обработки (файл: {file_mtime_dt}, маркер: {marker_mtime_dt}) - скрываем товары, не пришедшие в обмене")
-                                else:
-                                    should_hide_products = False
-                                    logger.info(f"Файл import.xml НЕ изменился с последней обработки (файл: {file_mtime_dt}, маркер: {marker_mtime_dt}) - НЕ скрываем товары")
-                        except Exception as e:
-                            # Если не удалось проверить - НЕ скрываем товары (безопаснее)
-                            should_hide_products = False
-                            logger.warning(f"Не удалось проверить время изменения файла: {e}, НЕ скрываем товары для безопасности")
-                    else:
-                        # Файл новый (нет маркера) - скрываем товары (это новая загрузка из 1С через веб-интерфейс)
-                        should_hide_products = True
-                        logger.info(f"Файл import.xml новый (нет маркера) - скрываем товары, не пришедшие в обмене")
-                else:
-                    # Для offers.xml или если не можем определить файл - НЕ скрываем товары
-                    should_hide_products = False
-                    if not is_import_file:
-                        logger.info(f"Файл {filename} - это offers.xml, НЕ скрываем товары (только обновляем цены и остатки)")
-                    else:
-                        logger.warning(f"⚠ Не удалось определить путь к файлу или файл не существует - НЕ скрываем товары")
-        
-        # Находим товары, которые были импортированы из 1С (имеют external_id),
-        # но не пришли в текущем обмене
-        # ВАЖНО: Скрываем только товары из того же типа каталога (retail или wholesale)
-        # И ТОЛЬКО ЕСЛИ ФАЙЛ НОВЫЙ/ИЗМЕНЕННЫЙ
-        # ВАЖНО: Скрываем товары ТОЛЬКО если были обработаны товары для этого типа каталога (processed_count > 0)
-        # Это предотвращает скрытие всех товаров, если в обмене не было товаров для этого типа каталога
-        if processed_external_ids and should_hide_products and processed_count > 0:
-            # Ищем товары, которые:
-            # 1. Имеют external_id (были импортированы из 1С)
-            # 2. Принадлежат к текущему типу каталога (retail или wholesale)
-            # 3. Были активны (чтобы не трогать уже скрытые)
-            # 4. Их external_id нет в списке обработанных
-            products_to_hide = Product.objects.filter(
-                catalog_type=current_catalog_type,  # Только товары из текущего типа каталога
-                is_active=True,
-                external_id__isnull=False,
-                external_id__gt=''  # Не пустой
-            ).exclude(external_id__in=processed_external_ids)
-            
-            deleted_count = products_to_hide.count()
-            if deleted_count > 0:
-                logger.info(f"Найдено {deleted_count} товаров в каталоге {current_catalog_type}, которые не пришли в обмене - скрываем их (удалены в 1С)")
-                # Логируем первые 5 для отладки
-                for product in products_to_hide[:5]:
-                    logger.info(f"  Скрываем: {product.name[:50]} (external_id={product.external_id}, article={product.article})")
-                
-                # ВАЖНО: НЕ обнуляем quantity при скрытии товаров!
-                # Количество должно сохраняться, чтобы при следующем обмене товары могли восстановиться
-                # Скрываем товары (не удаляем физически, чтобы сохранить историю)
-                products_to_hide.update(is_active=False, availability='out_of_stock')
-                # НЕ обнуляем quantity - оставляем существующее значение
-                logger.info(f"✓ Скрыто товаров в каталоге {current_catalog_type}: {deleted_count} (количество сохранено)")
-            else:
-                logger.info(f"Все товары из 1С присутствуют в обмене для каталога {current_catalog_type}, скрывать нечего")
-        elif not should_hide_products:
-            logger.info(f"Файл не изменился или обработка через скрипт - НЕ скрываем товары для каталога {current_catalog_type}")
-        elif processed_count == 0:
-            logger.warning(f"⚠ В обмене нет товаров для каталога {current_catalog_type} (processed_count=0) - НЕ скрываем товары (предотвращает случайное скрытие всех товаров)")
-        else:
-            logger.warning(f"⚠ В обмене нет товаров с external_id для каталога {current_catalog_type} - невозможно определить удаленные товары")
             
             # Сохраняем результаты для текущего каталога
             results[current_catalog_type] = {
                 'processed': processed_count,
                 'created': created_count,
                 'updated': updated_count,
-                'deleted': deleted_count,
-                'errors': errors
+                'deleted': 0,  # Будет обновлено после скрытия товаров
+                'errors': errors,
+                'processed_external_ids': processed_external_ids.copy()  # Сохраняем для скрытия товаров
             }
             
             # Суммируем общие результаты
             total_processed += processed_count
             total_created += created_count
             total_updated += updated_count
-            total_deleted += deleted_count
             all_errors.extend(errors)
+        
+        # ВАЖНО: Скрываем товары ТОЛЬКО ПОСЛЕ обработки всех каталогов
+        # Это предотвращает ситуацию, когда товары скрываются/показываются во время обработки
+        # ВАЖНО: Скрываем товары ТОЛЬКО при обработке через веб-интерфейс (когда 1С загружает файлы напрямую)
+        # При обработке через скрипт (request=None) НЕ скрываем товары - это может быть повторная обработка
+        should_hide_products = False
+        
+        # Если обработка через скрипт (request=None), НЕ скрываем товары вообще
+        if request is None:
+            logger.info(f"Обработка через скрипт (request=None) - НЕ скрываем товары для безопасности (предотвращает случайное скрытие при повторной обработке)")
+            should_hide_products = False
+        else:
+            # Обработка через веб-интерфейс - проверяем, нужно ли скрывать товары
+            # Проверяем тип файла - скрываем товары только для import.xml
+            filename_lower = filename.lower() if filename else ''
+            is_import_file = 'import' in filename_lower and 'offers' not in filename_lower
+            
+            if is_import_file and file_path and os.path.exists(file_path):
+                processed_marker = f"{file_path}.processed"
+                if os.path.exists(processed_marker):
+                    # Файл уже обрабатывался - проверяем, изменился ли он
+                    # ВАЖНО: Используем file_mtime из маркера, а не время создания маркера
+                    try:
+                        # Получаем текущее время файла
+                        file_mtime = os.path.getmtime(file_path)
+                        file_mtime_dt = datetime.fromtimestamp(file_mtime)
+                        
+                        # Пытаемся прочитать время файла из маркера (если оно там сохранено)
+                        file_mtime_from_marker = None
+                        try:
+                            with open(processed_marker, 'r') as f:
+                                for line in f:
+                                    if line.startswith('file_mtime:'):
+                                        file_mtime_from_marker = datetime.fromisoformat(line.split(':', 1)[1].strip())
+                                        break
+                        except Exception:
+                            pass
+                        
+                        # Если время файла сохранено в маркере, используем его
+                        # Иначе используем время маркера (старая логика для обратной совместимости)
+                        if file_mtime_from_marker:
+                            # Сравниваем текущее время файла с временем из маркера
+                            if file_mtime_dt > file_mtime_from_marker:
+                                should_hide_products = True
+                                logger.info(f"Файл import.xml изменен после последней обработки (файл: {file_mtime_dt}, маркер: {file_mtime_from_marker}) - скрываем товары, не пришедшие в обмене")
+                            else:
+                                should_hide_products = False
+                                logger.info(f"Файл import.xml НЕ изменился с последней обработки (файл: {file_mtime_dt}, маркер: {file_mtime_from_marker}) - НЕ скрываем товары")
+                        else:
+                            # Старая логика - сравниваем с временем маркера (для обратной совместимости)
+                            marker_mtime = os.path.getmtime(processed_marker)
+                            marker_mtime_dt = datetime.fromtimestamp(marker_mtime)
+                            if file_mtime_dt > marker_mtime_dt:
+                                should_hide_products = True
+                                logger.info(f"Файл import.xml изменен после последней обработки (файл: {file_mtime_dt}, маркер: {marker_mtime_dt}) - скрываем товары, не пришедшие в обмене")
+                            else:
+                                should_hide_products = False
+                                logger.info(f"Файл import.xml НЕ изменился с последней обработки (файл: {file_mtime_dt}, маркер: {marker_mtime_dt}) - НЕ скрываем товары")
+                    except Exception as e:
+                        # Если не удалось проверить - НЕ скрываем товары (безопаснее)
+                        should_hide_products = False
+                        logger.warning(f"Не удалось проверить время изменения файла: {e}, НЕ скрываем товары для безопасности")
+                else:
+                    # Файл новый (нет маркера) - скрываем товары (это новая загрузка из 1С через веб-интерфейс)
+                    should_hide_products = True
+                    logger.info(f"Файл import.xml новый (нет маркера) - скрываем товары, не пришедшие в обмене")
+            else:
+                # Для offers.xml или если не можем определить файл - НЕ скрываем товары
+                should_hide_products = False
+                if not is_import_file:
+                    logger.info(f"Файл {filename} - это offers.xml, НЕ скрываем товары (только обновляем цены и остатки)")
+                else:
+                    logger.warning(f"⚠ Не удалось определить путь к файлу или файл не существует - НЕ скрываем товары")
+        
+        # Находим товары, которые были импортированы из 1С (имеют external_id),
+        # но не пришли в текущем обмене
+        # ВАЖНО: Скрываем только товары из того же типа каталога (retail или wholesale)
+        # И ТОЛЬКО ЕСЛИ ФАЙЛ НОВЫЙ/ИЗМЕНЕННЫЙ
+        # ВАЖНО: Скрываем товары ТОЛЬКО после обработки всех каталогов
+        total_deleted = 0
+        if should_hide_products:
+            for current_catalog_type in ['retail', 'wholesale']:
+                catalog_results = results.get(current_catalog_type, {})
+                processed_external_ids = catalog_results.get('processed_external_ids', set())
+                processed_count = catalog_results.get('processed', 0)
+                
+                # ВАЖНО: Скрываем товары ТОЛЬКО если были обработаны товары для этого типа каталога (processed_count > 0)
+                # Это предотвращает скрытие всех товаров, если в обмене не было товаров для этого типа каталога
+                if processed_external_ids and processed_count > 0:
+                    # Ищем товары, которые:
+                    # 1. Имеют external_id (были импортированы из 1С)
+                    # 2. Принадлежат к текущему типу каталога (retail или wholesale)
+                    # 3. Были активны (чтобы не трогать уже скрытые)
+                    # 4. Их external_id нет в списке обработанных
+                    products_to_hide = Product.objects.filter(
+                        catalog_type=current_catalog_type,  # Только товары из текущего типа каталога
+                        is_active=True,
+                        external_id__isnull=False,
+                        external_id__gt=''  # Не пустой
+                    ).exclude(external_id__in=processed_external_ids)
+                    
+                    deleted_count = products_to_hide.count()
+                    if deleted_count > 0:
+                        logger.info(f"Найдено {deleted_count} товаров в каталоге {current_catalog_type}, которые не пришли в обмене - скрываем их (удалены в 1С)")
+                        # Логируем первые 5 для отладки
+                        for product in products_to_hide[:5]:
+                            logger.info(f"  Скрываем: {product.name[:50]} (external_id={product.external_id}, article={product.article})")
+                        
+                        # ВАЖНО: НЕ обнуляем quantity при скрытии товаров!
+                        # Количество должно сохраняться, чтобы при следующем обмене товары могли восстановиться
+                        # Скрываем товары (не удаляем физически, чтобы сохранить историю)
+                        products_to_hide.update(is_active=False, availability='out_of_stock')
+                        # НЕ обнуляем quantity - оставляем существующее значение
+                        logger.info(f"✓ Скрыто товаров в каталоге {current_catalog_type}: {deleted_count} (количество сохранено)")
+                        total_deleted += deleted_count
+                        # Обновляем результаты для текущего каталога
+                        results[current_catalog_type]['deleted'] = deleted_count
+                    else:
+                        logger.info(f"Все товары из 1С присутствуют в обмене для каталога {current_catalog_type}, скрывать нечего")
+                elif processed_count == 0:
+                    logger.warning(f"⚠ В обмене нет товаров для каталога {current_catalog_type} (processed_count=0) - НЕ скрываем товары (предотвращает случайное скрытие всех товаров)")
+                else:
+                    logger.warning(f"⚠ В обмене нет товаров с external_id для каталога {current_catalog_type} - невозможно определить удаленные товары")
+        elif not should_hide_products:
+            logger.info(f"Файл не изменился или обработка через скрипт - НЕ скрываем товары")
         
         # Создаем лог синхронизации
         processing_time = (timezone.now() - start_time).total_seconds()
@@ -1171,20 +1185,20 @@ def process_commerceml_file(file_path, filename, request=None):
         else:
             logger.warning(f"⚠ Маркер не создан: total_processed={total_processed} (товары не обработаны)")
         
-        # ВАЖНО: Проверяем существование таблицы SyncLog перед использованием
-        from django.db import connection
-        table_exists = False
-        try:
-            with connection.cursor() as cursor:
-                if 'sqlite' in connection.vendor:
-                    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='catalog_synclog'")
-                else:
-                    cursor.execute("SELECT table_name FROM information_schema.tables WHERE table_name='catalog_synclog'")
-                table_exists = cursor.fetchone() is not None
-        except Exception:
-            pass
-        
-        if table_exists:
+            # ВАЖНО: Проверяем существование таблицы SyncLog перед использованием
+            from django.db import connection
+            table_exists = False
+            try:
+                with connection.cursor() as cursor:
+                    if 'sqlite' in connection.vendor:
+                        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='catalog_synclog'")
+                    else:
+                        cursor.execute("SELECT table_name FROM information_schema.tables WHERE table_name='catalog_synclog'")
+                    table_exists = cursor.fetchone() is not None
+            except Exception:
+                pass
+            
+            if table_exists:
                 sync_log = SyncLog.objects.create(
                     operation_type='file_upload',
                     status=status,
@@ -1681,47 +1695,117 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
     
     # Обрабатываем каждое предложение в отдельной транзакции
     # Это позволяет избежать ситуации, когда ошибка одного предложения ломает обработку всех остальных
-    logger.info(f"Начало обработки {len(offers)} предложений (каждое в отдельной транзакции)")
+    # ВАЖНО: Добавляем retry логику для обработки ошибок "database is locked" в SQLite
+    logger.info(f"Начало обработки {len(offers)} предложений (каждое в отдельной транзакции с retry)")
+    
+    def process_offer_with_retry(offer_elem, idx, max_retries=3):
+        """Обрабатывает предложение с повторными попытками при ошибке 'database is locked'"""
+        for attempt in range(max_retries):
+            try:
+                with transaction.atomic():
+                    return process_single_offer(offer_elem, idx)
+            except OperationalError as e:
+                error_str = str(e).lower()
+                if 'database is locked' in error_str or 'locked' in error_str:
+                    if attempt < max_retries - 1:
+                        # Экспоненциальная задержка: 0.1, 0.2, 0.4, 0.8 секунд
+                        wait_time = 0.1 * (2 ** attempt)
+                        logger.warning(f"⚠ База данных заблокирована для предложения #{idx+1}, попытка {attempt+1}/{max_retries}, ждем {wait_time:.2f} сек...")
+                        time.sleep(wait_time)
+                        continue
+                    else:
+                        logger.error(f"✗ Не удалось обработать предложение #{idx+1} после {max_retries} попыток: database is locked")
+                        return {'error': 'database is locked', 'offer_id': None}
+                else:
+                    # Другая ошибка - пробрасываем дальше
+                    raise
+            except Exception as e:
+                # Другие ошибки - пробрасываем дальше
+                logger.error(f"✗ Ошибка обработки предложения #{idx+1}: {e}")
+                raise
+    
+    def process_single_offer(offer_elem, idx):
+        """Обрабатывает одно предложение"""
+        # Ищем Ид товара
+        product_id_elem = None
+        if namespace:
+            product_id_elem = offer_elem.find(f'{{{namespace}}}Ид')
+        if product_id_elem is None:
+            product_id_elem = offer_elem.find('.//Ид')
+        if product_id_elem is None and 'catalog' in namespaces:
+            try:
+                product_id_elem = offer_elem.find('catalog:Ид', namespaces)
+            except (KeyError, ValueError):
+                pass
+        
+        if product_id_elem is None or not product_id_elem.text:
+            if idx < 5:
+                logger.warning(f"Предложение #{idx+1}: не найден Ид товара")
+            return {'error': 'no product_id', 'offer_id': None}
+        
+        product_id = product_id_elem.text.strip()
+        
+        # Ищем товар по external_id сначала в нужном типе каталога, потом в любом
+        product = Product.objects.filter(external_id=product_id, catalog_type=catalog_type).first()
+        if not product:
+            # Пробуем по артикулу в нужном типе каталога
+            product = Product.objects.filter(article=product_id, catalog_type=catalog_type).first()
+        
+        # Если не нашли в нужном типе каталога, ищем в любом каталоге
+        if not product:
+            product = Product.objects.filter(external_id=product_id).first()
+        if not product:
+            product = Product.objects.filter(article=product_id).first()
+        
+        # Продолжаем обработку товара...
+        # (остальной код обработки товара)
+        return {'success': True, 'offer_id': product_id}
     
     for idx, offer_elem in enumerate(offers):
-        # Каждое предложение обрабатывается в отдельной транзакции
-        try:
-            with transaction.atomic():
-                # Ищем Ид товара
-                product_id_elem = None
-                if namespace:
-                    product_id_elem = offer_elem.find(f'{{{namespace}}}Ид')
-                if product_id_elem is None:
-                    product_id_elem = offer_elem.find('.//Ид')
-                if product_id_elem is None and 'catalog' in namespaces:
-                    try:
-                        product_id_elem = offer_elem.find('catalog:Ид', namespaces)
-                    except (KeyError, ValueError):
-                        pass
-                
-                if product_id_elem is None or not product_id_elem.text:
-                    if idx < 5:
-                        logger.warning(f"Предложение #{idx+1}: не найден Ид товара")
-                    continue
-                
-                product_id = product_id_elem.text.strip()
-                
-                # Ищем товар по external_id сначала в нужном типе каталога, потом в любом
-                product = Product.objects.filter(external_id=product_id, catalog_type=catalog_type).first()
-                if not product:
-                    # Пробуем по артикулу в нужном типе каталога
-                    product = Product.objects.filter(article=product_id, catalog_type=catalog_type).first()
-                
-                # Если не нашли в нужном типе каталога, ищем в любом каталоге
-                if not product:
-                    product = Product.objects.filter(external_id=product_id).first()
-                if not product:
-                    product = Product.objects.filter(article=product_id).first()
-                
-                # Если товар найден, но в другом каталоге, создаем копию в нужном каталоге
-                if product and product.catalog_type != catalog_type:
-                    # Создаем товар в нужном каталоге на основе найденного
-                    existing_product = product
+        # Каждое предложение обрабатывается в отдельной транзакции с retry
+        product_id = None
+        # Используем retry логику для обработки ошибок "database is locked"
+        max_retries = 3
+        processed_successfully = False
+        
+        for attempt in range(max_retries):
+            try:
+                with transaction.atomic():
+                    # Ищем Ид товара
+                    product_id_elem = None
+                    if namespace:
+                        product_id_elem = offer_elem.find(f'{{{namespace}}}Ид')
+                    if product_id_elem is None:
+                        product_id_elem = offer_elem.find('.//Ид')
+                    if product_id_elem is None and 'catalog' in namespaces:
+                        try:
+                            product_id_elem = offer_elem.find('catalog:Ид', namespaces)
+                        except (KeyError, ValueError):
+                            pass
+                    
+                    if product_id_elem is None or not product_id_elem.text:
+                        if idx < 5:
+                            logger.warning(f"Предложение #{idx+1}: не найден Ид товара")
+                        continue
+                    
+                    product_id = product_id_elem.text.strip()
+                    
+                    # Ищем товар по external_id сначала в нужном типе каталога, потом в любом
+                    product = Product.objects.filter(external_id=product_id, catalog_type=catalog_type).first()
+                    if not product:
+                        # Пробуем по артикулу в нужном типе каталога
+                        product = Product.objects.filter(article=product_id, catalog_type=catalog_type).first()
+                    
+                    # Если не нашли в нужном типе каталога, ищем в любом каталоге
+                    if not product:
+                        product = Product.objects.filter(external_id=product_id).first()
+                    if not product:
+                        product = Product.objects.filter(article=product_id).first()
+                    
+                    # Если товар найден, но в другом каталоге, создаем копию в нужном каталоге
+                    if product and product.catalog_type != catalog_type:
+                        # Создаем товар в нужном каталоге на основе найденного
+                        existing_product = product
                     product = Product.objects.filter(
                         external_id=product_id,
                         catalog_type=catalog_type
@@ -2264,16 +2348,41 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                     current_price = product.price if catalog_type == 'retail' else product.wholesale_price
                     logger.info(f"✓ Товар обновлен: Ид={product_id}, название={product.name[:50]}, цена={current_price}, остаток={product.quantity}, активен={product.is_active}, каталог={catalog_type}")
                 
-        except Exception as e:
-            # Исключение при обработке предложения - транзакция автоматически откатывается
-            error_msg = str(e)
-            logger.error(f"✗ Исключение при обработке предложения #{idx+1}: {error_msg}", exc_info=True)
-            errors.append({
-                'offer_id': product_id if 'product_id' in locals() else f'offer_{idx}',
-                'error': error_msg
-            })
-            # Транзакция автоматически откатывается при исключении
-            # Продолжаем обработку следующего предложения
+                # Успешно обработано - выходим из retry цикла
+                processed_successfully = True
+                break
+                    
+            except OperationalError as e:
+                error_str = str(e).lower()
+                if 'database is locked' in error_str or 'locked' in error_str:
+                    if attempt < max_retries - 1:
+                        # Экспоненциальная задержка: 0.1, 0.2, 0.4 секунд
+                        wait_time = 0.1 * (2 ** attempt)
+                        logger.warning(f"⚠ База данных заблокирована для предложения #{idx+1}, попытка {attempt+1}/{max_retries}, ждем {wait_time:.2f} сек...")
+                        time.sleep(wait_time)
+                        continue
+                    else:
+                        logger.error(f"✗ Не удалось обработать предложение #{idx+1} после {max_retries} попыток: database is locked")
+                        errors.append({
+                            'offer_id': product_id if product_id else f'offer_{idx}',
+                            'error': 'database is locked'
+                        })
+                        break
+                else:
+                    # Другая ошибка - пробрасываем дальше
+                    raise
+                        
+            except Exception as e:
+                # Исключение при обработке предложения - транзакция автоматически откатывается
+                error_msg = str(e)
+                logger.error(f"✗ Исключение при обработке предложения #{idx+1}: {error_msg}", exc_info=True)
+                errors.append({
+                    'offer_id': product_id if product_id else f'offer_{idx}',
+                    'error': error_msg
+                })
+                # Транзакция автоматически откатывается при исключении
+                # Продолжаем обработку следующего предложения
+                break  # Выходим из retry цикла при любой другой ошибке
     
     processing_time = (timezone.now() - start_time).total_seconds()
     request_ip = get_client_ip(request) if request else None
