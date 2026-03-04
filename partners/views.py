@@ -198,12 +198,11 @@ class PartnerProductView(PartnerRequiredMixin, DetailView):
     slug_url_kwarg = 'slug'
     
     def get_queryset(self):
-        # ТОЛЬКО товары из партнёрского каталога с остатком!
+        # ТОЛЬКО товары из партнёрского каталога с количеством > 0!
         return Product.objects.filter(
             is_active=True,
-            catalog_type='wholesale'
-        ).filter(
-            Q(quantity__gt=0) | Q(wholesale_price__gt=0)  # Товары с остатком ИЛИ оптовой ценой
+            catalog_type='wholesale',
+            quantity__gt=0  # Только товары с количеством больше 0
         ).select_related('category').prefetch_related('images')
     
     def get_context_data(self, **kwargs):

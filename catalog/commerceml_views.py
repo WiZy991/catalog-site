@@ -920,74 +920,69 @@ def process_commerceml_file(file_path, filename, request=None):
             logger.info(f"ОБРАБОТКА ДЛЯ КАТАЛОГА: {current_catalog_type.upper()}")
             logger.info("=" * 80)
         
-        # Обрабатываем товары - каждый в отдельной транзакции
-        # Это позволяет избежать ситуации, когда ошибка одного товара ломает обработку всех остальных
-        processed_count = 0
-        created_count = 0
-        updated_count = 0
-        errors = []
-        
-        logger.info(f"Начало обработки {len(products_data)} товаров для каталога {current_catalog_type} (каждый в отдельной транзакции)")
-        
-        for idx, product_data in enumerate(products_data):
-            # Каждый товар обрабатывается в отдельной транзакции
-            # Это гарантирует, что ошибка одного товара не повлияет на обработку остальных
-            try:
-                with transaction.atomic():
-                    # Логируем данные товара перед обработкой (для первых 3)
-                    if idx < 3:
-                        logger.info(f"Обработка товара #{idx+1} для {current_catalog_type}: sku={product_data.get('sku')}, name={product_data.get('name')[:50] if product_data.get('name') else 'N/A'}")
-                    
-                    product, error, was_created = process_product_from_commerceml(product_data, catalog_type=current_catalog_type)
-                    if product:
-                        processed_count += 1
-                        if was_created:
-                            created_count += 1
-                            logger.info(f"✓ Создан товар в каталоге {current_catalog_type}: {product.article} - {product.name[:50]}")
-                        else:
-                            updated_count += 1
-                            if idx < 10:  # Логируем первые 10 обновлений
-                                logger.info(f"✓ Обновлен товар в каталоге {current_catalog_type}: {product.article} - {product.name[:50]}")
-                    elif error:
-                        # Ошибка внутри process_product_from_commerceml
-                        error_info = {
-                            'sku': product_data.get('sku', 'unknown'),
-                            'catalog_type': current_catalog_type,
-                            'error': error
-                        }
-                        errors.append(error_info)
-                        logger.warning(f"✗ Ошибка обработки товара {product_data.get('sku', 'unknown')} для {current_catalog_type}: {error}")
-                        # Выводим данные товара при ошибке (только для первых 5)
-                        if idx < 5:
-                            logger.warning(f"  Данные товара: {product_data}")
-            except Exception as e:
-                # Исключение при обработке товара - транзакция автоматически откатывается
-                error_msg = str(e)
-                logger.error(f"✗ Исключение при обработке товара {product_data.get('sku', 'unknown')} для {current_catalog_type}: {error_msg}", exc_info=True)
-                errors.append({
-                    'sku': product_data.get('sku', 'unknown'),
-                    'catalog_type': current_catalog_type,
-                    'error': error_msg
-                })
-                # Выводим данные товара при ошибке (только для первых 5)
-                if idx < 5:
-                    logger.warning(f"  Данные товара: {product_data}")
-                # Транзакция автоматически откатывается при исключении
-                # Продолжаем обработку следующего товара
-        
+            # Обрабатываем товары - каждый в отдельной транзакции
+            # Это позволяет избежать ситуации, когда ошибка одного товара ломает обработку всех остальных
+            processed_count = 0
+            created_count = 0
+            updated_count = 0
+            errors = []
+            # ВАЖНО: Собираем external_id только из успешно обработанных товаров для текущего типа каталога
+            processed_external_ids = set()
+            
+            logger.info(f"Начало обработки {len(products_data)} товаров для каталога {current_catalog_type} (каждый в отдельной транзакции)")
+            
+            for idx, product_data in enumerate(products_data):
+                # Каждый товар обрабатывается в отдельной транзакции
+                # Это гарантирует, что ошибка одного товара не повлияет на обработку остальных
+                try:
+                    with transaction.atomic():
+                        # Логируем данные товара перед обработкой (для первых 3)
+                        if idx < 3:
+                            logger.info(f"Обработка товара #{idx+1} для {current_catalog_type}: sku={product_data.get('sku')}, name={product_data.get('name')[:50] if product_data.get('name') else 'N/A'}")
+                        
+                        product, error, was_created = process_product_from_commerceml(product_data, catalog_type=current_catalog_type)
+                        if product:
+                            processed_count += 1
+                            # ВАЖНО: Добавляем external_id только если товар успешно обработан для текущего типа каталога
+                            external_id = product.external_id or product_data.get('external_id') or product_data.get('sku')
+                            if external_id:
+                                processed_external_ids.add(str(external_id).strip())
+                            
+                            if was_created:
+                                created_count += 1
+                                logger.info(f"✓ Создан товар в каталоге {current_catalog_type}: {product.article} - {product.name[:50]}")
+                            else:
+                                updated_count += 1
+                                if idx < 10:  # Логируем первые 10 обновлений
+                                    logger.info(f"✓ Обновлен товар в каталоге {current_catalog_type}: {product.article} - {product.name[:50]}")
+                        elif error:
+                            # Ошибка внутри process_product_from_commerceml
+                            error_info = {
+                                'sku': product_data.get('sku', 'unknown'),
+                                'catalog_type': current_catalog_type,
+                                'error': error
+                            }
+                            errors.append(error_info)
+                            logger.warning(f"✗ Ошибка обработки товара {product_data.get('sku', 'unknown')} для {current_catalog_type}: {error}")
+                            # Выводим данные товара при ошибке (только для первых 5)
+                            if idx < 5:
+                                logger.warning(f"  Данные товара: {product_data}")
+                except Exception as e:
+                    # Исключение при обработке товара - транзакция автоматически откатывается
+                    error_msg = str(e)
+                    logger.error(f"✗ Исключение при обработке товара {product_data.get('sku', 'unknown')} для {current_catalog_type}: {error_msg}", exc_info=True)
+                    errors.append({
+                        'sku': product_data.get('sku', 'unknown'),
+                        'catalog_type': current_catalog_type,
+                        'error': error_msg
+                    })
+                    # Выводим данные товара при ошибке (только для первых 5)
+                    if idx < 5:
+                        logger.warning(f"  Данные товара: {product_data}")
+                    # Транзакция автоматически откатывается при исключении
+                    # Продолжаем обработку следующего товара
+            
             logger.info(f"Обработка для {current_catalog_type} завершена: обработано={processed_count}, создано={created_count}, обновлено={updated_count}, ошибок={len(errors)}")
-        
-        # ВАЖНО: Скрываем товары, которые были импортированы из 1С, но не пришли в текущем обмене
-            # НО ТОЛЬКО ЕСЛИ ФАЙЛ ДЕЙСТВИТЕЛЬНО НОВЫЙ/ИЗМЕНЕННЫЙ
-        # Это означает, что они были удалены в 1С
-        # Собираем все external_id из обработанных товаров (это уникальный идентификатор из 1С)
-        processed_external_ids = set()
-        
-        for product_data in products_data:
-            external_id = product_data.get('external_id') or product_data.get('sku')
-            if external_id:
-                processed_external_ids.add(str(external_id).strip())
-        
             logger.info(f"Обработано товаров в обмене: {len(processed_external_ids)} с external_id для каталога {current_catalog_type}")
             
             # ВАЖНО: Скрываем товары ТОЛЬКО если файл действительно новый/измененный
@@ -1061,43 +1056,43 @@ def process_commerceml_file(file_path, filename, request=None):
                     logger.info(f"Файл {filename} - это offers.xml, НЕ скрываем товары (только обновляем цены и остатки)")
                 else:
                     logger.warning(f"⚠ Не удалось определить путь к файлу или файл не существует - НЕ скрываем товары")
-        
-        # Находим товары, которые были импортированы из 1С (имеют external_id),
-        # но не пришли в текущем обмене
-        # ВАЖНО: Скрываем только товары из того же типа каталога (retail или wholesale)
-        # И ТОЛЬКО ЕСЛИ ФАЙЛ НОВЫЙ/ИЗМЕНЕННЫЙ
-        if processed_external_ids and should_hide_products:
-            # Ищем товары, которые:
-            # 1. Имеют external_id (были импортированы из 1С)
-            # 2. Принадлежат к текущему типу каталога (retail или wholesale)
-            # 3. Были активны (чтобы не трогать уже скрытые)
-            # 4. Их external_id нет в списке обработанных
-            products_to_hide = Product.objects.filter(
-                catalog_type=current_catalog_type,  # Только товары из текущего типа каталога
-                is_active=True,
-                external_id__isnull=False,
-                external_id__gt=''  # Не пустой
-            ).exclude(external_id__in=processed_external_ids)
             
-            deleted_count = products_to_hide.count()
-            if deleted_count > 0:
-                logger.info(f"Найдено {deleted_count} товаров в каталоге {current_catalog_type}, которые не пришли в обмене - скрываем их (удалены в 1С)")
-                # Логируем первые 5 для отладки
-                for product in products_to_hide[:5]:
-                    logger.info(f"  Скрываем: {product.name[:50]} (external_id={product.external_id}, article={product.article})")
+            # Находим товары, которые были импортированы из 1С (имеют external_id),
+            # но не пришли в текущем обмене
+            # ВАЖНО: Скрываем только товары из того же типа каталога (retail или wholesale)
+            # И ТОЛЬКО ЕСЛИ ФАЙЛ НОВЫЙ/ИЗМЕНЕННЫЙ
+            if processed_external_ids and should_hide_products:
+                # Ищем товары, которые:
+                # 1. Имеют external_id (были импортированы из 1С)
+                # 2. Принадлежат к текущему типу каталога (retail или wholesale)
+                # 3. Были активны (чтобы не трогать уже скрытые)
+                # 4. Их external_id нет в списке обработанных
+                products_to_hide = Product.objects.filter(
+                    catalog_type=current_catalog_type,  # Только товары из текущего типа каталога
+                    is_active=True,
+                    external_id__isnull=False,
+                    external_id__gt=''  # Не пустой
+                ).exclude(external_id__in=processed_external_ids)
                 
-                # ВАЖНО: НЕ обнуляем quantity при скрытии товаров!
-                # Количество должно сохраняться, чтобы при следующем обмене товары могли восстановиться
-                # Скрываем товары (не удаляем физически, чтобы сохранить историю)
-                products_to_hide.update(is_active=False, availability='out_of_stock')
-                # НЕ обнуляем quantity - оставляем существующее значение
-                logger.info(f"✓ Скрыто товаров в каталоге {current_catalog_type}: {deleted_count} (количество сохранено)")
+                deleted_count = products_to_hide.count()
+                if deleted_count > 0:
+                    logger.info(f"Найдено {deleted_count} товаров в каталоге {current_catalog_type}, которые не пришли в обмене - скрываем их (удалены в 1С)")
+                    # Логируем первые 5 для отладки
+                    for product in products_to_hide[:5]:
+                        logger.info(f"  Скрываем: {product.name[:50]} (external_id={product.external_id}, article={product.article})")
+                    
+                    # ВАЖНО: НЕ обнуляем quantity при скрытии товаров!
+                    # Количество должно сохраняться, чтобы при следующем обмене товары могли восстановиться
+                    # Скрываем товары (не удаляем физически, чтобы сохранить историю)
+                    products_to_hide.update(is_active=False, availability='out_of_stock')
+                    # НЕ обнуляем quantity - оставляем существующее значение
+                    logger.info(f"✓ Скрыто товаров в каталоге {current_catalog_type}: {deleted_count} (количество сохранено)")
+                else:
+                    logger.info(f"Все товары из 1С присутствуют в обмене для каталога {current_catalog_type}, скрывать нечего")
+            elif not should_hide_products:
+                logger.info(f"Файл не изменился - НЕ скрываем товары для каталога {current_catalog_type}")
             else:
-                logger.info(f"Все товары из 1С присутствуют в обмене для каталога {current_catalog_type}, скрывать нечего")
-        elif not should_hide_products:
-            logger.info(f"Файл не изменился - НЕ скрываем товары для каталога {current_catalog_type}")
-        else:
-            logger.warning(f"⚠ В обмене нет товаров с external_id для каталога {current_catalog_type} - невозможно определить удаленные товары")
+                logger.warning(f"⚠ В обмене нет товаров с external_id для каталога {current_catalog_type} - невозможно определить удаленные товары")
             
             # Сохраняем результаты для текущего каталога
             results[current_catalog_type] = {
@@ -2122,29 +2117,16 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                             if idx < 5:
                                 logger.info(f"✓ Синхронизировано количество для товара {product_id} в каталоге {other_catalog_type}: {quantity}")
                     
-                    # ВАЖНО: Определяем наличие на основе остатка (одинаково для обоих каталогов)
-                    # Если есть остаток > 0, товар всегда в наличии
+                    # ВАЖНО: Определяем активность на основе количества (количество = остаток в XML)
+                    # Если количество > 0, товар активен и в наличии
+                    # Если количество = 0, товар скрыт (неактивен)
                     if quantity > 0:
                         product.availability = 'in_stock'
-                        product.is_active = True  # Товар с остатком - всегда активен
+                        product.is_active = True  # Товар с количеством > 0 - всегда активен
                     else:
-                        # Если остатка нет, проверяем цену для определения статуса
-                        # Для оптового каталога проверяем wholesale_price, для розничного - price
-                        if catalog_type == 'wholesale':
-                            current_price = product.wholesale_price
-                        else:
-                            current_price = product.price
-                        
-                        if current_price and current_price > 0:
-                            product.availability = 'order'  # Под заказ, если есть цена
-                            product.is_active = True  # Товар с ценой - активен (под заказ)
-                        else:
-                            # ВАЖНО: Если quantity = 0 и нет цены, НЕ деактивируем товар автоматически при обновлении из offers.xml
-                            # Товар может быть временно без остатка, но должен оставаться активным
-                            # Деактивация происходит только при скрытии в import.xml (когда товар удален в 1С)
-                            product.availability = 'out_of_stock'
-                            # НЕ меняем is_active - оставляем существующее значение
-                            # Это предотвращает случайную деактивацию товаров при обновлении из offers.xml
+                        # Если количество = 0, скрываем товар
+                        product.availability = 'out_of_stock'
+                        product.is_active = False  # Товар с количеством = 0 - скрываем
                     
                     if idx < 5:
                         if catalog_type == 'wholesale':
@@ -2164,29 +2146,16 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                     # Количество одинаково для обоих каталогов
                     existing_quantity = product.quantity or 0
                     
-                    # ВАЖНО: Определяем наличие на основе остатка (одинаково для обоих каталогов)
-                    # Если есть остаток > 0, товар всегда в наличии
+                    # ВАЖНО: Определяем активность на основе количества (количество = остаток в XML)
+                    # Если количество > 0, товар активен и в наличии
+                    # Если количество = 0, товар скрыт (неактивен)
                     if existing_quantity > 0:
                         product.availability = 'in_stock'
-                        product.is_active = True  # Товар с остатком - всегда активен
+                        product.is_active = True  # Товар с количеством > 0 - всегда активен
                     else:
-                        # Если остатка нет, проверяем цену для определения статуса
-                        # Для оптового каталога проверяем wholesale_price, для розничного - price
-                        if catalog_type == 'wholesale':
-                            current_price = product.wholesale_price
-                        else:
-                            current_price = product.price
-                        
-                        if current_price and current_price > 0:
-                            product.availability = 'order'  # Под заказ, если есть цена
-                            product.is_active = True  # Товар с ценой - активен (под заказ)
-                        else:
-                            # ВАЖНО: Если quantity = 0 и нет цены, НЕ деактивируем товар автоматически при обновлении из offers.xml
-                            # Товар может быть временно без остатка, но должен оставаться активным
-                            # Деактивация происходит только при скрытии в import.xml (когда товар удален в 1С)
-                            product.availability = 'out_of_stock'
-                            # НЕ меняем is_active - оставляем существующее значение
-                            # Это предотвращает случайную деактивацию товаров при обновлении из offers.xml
+                        # Если количество = 0, скрываем товар
+                        product.availability = 'out_of_stock'
+                        product.is_active = False  # Товар с количеством = 0 - скрываем
                     
                     # ВАЖНО: Синхронизируем availability с другим каталогом (retail <-> wholesale)
                     # Availability должно быть одинаковым для обоих каталогов, если количество одинаково

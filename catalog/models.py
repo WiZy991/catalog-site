@@ -125,7 +125,7 @@ class Category(MPTTModel):
             category_id__in=descendant_ids, 
             is_active=True,
             catalog_type='retail',  # Только товары из основного каталога
-            quantity__gt=0  # Только товары с остатком больше 0
+            quantity__gt=0  # Только товары с количеством больше 0
         ).count()
         
         return count
