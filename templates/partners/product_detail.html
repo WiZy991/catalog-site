@@ -359,18 +359,6 @@
                 </div>
                 {% endif %}
                 
-                {% if product.applicability %}
-                <div class="product-info__section">
-                    <h3 class="product-info__section-title">Применимость</h3>
-                    <div class="product-info__applicability">
-                        {% for item in product.get_applicability_list %}
-                        <span class="product-info__applicability-item">{{ item }}</span>
-                        {% endfor %}
-                    </div>
-                </div>
-                {% endif %}
-                
-                
                 {% if product.description %}
                 <div class="product-info__section">
                     <h3 class="product-info__section-title">Применимость</h3>

@@ -606,9 +606,6 @@ class WholesaleProductAdmin(ImportExportModelAdmin, admin.ModelAdmin):
         ('Описание', {
             'fields': ('short_description', 'description', 'characteristics')
         }),
-        ('Применимость', {
-            'fields': ('applicability', 'cross_numbers')
-        }),
         ('SEO', {
             'fields': ('meta_title', 'meta_description'),
             'classes': ('collapse',)
