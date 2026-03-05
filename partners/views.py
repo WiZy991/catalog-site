@@ -12,6 +12,9 @@ from django.http import HttpResponseForbidden
 from django.urls import reverse_lazy, reverse
 from django.utils import timezone
 from django.template.loader import render_to_string
+from django.contrib.auth.tokens import default_token_generator
+from django.utils.encoding import force_bytes
+from django.utils.http import urlsafe_base64_encode
 
 from catalog.models import Category, Product
 from .models import PartnerRequest, Partner, PartnerSettings, PartnerOrder, PartnerOrderItem
@@ -218,7 +221,44 @@ class PartnerPasswordResetView(PasswordResetView):
             )
             return self.form_invalid(form)
         
-        return super().form_valid(form)
+        # --- Отправляем письмо полностью из view, минуя form.save() ---
+        uid = urlsafe_base64_encode(force_bytes(user.pk))
+        token = default_token_generator.make_token(user)
+        protocol = "https" if self.request.is_secure() else "http"
+        domain = self.request.get_host()
+        
+        reset_link = f"{protocol}://{domain}/partners/password-reset/confirm/{uid}/{token}/"
+        
+        context = {
+            "email": email,
+            "domain": domain,
+            "site_name": domain,
+            "uid": uid,
+            "uidb64": uid,
+            "user": user,
+            "token": token,
+            "protocol": protocol,
+            "reset_url": reset_link,
+        }
+        
+        # Тема письма
+        subject = render_to_string('partners/password_reset_subject.txt', context)
+        subject = ''.join(subject.splitlines())
+        
+        # HTML тело письма
+        html_body = render_to_string('partners/password_reset_email.html', context)
+        
+        # Отправляем как HTML
+        msg = EmailMessage(
+            subject=subject,
+            body=html_body,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            to=[email],
+        )
+        msg.content_subtype = "html"
+        msg.send()
+        
+        return redirect(self.success_url)
 
 
 class PartnerPasswordResetDoneView(PasswordResetDoneView):
