@@ -2,7 +2,7 @@ from django import forms
 from django.contrib.auth.forms import AuthenticationForm, PasswordResetForm, SetPasswordForm
 from django.contrib.auth.models import User
 from django.contrib.auth import password_validation
-from django.core.mail import EmailMultiAlternatives
+from django.core.mail import EmailMessage
 from django.template.loader import render_to_string
 from .models import PartnerRequest, Partner
 
@@ -196,21 +196,25 @@ class PartnerPasswordResetForm(PasswordResetForm):
                   from_email, to_email, html_email_template_name=None):
         """
         Переопределяем send_mail формы, чтобы гарантированно отправлять HTML-письмо.
+        Используем EmailMessage + content_subtype="html" — тот же способ,
+        который работает в orders/views.py (send_order_email).
         """
         subject = render_to_string(subject_template_name, context)
         subject = ''.join(subject.splitlines())
         
-        # Текстовая версия письма
-        body = render_to_string(email_template_name, context)
+        # Берём HTML-шаблон (или обычный, если HTML не задан)
+        template = html_email_template_name or email_template_name
+        html_body = render_to_string(template, context)
         
-        email_message = EmailMultiAlternatives(subject, body, from_email, [to_email])
-        
-        # Если задан HTML-шаблон, прикрепляем HTML как альтернативу
-        if html_email_template_name is not None:
-            html_email = render_to_string(html_email_template_name, context)
-            email_message.attach_alternative(html_email, 'text/html')
-        
-        email_message.send()
+        # Отправляем как HTML — точно так же, как в send_order_email
+        email = EmailMessage(
+            subject=subject,
+            body=html_body,
+            from_email=from_email,
+            to=[to_email],
+        )
+        email.content_subtype = "html"
+        email.send()
 
 
 class PartnerSetPasswordForm(SetPasswordForm):
