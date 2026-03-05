@@ -199,6 +199,10 @@ class PartnerPasswordResetForm(PasswordResetForm):
         Используем EmailMessage + content_subtype="html" — тот же способ,
         который работает в orders/views.py (send_order_email).
         """
+        # Django передаёт uid, но шаблон может использовать uidb64 — добавляем оба
+        if 'uid' in context:
+            context['uidb64'] = context['uid']
+        
         subject = render_to_string(subject_template_name, context)
         subject = ''.join(subject.splitlines())
         
