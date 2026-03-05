@@ -205,7 +205,6 @@ class PartnerPasswordResetView(PasswordResetView):
     success_url = reverse_lazy('partners:password_reset_done')
     
     def form_valid(self, form):
-        logger = logging.getLogger('partners')
         # Проверяем, что пользователь с таким email существует и является партнёром
         email = form.cleaned_data['email']
         try:
@@ -237,75 +236,9 @@ class PartnerPasswordResetView(PasswordResetView):
                 )
                 return self.form_invalid(form)
         
-        # --- Генерируем uid и token напрямую через base64 ---
-        import base64
-        pk_bytes = str(user.pk).encode('utf-8')
-        uid = base64.urlsafe_b64encode(pk_bytes).decode('ascii').rstrip('=')
-        token = default_token_generator.make_token(user)
-        
-        # Дебаг: пишем в файл на сервере
-        import datetime
-        debug_msg = (
-            f"[{datetime.datetime.now()}] "
-            f"pk={user.pk!r}, pk_bytes={pk_bytes!r}, uid='{uid}', "
-            f"token='{token}', email={email}\n"
-        )
-        try:
-            with open('/tmp/password_reset_debug.txt', 'a') as f:
-                f.write(debug_msg)
-        except Exception:
-            pass
-        
-        logger.info(f"Password reset DEBUG: {debug_msg.strip()}")
-        
-        # Строим ссылку
-        domain = self.request.get_host()
-        reset_link = f"https://{domain}/partners/password-reset/confirm/{uid}/{token}/"
-        
-        # Дебаг: пишем ссылку в файл
-        try:
-            with open('/tmp/password_reset_debug.txt', 'a') as f:
-                f.write(f"  LINK: {reset_link}\n")
-        except Exception:
-            pass
-        
-        logger.info(f"Password reset link: {reset_link}")
-        
-        # HTML письмо с маркером [v3] в теме — чтобы убедиться что это наш код
-        html_body = f"""<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"></head>
-<body>
-<div style="max-width:600px;margin:0 auto;padding:20px;font-family:Arial,sans-serif;">
-<h2 style="color:#1a1a2e;">Восстановление пароля для партнёра</h2>
-<p>Здравствуйте!</p>
-<p>Вы запросили восстановление пароля для вашего партнёрского аккаунта на сайте Onesimus.</p>
-<p>Для установки нового пароля перейдите по следующей ссылке:</p>
-<p style="text-align:center;margin:30px 0;">
-<a href="{reset_link}" style="display:inline-block;padding:12px 24px;background:#dc2626;color:#ffffff;text-decoration:none;border-radius:5px;font-weight:600;">Восстановить пароль</a>
-</p>
-<p>Если ссылка не работает, скопируйте и вставьте в адресную строку браузера:</p>
-<p style="word-break:break-all;color:#666;font-size:12px;">{reset_link}</p>
-<p><strong>Важно:</strong> Ссылка действительна в течение 24 часов.</p>
-<p>Если вы не запрашивали восстановление пароля, просто проигнорируйте это письмо.</p>
-<hr style="border:none;border-top:1px solid #eee;margin:30px 0;">
-<p style="color:#666;font-size:12px;">С уважением,<br>Команда Onesimus</p>
-<p style="color:#999;font-size:10px;">debug: uid={uid} pk={user.pk}</p>
-</div>
-</body>
-</html>"""
-        
-        # Отправляем как HTML — тема с маркером [v3]
-        msg = EmailMessage(
-            subject='[v3] Восстановление пароля — Onesimus',
-            body=html_body,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            to=[email],
-        )
-        msg.content_subtype = "html"
-        msg.send()
-        
-        return redirect(self.success_url)
+        # Делегируем стандартному Django PasswordResetView:
+        # form.save() сгенерирует правильный URL через reverse() и отправит письмо
+        return super().form_valid(form)
 
 
 class PartnerPasswordResetDoneView(PasswordResetDoneView):

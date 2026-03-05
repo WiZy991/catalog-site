@@ -222,7 +222,7 @@ class PartnerPasswordResetForm(PasswordResetForm):
             if not uid:
                 uid = urlsafe_base64_encode(str(user.pk).encode('utf-8'))
             token = token_generator.make_token(user)
-            protocol = "https" if use_https else "http"
+            protocol = "https"  # Сайт работает только по HTTPS
             
             reset_path = reverse('partners:password_reset_confirm', kwargs={'uidb64': uid, 'token': token})
             reset_url = f"{protocol}://{domain}{reset_path}"
