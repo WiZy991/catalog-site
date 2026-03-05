@@ -195,7 +195,8 @@ class PartnerPasswordResetView(PasswordResetView):
     """Восстановление пароля для партнёра."""
     template_name = 'partners/password_reset.html'
     form_class = PartnerPasswordResetForm
-    email_template_name = 'partners/password_reset_email.html'
+    email_template_name = 'partners/password_reset_email.txt'
+    html_email_template_name = 'partners/password_reset_email.html'
     subject_template_name = 'partners/password_reset_subject.txt'
     success_url = reverse_lazy('partners:password_reset_done')
     
@@ -218,34 +219,6 @@ class PartnerPasswordResetView(PasswordResetView):
             return self.form_invalid(form)
         
         return super().form_valid(form)
-    
-    def send_mail(self, subject_template_name, email_template_name, context, from_email, to_email, html_email_template_name=None, extra_email_context=None):
-        """
-        Отправка HTML-письма для восстановления пароля.
-        Переопределяем метод, чтобы отправлять HTML-письма вместо plain text.
-        """
-        subject = render_to_string(subject_template_name, context)
-        # Убираем переносы строк из темы письма
-        subject = ''.join(subject.splitlines())
-        
-        # Рендерим HTML-шаблон
-        html_message = render_to_string(email_template_name, context)
-        
-        # Создаём текстовую версию письма (убираем HTML-теги для простоты)
-        text_message = strip_tags(html_message)
-        # Убираем лишние пробелы и переносы строк
-        text_message = '\n'.join(line.strip() for line in text_message.split('\n') if line.strip())
-        
-        # Используем EmailMessage с HTML (как в orders/views.py и send_partner_order_email)
-        msg = EmailMessage(
-            subject=subject,
-            body=text_message,
-            from_email=from_email,
-            to=[to_email],
-        )
-        msg.content_subtype = "html"
-        msg.body = html_message
-        msg.send()
 
 
 class PartnerPasswordResetDoneView(PasswordResetDoneView):
