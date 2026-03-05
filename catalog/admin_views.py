@@ -49,6 +49,18 @@ def bulk_image_upload(request):
                     f'📦 Создано новых товаров: {stats["created_products"]}'
                 )
             
+            if stats.get('duplicates', 0) > 0:
+                messages.info(
+                    request,
+                    f'ℹ️ Пропущено дубликатов: {stats["duplicates"]}'
+                )
+                # Показываем список дубликатов
+                if stats.get('duplicate_files', [])[:10]:
+                    files_list = ', '.join(stats['duplicate_files'][:10])
+                    if len(stats['duplicate_files']) > 10:
+                        files_list += f' и ещё {len(stats["duplicate_files"]) - 10}...'
+                    messages.info(request, f'Дубликаты: {files_list}')
+            
             if stats['not_matched']:
                 messages.warning(
                     request,
@@ -622,13 +634,21 @@ def quick_add_product(request):
                 is_active=True,
             )
             
-            # Загружаем изображение
+            # Загружаем изображение (проверяем на дубликаты)
             if image:
-                ProductImage.objects.create(
-                    product=product,
-                    image=image,
-                    is_main=True,
-                )
+                # Проверяем, нет ли уже изображений у товара
+                if not product.images.exists():
+                    ProductImage.objects.create(
+                        product=product,
+                        image=image,
+                        is_main=True,
+                    )
+                else:
+                    # Если изображения уже есть, не создаем дубликат
+                    messages.warning(
+                        request,
+                        f'⚠️ У товара "{product.name}" уже есть изображения. Новое изображение не добавлено.'
+                    )
             
             # Сообщения
             success_msg = f'✅ Товар "{product.name}" создан!'

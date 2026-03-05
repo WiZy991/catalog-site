@@ -1440,6 +1440,8 @@ def process_bulk_images(images, create_products=False):
         'created_products': 0,
         'not_matched': 0,
         'not_matched_files': [],
+        'duplicates': 0,
+        'duplicate_files': [],
     }
     
     for filename, file_content in images:
@@ -1465,6 +1467,27 @@ def process_bulk_images(images, create_products=False):
             stats['created_products'] += 1
         
         if product:
+            # Проверяем, нет ли уже такого изображения (по имени файла)
+            # Убираем расширение и номер для сравнения (например, image_1.jpg и image_2.jpg - это одно изображение)
+            base_filename = os.path.splitext(filename)[0]
+            base_filename = re.sub(r'[_-]?\d+$', '', base_filename)  # Убираем _1, _2 в конце
+            
+            # Проверяем существующие изображения товара
+            existing_images = product.images.all()
+            is_duplicate = False
+            for existing_img in existing_images:
+                existing_name = os.path.splitext(os.path.basename(existing_img.image.name))[0]
+                existing_name = re.sub(r'[_-]?\d+$', '', existing_name)
+                if existing_name.lower() == base_filename.lower():
+                    is_duplicate = True
+                    break
+            
+            if is_duplicate:
+                # Пропускаем дубликат
+                stats['duplicates'] += 1
+                stats['duplicate_files'].append(filename)
+                continue
+            
             # Создаём изображение
             is_main = not product.images.exists()
             
