@@ -19,7 +19,7 @@ from .forms import PartnerRequestForm, PartnerLoginForm, PartnerProfileForm, Par
 from django.http import JsonResponse
 from django.db.models import Q
 from django.core.mail import EmailMessage
-from django.utils.html import escape
+from django.utils.html import escape, strip_tags
 
 
 def get_partner_or_none(user):
@@ -231,9 +231,15 @@ class PartnerPasswordResetView(PasswordResetView):
         # Рендерим HTML-шаблон
         html_message = render_to_string(email_template_name, context)
         
-        # Отправляем письмо с HTML-контентом
-        msg = EmailMultiAlternatives(subject, html_message, from_email, [to_email])
-        msg.content_subtype = 'html'  # Указываем, что это HTML-письмо
+        # Создаём текстовую версию письма (убираем HTML-теги для простоты)
+        text_message = strip_tags(html_message)
+        # Убираем лишние пробелы и переносы строк
+        text_message = '\n'.join(line.strip() for line in text_message.split('\n') if line.strip())
+        
+        # Создаём письмо с текстовой версией как основным контентом
+        msg = EmailMultiAlternatives(subject, text_message, from_email, [to_email])
+        # Добавляем HTML-версию как альтернативу
+        msg.attach_alternative(html_message, 'text/html')
         msg.send()
 
 
