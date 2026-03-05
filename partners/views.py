@@ -236,10 +236,15 @@ class PartnerPasswordResetView(PasswordResetView):
         # Убираем лишние пробелы и переносы строк
         text_message = '\n'.join(line.strip() for line in text_message.split('\n') if line.strip())
         
-        # Создаём письмо с текстовой версией как основным контентом
-        msg = EmailMultiAlternatives(subject, text_message, from_email, [to_email])
-        # Добавляем HTML-версию как альтернативу
-        msg.attach_alternative(html_message, 'text/html')
+        # Используем EmailMessage с HTML (как в orders/views.py и send_partner_order_email)
+        msg = EmailMessage(
+            subject=subject,
+            body=text_message,
+            from_email=from_email,
+            to=[to_email],
+        )
+        msg.content_subtype = "html"
+        msg.body = html_message
         msg.send()
 
 
