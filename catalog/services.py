@@ -1631,7 +1631,7 @@ def generate_farpost_api_file(products, file_format='xls', request=None):
             'Заголовок', 'Название', 'Цена', 'Описание', 'Артикул', 'Бренд',
             'Состояние', 'Наличие', 'Количество', 'Характеристики', 'Применимость',
             'Кросс-номера', 'Фото1', 'Фото2', 'Фото3', 'Фото4', 'Фото5',
-            'Ссылка на сайт', 'Категория'
+            'Ссылка на сайт', 'Категория', 'Производитель'
         ])
         
         for product in products:
@@ -1675,6 +1675,7 @@ def generate_farpost_api_file(products, file_format='xls', request=None):
                 photo_urls[4],
                 site_url,
                 product.category.name if product.category else '',
+                'Onesimus',
             ])
         
         content = output.getvalue().encode('utf-8-sig')
@@ -1695,7 +1696,7 @@ def generate_farpost_api_file(products, file_format='xls', request=None):
             'Заголовок', 'Название', 'Цена', 'Описание', 'Артикул', 'Бренд',
             'Состояние', 'Наличие', 'Количество', 'Характеристики', 'Применимость',
             'Кросс-номера', 'Фото1', 'Фото2', 'Фото3', 'Фото4', 'Фото5',
-            'Ссылка на сайт', 'Категория'
+            'Ссылка на сайт', 'Категория', 'Производитель'
         ]
         ws.append(headers)
         
@@ -1741,6 +1742,7 @@ def generate_farpost_api_file(products, file_format='xls', request=None):
                 photo_urls[4],
                 site_url,
                 product.category.name if product.category else '',
+                'Onesimus',
             ])
         
         # Сохраняем в BytesIO
@@ -1787,6 +1789,8 @@ def generate_farpost_api_file(products, file_format='xls', request=None):
             SubElement(offer_elem, 'description').text = desc_text
             
             SubElement(offer_elem, 'ordercode').text = product.article or ''
+            
+            SubElement(offer_elem, 'vendor').text = 'Onesimus'
             
             if product.brand:
                 SubElement(offer_elem, 'manufacturer').text = product.brand

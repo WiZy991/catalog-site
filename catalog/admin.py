@@ -197,7 +197,7 @@ class FarpostExportMixin:
             'Заголовок', 'Название', 'Цена', 'Описание', 'Артикул', 'Бренд',
             'Состояние', 'Наличие', 'Количество', 'Характеристики', 'Применимость',
             'Кросс-номера', 'Фото1', 'Фото2', 'Фото3', 'Фото4', 'Фото5',
-            'Ссылка на сайт', 'Категория'
+            'Ссылка на сайт', 'Категория', 'Производитель'
         ])
         
         no_article_count = 0
@@ -245,6 +245,7 @@ class FarpostExportMixin:
                 photo_urls[4],
                 site_url,
                 product.category.name if product.category else '',
+                'Onesimus',
             ])
         
         content = output.getvalue().encode('utf-8-sig')
