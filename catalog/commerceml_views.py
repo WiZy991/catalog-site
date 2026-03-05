@@ -2377,6 +2377,25 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                             for w_elem in all_warehouse_elems:
                                 logger.debug(f"    <Склад> атрибуты: {w_elem.attrib}")
                 
+                # Синхронизируем категорию оптового товара с розничным аналогом
+                # Это гарантирует правильное распределение по категориям при каждом обмене
+                if catalog_type == 'wholesale':
+                    retail_counterpart = None
+                    if product.external_id:
+                        retail_counterpart = Product.objects.filter(
+                            external_id=product.external_id,
+                            catalog_type='retail'
+                        ).first()
+                    if not retail_counterpart and product.article:
+                        retail_counterpart = Product.objects.filter(
+                            article=product.article,
+                            catalog_type='retail'
+                        ).first()
+                    if retail_counterpart and retail_counterpart.category_id != product.category_id:
+                        product.category = retail_counterpart.category
+                        if idx < 10:
+                            logger.info(f"  ↳ Синхронизирована категория оптового товара {product_id}: {retail_counterpart.category}")
+                
                 product.save()
                 
                 # ВАЖНО: Добавляем external_id в список обработанных для логики скрытия
