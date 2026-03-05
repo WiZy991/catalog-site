@@ -241,11 +241,20 @@ class PartnerPasswordResetView(PasswordResetView):
         uid = urlsafe_base64_encode(force_bytes(user.pk))
         token = default_token_generator.make_token(user)
         
-        # Строим полную ссылку (всегда https для продакшена)
-        domain = self.request.get_host()
-        reset_link = f"https://{domain}/partners/password-reset/confirm/{uid}/{token}/"
+        logger.info(f"Password reset: pk={user.pk}, email={email}, uid='{uid}', token='{token}'")
         
-        logger.info(f"Password reset for user pk={user.pk}, email={email}, uid={uid}, link={reset_link}")
+        # Защита: если uid пустой — что-то пошло не так
+        if not uid:
+            logger.error(f"EMPTY uid for user pk={user.pk}! force_bytes={force_bytes(user.pk)!r}")
+            uid = urlsafe_base64_encode(str(user.pk).encode('utf-8'))
+            logger.info(f"Fallback uid='{uid}'")
+        
+        # Строим ссылку через reverse() — надёжнее ручной сборки
+        domain = self.request.get_host()
+        reset_path = reverse('partners:password_reset_confirm', kwargs={'uidb64': uid, 'token': token})
+        reset_link = f"https://{domain}{reset_path}"
+        
+        logger.info(f"Password reset link: {reset_link}")
         
         # HTML письмо целиком в Python — не зависит от шаблонов
         html_body = f"""<!DOCTYPE html>

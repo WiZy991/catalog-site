@@ -6,6 +6,7 @@ from django.contrib.auth.tokens import default_token_generator
 from django.contrib.sites.shortcuts import get_current_site
 from django.core.mail import EmailMessage
 from django.template.loader import render_to_string
+from django.urls import reverse
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 from .models import PartnerRequest, Partner
@@ -218,8 +219,13 @@ class PartnerPasswordResetForm(PasswordResetForm):
         for user in self.get_users(email_addr):
             user_email = getattr(user, email_field_name)
             uid = urlsafe_base64_encode(force_bytes(user.pk))
+            if not uid:
+                uid = urlsafe_base64_encode(str(user.pk).encode('utf-8'))
             token = token_generator.make_token(user)
             protocol = "https" if use_https else "http"
+            
+            reset_path = reverse('partners:password_reset_confirm', kwargs={'uidb64': uid, 'token': token})
+            reset_url = f"{protocol}://{domain}{reset_path}"
             
             context = {
                 "email": user_email,
@@ -230,7 +236,7 @@ class PartnerPasswordResetForm(PasswordResetForm):
                 "user": user,
                 "token": token,
                 "protocol": protocol,
-                "reset_url": f"{protocol}://{domain}/partners/password-reset/confirm/{uid}/{token}/",
+                "reset_url": reset_url,
                 **(extra_email_context or {}),
             }
             self.send_mail(
