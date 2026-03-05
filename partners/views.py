@@ -221,36 +221,40 @@ class PartnerPasswordResetView(PasswordResetView):
             )
             return self.form_invalid(form)
         
-        # --- Отправляем письмо полностью из view, минуя form.save() ---
+        # --- Генерируем uid и token ---
         uid = urlsafe_base64_encode(force_bytes(user.pk))
         token = default_token_generator.make_token(user)
-        protocol = "https" if self.request.is_secure() else "http"
+        
+        # Строим полную ссылку (всегда https для продакшена)
         domain = self.request.get_host()
+        reset_link = f"https://{domain}/partners/password-reset/confirm/{uid}/{token}/"
         
-        reset_link = f"{protocol}://{domain}/partners/password-reset/confirm/{uid}/{token}/"
-        
-        context = {
-            "email": email,
-            "domain": domain,
-            "site_name": domain,
-            "uid": uid,
-            "uidb64": uid,
-            "user": user,
-            "token": token,
-            "protocol": protocol,
-            "reset_url": reset_link,
-        }
-        
-        # Тема письма
-        subject = render_to_string('partners/password_reset_subject.txt', context)
-        subject = ''.join(subject.splitlines())
-        
-        # HTML тело письма
-        html_body = render_to_string('partners/password_reset_email.html', context)
+        # HTML письмо целиком в Python — не зависит от шаблонов
+        html_body = f"""<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body>
+<div style="max-width:600px;margin:0 auto;padding:20px;font-family:Arial,sans-serif;">
+<h2 style="color:#1a1a2e;">Восстановление пароля для партнёра</h2>
+<p>Здравствуйте!</p>
+<p>Вы запросили восстановление пароля для вашего партнёрского аккаунта на сайте Onesimus.</p>
+<p>Для установки нового пароля перейдите по следующей ссылке:</p>
+<p style="text-align:center;margin:30px 0;">
+<a href="{reset_link}" style="display:inline-block;padding:12px 24px;background:#dc2626;color:#ffffff;text-decoration:none;border-radius:5px;font-weight:600;">Восстановить пароль</a>
+</p>
+<p>Если ссылка не работает, скопируйте и вставьте в адресную строку браузера:</p>
+<p style="word-break:break-all;color:#666;font-size:12px;">{reset_link}</p>
+<p><strong>Важно:</strong> Ссылка действительна в течение 24 часов.</p>
+<p>Если вы не запрашивали восстановление пароля, просто проигнорируйте это письмо.</p>
+<hr style="border:none;border-top:1px solid #eee;margin:30px 0;">
+<p style="color:#666;font-size:12px;">С уважением,<br>Команда Onesimus</p>
+</div>
+</body>
+</html>"""
         
         # Отправляем как HTML
         msg = EmailMessage(
-            subject=subject,
+            subject='Восстановление пароля — Onesimus',
             body=html_body,
             from_email=settings.DEFAULT_FROM_EMAIL,
             to=[email],
