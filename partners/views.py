@@ -1,4 +1,5 @@
 import re
+import logging
 from django.shortcuts import render, redirect, get_object_or_404
 from django.views.generic import TemplateView, ListView, DetailView, FormView, View
 from django.contrib.auth.views import LoginView, LogoutView, PasswordResetView, PasswordResetDoneView, PasswordResetConfirmView, PasswordResetCompleteView
@@ -204,6 +205,7 @@ class PartnerPasswordResetView(PasswordResetView):
     success_url = reverse_lazy('partners:password_reset_done')
     
     def form_valid(self, form):
+        logger = logging.getLogger('partners')
         # Проверяем, что пользователь с таким email существует и является партнёром
         email = form.cleaned_data['email']
         try:
@@ -220,6 +222,20 @@ class PartnerPasswordResetView(PasswordResetView):
                 'Пользователь с таким email не найден.'
             )
             return self.form_invalid(form)
+        except User.MultipleObjectsReturned:
+            # Если несколько пользователей с одним email — берём первого с партнёрским профилем
+            users = User.objects.filter(email__iexact=email, is_active=True)
+            user = None
+            for u in users:
+                if hasattr(u, 'partner_profile'):
+                    user = u
+                    break
+            if user is None:
+                messages.error(
+                    self.request,
+                    'Пользователь с таким email не найден в системе партнёров.'
+                )
+                return self.form_invalid(form)
         
         # --- Генерируем uid и token ---
         uid = urlsafe_base64_encode(force_bytes(user.pk))
@@ -228,6 +244,8 @@ class PartnerPasswordResetView(PasswordResetView):
         # Строим полную ссылку (всегда https для продакшена)
         domain = self.request.get_host()
         reset_link = f"https://{domain}/partners/password-reset/confirm/{uid}/{token}/"
+        
+        logger.info(f"Password reset for user pk={user.pk}, email={email}, uid={uid}, link={reset_link}")
         
         # HTML письмо целиком в Python — не зависит от шаблонов
         html_body = f"""<!DOCTYPE html>
