@@ -197,56 +197,9 @@ class PartnerPasswordResetForm(PasswordResetForm):
         # Фильтруем только тех, у кого есть партнёрский профиль
         return [u for u in active_users if hasattr(u, 'partner_profile')]
     
-    def save(self, domain_override=None,
-             subject_template_name='partners/password_reset_subject.txt',
-             email_template_name='partners/password_reset_email.txt',
-             use_https=False, token_generator=default_token_generator,
-             from_email=None, request=None,
-             html_email_template_name='partners/password_reset_email.html',
-             extra_email_context=None):
-        """
-        Полностью переопределяем save() для полного контроля над контекстом и отправкой.
-        """
-        email_addr = self.cleaned_data["email"]
-        if not domain_override:
-            current_site = get_current_site(request)
-            site_name = current_site.name
-            domain = current_site.domain
-        else:
-            site_name = domain = domain_override
-        
-        email_field_name = User.get_email_field_name()
-        for user in self.get_users(email_addr):
-            user_email = getattr(user, email_field_name)
-            uid = urlsafe_base64_encode(force_bytes(user.pk))
-            if not uid:
-                uid = urlsafe_base64_encode(str(user.pk).encode('utf-8'))
-            token = token_generator.make_token(user)
-            protocol = "https"  # Сайт работает только по HTTPS
-            
-            reset_path = reverse('partners:password_reset_confirm', kwargs={'uidb64': uid, 'token': token})
-            reset_url = f"{protocol}://{domain}{reset_path}"
-            
-            context = {
-                "email": user_email,
-                "domain": domain,
-                "site_name": site_name,
-                "uid": uid,
-                "uidb64": uid,
-                "user": user,
-                "token": token,
-                "protocol": protocol,
-                "reset_url": reset_url,
-                **(extra_email_context or {}),
-            }
-            self.send_mail(
-                subject_template_name,
-                email_template_name,
-                context,
-                from_email,
-                user_email,
-                html_email_template_name=html_email_template_name,
-            )
+    # save() НЕ переопределяем — используем стандартный Django PasswordResetForm.save(),
+    # который корректно генерирует uid и token через urlsafe_base64_encode(force_bytes(user.pk)).
+    # Наш get_users() фильтрует только партнёров, а send_mail() отправляет HTML-письмо.
     
     def send_mail(self, subject_template_name, email_template_name, context,
                   from_email, to_email, html_email_template_name=None):

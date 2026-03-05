@@ -203,6 +203,7 @@ class PartnerPasswordResetView(PasswordResetView):
     html_email_template_name = 'partners/password_reset_email.html'
     subject_template_name = 'partners/password_reset_subject.txt'
     success_url = reverse_lazy('partners:password_reset_done')
+    extra_email_context = {'protocol': 'https'}  # Сайт работает только по HTTPS
     
     def form_valid(self, form):
         # Проверяем, что пользователь с таким email существует и является партнёром
