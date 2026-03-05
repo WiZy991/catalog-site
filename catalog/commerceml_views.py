@@ -1560,11 +1560,27 @@ def parse_commerceml_product(product_elem, namespaces, root_elem=None, groups_ca
                     elif char_name_lower in ['марка', 'brand', 'бренд']:
                         product_data['brand'] = char_value
                     
-                    # Двигатель → applicability (применимость)
+                    # Двигатель → applicability (применимость) и engine (для раздела "Применимость")
                     elif char_name_lower in ['двигатель', 'engine', 'мотор']:
                         if 'applicability' not in product_data:
                             product_data['applicability'] = []
                         product_data['applicability'].append(char_value)
+                        if 'engine' not in product_data:
+                            product_data['engine'] = []
+                        product_data['engine'].append(char_value)
+                    
+                    # Кузов → body (для раздела "Применимость"/описание)
+                    elif char_name_lower in ['кузов', 'body', 'тип кузова']:
+                        if 'body' not in product_data:
+                            product_data['body'] = []
+                        product_data['body'].append(char_value)
+                    
+                    # Размер → всегда в характеристики (без фильтрации)
+                    elif 'размер' in char_name_lower or 'size' in char_name_lower:
+                        characteristics.append({
+                            'name': char_name,
+                            'value': char_value
+                        })
                     
                     # Все остальные характеристики добавляем в список
                     # ВАЖНО: Фильтруем неправильные значения (коды моделей, материалы и т.д.)
@@ -1577,13 +1593,6 @@ def parse_commerceml_product(product_elem, namespaces, root_elem=None, groups_ca
                         # Пропускаем материалы
                         if any(material in char_name_lower for material in excluded_materials):
                             continue
-                        
-                        # Если это размер, проверяем, что это действительно размер
-                        if 'размер' in char_name_lower or 'size' in char_name_lower:
-                            # Размер должен содержать числа и * или x (например, 20*450)
-                            if not re.search(r'\d+[*x]\d+', char_value):
-                                # Это не размер, пропускаем
-                                continue
                         
                         # Проверяем, что значение не является кодом модели/применимости
                         # Коды моделей обычно: 1-4 цифры + буквы (например, 1GEN, 1NZF, 2GR, 4AFE)
@@ -2743,8 +2752,23 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
             if category:
                 product.category = category
         
-        # Описание
-        if product_data.get('description'):
+        # Описание (отображается как "Применимость") — заполняем из "Кузов" и "Двигатель" из 1С
+        description_parts = []
+        # Кузов из 1С
+        if product_data.get('body'):
+            body_list = product_data['body'] if isinstance(product_data['body'], list) else [product_data['body']]
+            for body_item in body_list:
+                if body_item and body_item.strip():
+                    description_parts.append(f"Кузов: {body_item.strip()}")
+        # Двигатель из 1С
+        if product_data.get('engine'):
+            engine_list = product_data['engine'] if isinstance(product_data['engine'], list) else [product_data['engine']]
+            for engine_item in engine_list:
+                if engine_item and engine_item.strip():
+                    description_parts.append(f"Двигатель: {engine_item.strip()}")
+        if description_parts:
+            product.description = '\n'.join(description_parts)
+        elif product_data.get('description'):
             product.description = product_data.get('description')
         
         # Применимость - используем из парсинга или из данных
@@ -2894,18 +2918,13 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
                     if any(material in char_name_lower for material in excluded_materials):
                         continue
                     
-                    # Если это размер, проверяем, что это действительно размер
-                    if 'размер' in char_name_lower or 'size' in char_name_lower:
-                        # Размер должен содержать числа и * или x (например, 20*450)
-                        if not re.search(r'\d+[*x]\d+', char_value_stripped):
-                            # Это не размер, пропускаем
-                            continue
-                    
                     # Проверяем, что значение не является кодом модели/применимости
                     # Коды моделей обычно: 1-4 цифры + буквы (например, 1GEN, 1NZF, 2GR, 4AFE)
-                    if re.match(r'^[A-Z0-9#\-/]{1,10}$', char_value_upper) and not re.search(r'[*x]', char_value_stripped):
-                        # Это похоже на код модели, а не на характеристику - пропускаем
-                        continue
+                    # Но НЕ фильтруем размеры — они всегда должны попадать в характеристики
+                    if 'размер' not in char_name_lower and 'size' not in char_name_lower:
+                        if re.match(r'^[A-Z0-9#\-/]{1,10}$', char_value_upper) and not re.search(r'[*x]', char_value_stripped):
+                            # Это похоже на код модели, а не на характеристику - пропускаем
+                            continue
                     
                     characteristics_parts.append(char_line)
         
@@ -2914,7 +2933,8 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
         excluded_chars = ['артикул1', 'артикул 1', 'article1', 'article 1',
                           'артикул2', 'артикул 2', 'article2', 'article 2', 'oem', 'oem номер',
                           'марка', 'brand', 'бренд',
-                          'двигатель', 'engine', 'мотор']
+                          'двигатель', 'engine', 'мотор',
+                          'кузов', 'body', 'тип кузова']
         
         if product_data.get('characteristics'):
             char_list = product_data.get('characteristics', [])
@@ -2938,19 +2958,13 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
                             if any(material in char_name_lower for material in excluded_materials):
                                 continue
                             
-                            # Если это размер, проверяем, что это действительно размер
-                            if 'размер' in char_name_lower or 'size' in char_name_lower:
-                                # Размер должен содержать числа и * или x (например, 20*450)
-                                if not re.search(r'\d+[*x]\d+', char_value):
-                                    # Это не размер, пропускаем
-                                    continue
-                            
                             # Проверяем, что значение не является кодом модели/применимости
                             # Коды моделей обычно: 1-4 цифры + буквы (например, 1GEN, 1NZF, 2GR, 4AFE)
-                            # Или только буквы+цифры без * или x
-                            if re.match(r'^[A-Z0-9#\-/]{1,10}$', char_value_upper) and not re.search(r'[*x]', char_value):
-                                # Это похоже на код модели, а не на характеристику - пропускаем
-                                continue
+                            # Но НЕ фильтруем размеры — они всегда должны попадать в характеристики
+                            if 'размер' not in char_name_lower and 'size' not in char_name_lower:
+                                if re.match(r'^[A-Z0-9#\-/]{1,10}$', char_value_upper) and not re.search(r'[*x]', char_value):
+                                    # Это похоже на код модели, а не на характеристику - пропускаем
+                                    continue
                             
                                 char_str = f"{char_name}: {char_value}"
                                 # Проверяем, нет ли уже такой характеристики

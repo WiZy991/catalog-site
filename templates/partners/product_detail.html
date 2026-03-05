@@ -274,9 +274,10 @@
                     {% endwith %}
                 </div>
                 
-                {% if product.images.count > 1 %}
+                {% with all_images=product.get_all_images %}
+                {% if all_images.count > 1 %}
                 <div class="product-gallery__thumbs">
-                    {% for image in product.images.all %}
+                    {% for image in all_images %}
                     <div class="product-gallery__thumb {% if forloop.first %}product-gallery__thumb--active{% endif %}" 
                          onclick="changeImage('{{ image.image.url }}', this)">
                         <img src="{{ image.image.url }}" alt="{{ product.name }}">
@@ -284,6 +285,7 @@
                     {% endfor %}
                 </div>
                 {% endif %}
+                {% endwith %}
             </div>
             
             <!-- Info -->
@@ -371,7 +373,7 @@
                 
                 {% if product.description %}
                 <div class="product-info__section">
-                    <h3 class="product-info__section-title">Описание</h3>
+                    <h3 class="product-info__section-title">Применимость</h3>
                     <div class="product-info__description">{{ product.description|linebreaks }}</div>
                 </div>
                 {% endif %}

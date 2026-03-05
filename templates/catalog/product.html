@@ -163,15 +163,15 @@
                 
                 <!-- Информация о товаре -->
                 <div class="product-info__content">
-                    <!-- Описание -->
+                    <!-- Применимость (кузов, двигатель) -->
                     <div class="product-info__section">
-                        <h3 class="product-info__section-title">Описание</h3>
+                        <h3 class="product-info__section-title">Применимость</h3>
                         {% if product.description %}
                         <div class="product-description">
                             {{ product.description|linebreaks }}
                         </div>
                         {% else %}
-                        <p class="text-muted">Описание не добавлено</p>
+                        <p class="text-muted">Не указана</p>
                         {% endif %}
                     </div>
                     

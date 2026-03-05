@@ -253,11 +253,44 @@ class Product(models.Model):
         return reverse('catalog:product_simple', kwargs={'slug': self.slug})
 
     def get_main_image(self):
-        """Получить главное изображение товара."""
+        """Получить главное изображение товара.
+        Для оптовых товаров без собственных фото берём фото из розничного аналога.
+        """
         main = self.images.filter(is_main=True).first()
         if main:
             return main
-        return self.images.first()
+        first = self.images.first()
+        if first:
+            return first
+        # Фоллбэк: если это оптовый товар без фото, ищем фото у розничного аналога
+        if self.catalog_type == 'wholesale' and self.external_id:
+            retail = Product.objects.filter(
+                external_id=self.external_id,
+                catalog_type='retail'
+            ).first()
+            if retail:
+                main = retail.images.filter(is_main=True).first()
+                if main:
+                    return main
+                return retail.images.first()
+        return None
+
+    def get_all_images(self):
+        """Получить все изображения товара.
+        Для оптовых товаров без собственных фото берём фото из розничного аналога.
+        """
+        own_images = self.images.all().order_by('-is_main', 'order')
+        if own_images.exists():
+            return own_images
+        # Фоллбэк: если это оптовый товар без фото, ищем фото у розничного аналога
+        if self.catalog_type == 'wholesale' and self.external_id:
+            retail = Product.objects.filter(
+                external_id=self.external_id,
+                catalog_type='retail'
+            ).first()
+            if retail:
+                return retail.images.all().order_by('-is_main', 'order')
+        return own_images
 
     def get_meta_title(self):
         if self.meta_title:
@@ -301,13 +334,6 @@ class Product(models.Model):
                 # Пропускаем материалы и другие ненужные характеристики
                 if any(excluded in key_lower for excluded in excluded_keys):
                     continue
-                
-                # Если это размер, проверяем, что это действительно размер (содержит числа и * или x)
-                if 'размер' in key_lower or 'size' in key_lower:
-                    # Размер должен содержать числа и * или x (например, 20*450, 260*170*10*29)
-                    if not re.search(r'\d+[*x]\d+', value_stripped):
-                        # Это не размер, пропускаем
-                        continue
                 
                 # Проверяем, что значение не является кодом модели/применимости
                 # Коды моделей обычно: 1-4 цифры + буквы (например, 1GEN, 1NZF, 2GR, 4AFE)

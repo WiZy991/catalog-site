@@ -1591,8 +1591,9 @@ def generate_farpost_description(product, site_url=''):
 def generate_farpost_images(product, request=None):
     """
     Генерирует список ссылок на изображения для Farpost.
+    Для оптовых товаров без фото использует фото розничного аналога.
     """
-    images = product.images.all().order_by('-is_main', 'order')[:5]  # Максимум 5 фото
+    images = product.get_all_images()[:5]  # Максимум 5 фото
     
     image_urls = []
     for img in images:
