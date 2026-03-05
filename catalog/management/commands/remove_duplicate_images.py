@@ -42,9 +42,9 @@ class Command(BaseCommand):
             
             products_processed += 1
             
-            # Группируем изображения по базовому имени файла И по размеру файла
-            image_groups_by_name = defaultdict(list)
-            image_groups_by_size = defaultdict(list)
+            # Группируем изображения по комбинации: базовое имя + размер файла
+            # Django добавляет случайные суффиксы типа _RuKm5tn, поэтому нужно извлекать базовое имя
+            image_groups = defaultdict(list)
             
             for img in images:
                 if not img.image:
@@ -55,20 +55,47 @@ class Command(BaseCommand):
                     filename = os.path.basename(img.image.name)
                     # Убираем расширение
                     base_name = os.path.splitext(filename)[0]
-                    # Убираем номер в конце (_1, _2, -1 и т.д.)
-                    base_name = re.sub(r'[_-]?\d+$', '', base_name)
-                    # Приводим к нижнему регистру для сравнения
-                    base_name = base_name.lower()
                     
-                    image_groups_by_name[base_name].append(img)
+                    # Django добавляет случайные суффиксы типа _RuKm5tn (обычно 7-8 символов)
+                    # Убираем их: ищем паттерн _XXXXXXX или _XXXXXXXX в конце
+                    # Паттерн: подчеркивание + буквы/цифры (обычно 7-8 символов)
+                    base_name = re.sub(r'_[A-Za-z0-9]{7,8}$', '', base_name)
                     
-                    # Также группируем по размеру файла (если файл существует)
-                    if img.image and hasattr(img.image, 'size'):
+                    # Извлекаем артикул и номер фото из имени файла
+                    # Формат файлов: АРТИКУЛ_НОМЕР или просто АРТИКУЛ
+                    # Например: 43530-60042_1 -> артикул: 43530-60042, номер: 1
+                    #           23300-78090 -> артикул: 23300-78090, номер: None
+                    #           ME220745_1 -> артикул: ME220745, номер: 1
+                    
+                    # Сначала убираем случайный суффикс Django (если есть)
+                    # Django добавляет суффиксы типа _RuKm5tn (7-8 символов)
+                    base_name_clean = re.sub(r'_[A-Za-z0-9]{7,8}$', '', base_name)
+                    
+                    # Теперь извлекаем артикул и номер фото
+                    # Паттерн: артикул может содержать буквы, цифры, дефисы
+                    # Номер фото - это _1, _2, _3 и т.д. в конце (но не случайный суффикс Django)
+                    match = re.match(r'^(.+?)(?:_(\d+))?$', base_name_clean)
+                    if match:
+                        article_part = match.group(1)  # Артикул (до _1, _2 и т.д.)
+                        photo_number = match.group(2) if match.group(2) else None  # Номер фото (_1, _2)
+                    else:
+                        article_part = base_name_clean
+                        photo_number = None
+                    
+                    # Получаем размер файла
+                    file_size = 0
+                    if hasattr(img.image, 'size'):
                         try:
                             file_size = img.image.size
-                            image_groups_by_size[file_size].append(img)
                         except:
                             pass
+                    
+                    # Группируем по комбинации: артикул + номер фото + размер
+                    # Это позволяет находить дубликаты даже если Django добавил разные суффиксы
+                    # Например: 43530-60042_1_RuKm5tn.jpg и 43530-60042_1_J6zCbsD.jpg - это дубликаты
+                    group_key = (article_part.lower(), photo_number, file_size)
+                    image_groups[group_key].append(img)
+                    
                 except Exception as e:
                     if verbose:
                         self.stdout.write(
@@ -78,9 +105,9 @@ class Command(BaseCommand):
                         )
                     continue
             
-            # Удаляем дубликаты по имени файла
+            # Удаляем дубликаты (группировка по артикулу + номер фото + размер)
             deleted_in_product = 0
-            for base_name, group in image_groups_by_name.items():
+            for (article_part, photo_number, file_size), group in image_groups.items():
                 if len(group) > 1:
                     # Сортируем по ID, чтобы оставить самое старое
                     group_sorted = sorted(group, key=lambda x: x.id)
@@ -88,47 +115,24 @@ class Command(BaseCommand):
                     to_delete = group_sorted[1:]
                     
                     for img in to_delete:
+                        filename = os.path.basename(img.image.name) if img.image else 'N/A'
+                        photo_info = f'"{article_part}"'
+                        if photo_number:
+                            photo_info += f' фото #{photo_number}'
                         if dry_run:
                             self.stdout.write(
-                                f'[DRY RUN] Будет удалено изображение "{img.image.name}" '
-                                f'у товара "{product.name}" (ID: {product.pk}) - дубликат по имени "{base_name}"'
+                                f'[DRY RUN] Будет удалено изображение "{filename}" '
+                                f'у товара "{product.name}" (ID: {product.pk}) - дубликат {photo_info} ({file_size} байт)'
                             )
                         else:
                             img.delete()
                             self.stdout.write(
                                 self.style.SUCCESS(
-                                    f'✓ Удалено изображение "{img.image.name}" у товара "{product.name}"'
+                                    f'✓ Удалено изображение "{filename}" у товара "{product.name}" (дубликат {photo_info})'
                                 )
                             )
                     
                     deleted_in_product += len(to_delete)
-            
-            # Также проверяем дубликаты по размеру файла (если имя не совпало, но размер одинаковый)
-            for file_size, group in image_groups_by_size.items():
-                if len(group) > 1:
-                    # Проверяем, не были ли уже удалены эти изображения
-                    group = [img for img in group if img.id]  # Фильтруем уже удаленные
-                    if len(group) > 1:
-                        # Сортируем по ID, оставляем первое
-                        group_sorted = sorted(group, key=lambda x: x.id)
-                        to_delete = group_sorted[1:]
-                        
-                        for img in to_delete:
-                            # Проверяем, не было ли это уже удалено по имени
-                            if img.id:  # Если изображение еще существует
-                                if dry_run:
-                                    self.stdout.write(
-                                        f'[DRY RUN] Будет удалено изображение "{img.image.name}" '
-                                        f'у товара "{product.name}" (ID: {product.pk}) - дубликат по размеру ({file_size} байт)'
-                                    )
-                                else:
-                                    img.delete()
-                                    self.stdout.write(
-                                        self.style.SUCCESS(
-                                            f'✓ Удалено изображение "{img.image.name}" у товара "{product.name}" (дубликат по размеру)'
-                                        )
-                                    )
-                                deleted_in_product += 1
             
             if deleted_in_product > 0:
                 total_deleted += deleted_in_product
