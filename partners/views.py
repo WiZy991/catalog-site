@@ -237,26 +237,41 @@ class PartnerPasswordResetView(PasswordResetView):
                 )
                 return self.form_invalid(form)
         
-        # --- Генерируем uid и token ---
-        uid = urlsafe_base64_encode(force_bytes(user.pk))
+        # --- Генерируем uid и token напрямую через base64 ---
+        import base64
+        pk_bytes = str(user.pk).encode('utf-8')
+        uid = base64.urlsafe_b64encode(pk_bytes).decode('ascii').rstrip('=')
         token = default_token_generator.make_token(user)
         
-        logger.info(f"Password reset: pk={user.pk}, email={email}, uid='{uid}', token='{token}'")
+        # Дебаг: пишем в файл на сервере
+        import datetime
+        debug_msg = (
+            f"[{datetime.datetime.now()}] "
+            f"pk={user.pk!r}, pk_bytes={pk_bytes!r}, uid='{uid}', "
+            f"token='{token}', email={email}\n"
+        )
+        try:
+            with open('/tmp/password_reset_debug.txt', 'a') as f:
+                f.write(debug_msg)
+        except Exception:
+            pass
         
-        # Защита: если uid пустой — что-то пошло не так
-        if not uid:
-            logger.error(f"EMPTY uid for user pk={user.pk}! force_bytes={force_bytes(user.pk)!r}")
-            uid = urlsafe_base64_encode(str(user.pk).encode('utf-8'))
-            logger.info(f"Fallback uid='{uid}'")
+        logger.info(f"Password reset DEBUG: {debug_msg.strip()}")
         
-        # Строим ссылку через reverse() — надёжнее ручной сборки
+        # Строим ссылку
         domain = self.request.get_host()
-        reset_path = reverse('partners:password_reset_confirm', kwargs={'uidb64': uid, 'token': token})
-        reset_link = f"https://{domain}{reset_path}"
+        reset_link = f"https://{domain}/partners/password-reset/confirm/{uid}/{token}/"
+        
+        # Дебаг: пишем ссылку в файл
+        try:
+            with open('/tmp/password_reset_debug.txt', 'a') as f:
+                f.write(f"  LINK: {reset_link}\n")
+        except Exception:
+            pass
         
         logger.info(f"Password reset link: {reset_link}")
         
-        # HTML письмо целиком в Python — не зависит от шаблонов
+        # HTML письмо с маркером [v3] в теме — чтобы убедиться что это наш код
         html_body = f"""<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"></head>
@@ -275,13 +290,14 @@ class PartnerPasswordResetView(PasswordResetView):
 <p>Если вы не запрашивали восстановление пароля, просто проигнорируйте это письмо.</p>
 <hr style="border:none;border-top:1px solid #eee;margin:30px 0;">
 <p style="color:#666;font-size:12px;">С уважением,<br>Команда Onesimus</p>
+<p style="color:#999;font-size:10px;">debug: uid={uid} pk={user.pk}</p>
 </div>
 </body>
 </html>"""
         
-        # Отправляем как HTML
+        # Отправляем как HTML — тема с маркером [v3]
         msg = EmailMessage(
-            subject='Восстановление пароля — Onesimus',
+            subject='[v3] Восстановление пароля — Onesimus',
             body=html_body,
             from_email=settings.DEFAULT_FROM_EMAIL,
             to=[email],
