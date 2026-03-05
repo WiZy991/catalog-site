@@ -2613,7 +2613,15 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
         # Определяем категорию
         category_name = product_data.get('category_name', '').strip()
         if category_name:
-            category = get_category_for_product(category_name)
+            from .models import Category as CategoryModel
+            # Сначала ищем категорию напрямую по точному имени из 1С (любой уровень)
+            category = CategoryModel.objects.filter(
+                name__iexact=category_name,
+                is_active=True
+            ).first()
+            if not category:
+                # Если точного совпадения нет, пробуем через логику по ключевым словам
+                category = get_category_for_product(category_name)
         else:
             category = get_category_for_product(clean_name)
         
