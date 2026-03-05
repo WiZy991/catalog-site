@@ -178,7 +178,7 @@ class FarpostExportMixin:
             'Заголовок', 'Цена', 'Описание', 'Артикул', 'Бренд',
             'Состояние', 'Наличие', 'Характеристики', 'Применимость',
             'Кросс-номера', 'Фото1', 'Фото2', 'Фото3', 'Фото4', 'Фото5', 
-            'Ссылка на сайт', 'Категория'
+            'Ссылка на сайт', 'Категория', 'Производитель'
         ])
         
         for product in queryset:
@@ -219,6 +219,7 @@ class FarpostExportMixin:
                 photo_urls[4],
                 site_url,  # Уникальная ссылка на карточку товара на сайте
                 product.category.name if product.category else '',
+                'Onesimus',
             ])
         
         return response
