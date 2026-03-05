@@ -6,11 +6,12 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.contrib import messages
-from django.core.mail import send_mail
+from django.core.mail import send_mail, EmailMultiAlternatives
 from django.conf import settings
 from django.http import HttpResponseForbidden
 from django.urls import reverse_lazy, reverse
 from django.utils import timezone
+from django.template.loader import render_to_string
 
 from catalog.models import Category, Product
 from .models import PartnerRequest, Partner, PartnerSettings, PartnerOrder, PartnerOrderItem
@@ -217,6 +218,23 @@ class PartnerPasswordResetView(PasswordResetView):
             return self.form_invalid(form)
         
         return super().form_valid(form)
+    
+    def send_mail(self, subject_template_name, email_template_name, context, from_email, to_email, html_email_template_name=None, extra_email_context=None):
+        """
+        Отправка HTML-письма для восстановления пароля.
+        Переопределяем метод, чтобы отправлять HTML-письма вместо plain text.
+        """
+        subject = render_to_string(subject_template_name, context)
+        # Убираем переносы строк из темы письма
+        subject = ''.join(subject.splitlines())
+        
+        # Рендерим HTML-шаблон
+        html_message = render_to_string(email_template_name, context)
+        
+        # Отправляем письмо с HTML-контентом
+        msg = EmailMultiAlternatives(subject, html_message, from_email, [to_email])
+        msg.content_subtype = 'html'  # Указываем, что это HTML-письмо
+        msg.send()
 
 
 class PartnerPasswordResetDoneView(PasswordResetDoneView):
