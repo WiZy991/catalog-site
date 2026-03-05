@@ -15,6 +15,7 @@ class Migration(migrations.Migration):
                 'ID пакет-объявления',
                 max_length=50,
                 blank=True,
+                null=True,
                 default='',
                 help_text='ID пакет-объявления на Farpost (необязательно). '
                           'ID можно найти в URL пакета: https://www.farpost.ru/personal/goods/packet/{id}/recurrent-update'

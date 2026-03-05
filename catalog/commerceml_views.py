@@ -1897,6 +1897,17 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                             product.price = existing_product.price
                             product.wholesale_price = existing_product.wholesale_price
                         product.save()
+                        # ВАЖНО: Копируем изображения из исходного товара
+                        if existing_product:
+                            from .models import ProductImage
+                            for img in existing_product.images.all():
+                                ProductImage.objects.create(
+                                    product=product,
+                                    image=img.image,
+                                    alt=img.alt,
+                                    is_main=img.is_main,
+                                    order=img.order
+                                )
                         if idx < 5:
                             logger.info(f"Создан товар в каталоге {catalog_type} на основе товара из другого каталога: {product_id}")
                 
@@ -1935,6 +1946,17 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                                 product.price = any_product.price
                                 product.wholesale_price = any_product.wholesale_price
                             product.save()
+                            # ВАЖНО: Копируем изображения из исходного товара
+                            if any_product:
+                                from .models import ProductImage
+                                for img in any_product.images.all():
+                                    ProductImage.objects.create(
+                                        product=product,
+                                        image=img.image,
+                                        alt=img.alt,
+                                        is_main=img.is_main,
+                                        order=img.order
+                                    )
                             logger.info(f"  ✓ Создан товар в каталоге {catalog_type} на основе товара из каталога {any_product.catalog_type}")
                         else:
                             any_product = Product.objects.filter(article=product_id).first()
@@ -1971,6 +1993,17 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                                     product.price = any_product.price
                                     product.wholesale_price = any_product.wholesale_price
                                 product.save()
+                                # ВАЖНО: Копируем изображения из исходного товара
+                                if any_product:
+                                    from .models import ProductImage
+                                    for img in any_product.images.all():
+                                        ProductImage.objects.create(
+                                            product=product,
+                                            image=img.image,
+                                            alt=img.alt,
+                                            is_main=img.is_main,
+                                            order=img.order
+                                        )
                                 logger.info(f"  ✓ Создан товар в каталоге {catalog_type} на основе товара из каталога {any_product.catalog_type}")
                             else:
                                 logger.warning(f"  → Товар не найден ни в одном каталоге. Убедитесь, что import.xml обработан перед offers.xml")
