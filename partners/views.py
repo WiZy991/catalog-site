@@ -206,6 +206,7 @@ class PartnerPasswordResetView(PasswordResetView):
     extra_email_context = {'protocol': 'https'}  # Сайт работает только по HTTPS
     
     def form_valid(self, form):
+        logger = logging.getLogger('partners')
         # Проверяем, что пользователь с таким email существует и является партнёром
         email = form.cleaned_data['email']
         try:
@@ -236,10 +237,58 @@ class PartnerPasswordResetView(PasswordResetView):
                     'Пользователь с таким email не найден в системе партнёров.'
                 )
                 return self.form_invalid(form)
-        
-        # Делегируем стандартному Django PasswordResetView:
-        # form.save() сгенерирует правильный URL через reverse() и отправит письмо
-        return super().form_valid(form)
+
+        # Генерируем uid и token стандартным способом Django
+        from django.utils.http import urlsafe_base64_encode
+        from django.utils.encoding import force_bytes
+        uid = urlsafe_base64_encode(force_bytes(user.pk))
+        token = default_token_generator.make_token(user)
+
+        # Строим корректный URL через reverse
+        reset_path = reverse(
+            'partners:password_reset_confirm',
+            kwargs={'uidb64': uid, 'token': token},
+        )
+        reset_url = f"https://onesimus25.ru{reset_path}"
+
+        logger.info(
+            f"[RESET] pk={user.pk!r} uid={uid!r} token={token!r} url={reset_url!r}"
+        )
+
+        # Отправляем письмо напрямую, без шаблонного {% url %}
+        html_body = f"""<!DOCTYPE html>
+<html><head><meta charset="utf-8"></head>
+<body>
+<div style="max-width:600px;margin:0 auto;padding:20px;font-family:Arial,sans-serif;">
+<h2 style="color:#1a1a2e;">Восстановление пароля</h2>
+<p>Здравствуйте!</p>
+<p>Вы запросили восстановление пароля для вашего партнёрского аккаунта на сайте Onesimus.</p>
+<p>Для установки нового пароля перейдите по следующей ссылке:</p>
+<p style="text-align:center;margin:30px 0;">
+<a href="{reset_url}" style="display:inline-block;padding:12px 24px;background:#dc2626;color:#ffffff;text-decoration:none;border-radius:5px;font-weight:600;">
+Восстановить пароль
+</a>
+</p>
+<p>Если ссылка не работает, скопируйте и вставьте в адресную строку:</p>
+<p style="word-break:break-all;color:#444;font-size:13px;">{reset_url}</p>
+<p><strong>Важно:</strong> Ссылка действительна в течение 24 часов.</p>
+<p>Если вы не запрашивали восстановление пароля — проигнорируйте это письмо.</p>
+<hr style="border:none;border-top:1px solid #eee;margin:30px 0;">
+<p style="color:#666;font-size:12px;">С уважением,<br>Команда Onesimus</p>
+<p style="color:#bbb;font-size:10px;">dbg: pk={user.pk} uid={uid}</p>
+</div>
+</body></html>"""
+
+        msg = EmailMessage(
+            subject='Восстановление пароля — Onesimus',
+            body=html_body,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            to=[email],
+        )
+        msg.content_subtype = "html"
+        msg.send()
+
+        return redirect(self.success_url)
 
 
 class PartnerPasswordResetDoneView(PasswordResetDoneView):
