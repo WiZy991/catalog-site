@@ -703,6 +703,9 @@ class FarpostAPISettingsAdmin(admin.ModelAdmin):
         
         def __init__(self, *args, **kwargs):
             super().__init__(*args, **kwargs)
+            # packet_id необязательный
+            if 'packet_id' in self.fields:
+                self.fields['packet_id'].required = False
             # Если это редактирование существующего объекта, показываем что ключ уже установлен (но не сам ключ)
             if self.instance and self.instance.pk and self.instance.api_key:
                 self.fields['api_key_input'].help_text += ' (Ключ уже установлен. Введите новый ключ, чтобы изменить его.)'
