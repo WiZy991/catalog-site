@@ -2,6 +2,8 @@ from django import forms
 from django.contrib.auth.forms import AuthenticationForm, PasswordResetForm, SetPasswordForm
 from django.contrib.auth.models import User
 from django.contrib.auth import password_validation
+from django.core.mail import EmailMultiAlternatives
+from django.template.loader import render_to_string
 from .models import PartnerRequest, Partner
 
 
@@ -189,6 +191,26 @@ class PartnerPasswordResetForm(PasswordResetForm):
         active_users = User.objects.filter(email__iexact=email, is_active=True)
         # Фильтруем только тех, у кого есть партнёрский профиль
         return [u for u in active_users if hasattr(u, 'partner_profile')]
+    
+    def send_mail(self, subject_template_name, email_template_name, context,
+                  from_email, to_email, html_email_template_name=None):
+        """
+        Переопределяем send_mail формы, чтобы гарантированно отправлять HTML-письмо.
+        """
+        subject = render_to_string(subject_template_name, context)
+        subject = ''.join(subject.splitlines())
+        
+        # Текстовая версия письма
+        body = render_to_string(email_template_name, context)
+        
+        email_message = EmailMultiAlternatives(subject, body, from_email, [to_email])
+        
+        # Если задан HTML-шаблон, прикрепляем HTML как альтернативу
+        if html_email_template_name is not None:
+            html_email = render_to_string(html_email_template_name, context)
+            email_message.attach_alternative(html_email, 'text/html')
+        
+        email_message.send()
 
 
 class PartnerSetPasswordForm(SetPasswordForm):
