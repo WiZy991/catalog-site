@@ -18,9 +18,15 @@ class Command(BaseCommand):
             action='store_true',
             help='Показать, что будет удалено, без фактического удаления',
         )
+        parser.add_argument(
+            '--verbose',
+            action='store_true',
+            help='Показать подробную информацию о процессе',
+        )
 
     def handle(self, *args, **options):
         dry_run = options['dry_run']
+        verbose = options.get('verbose', False)
         
         # Находим все товары с изображениями
         products = Product.objects.filter(images__isnull=False).distinct()
@@ -36,27 +42,45 @@ class Command(BaseCommand):
             
             products_processed += 1
             
-            # Группируем изображения по базовому имени файла
-            image_groups = defaultdict(list)
+            # Группируем изображения по базовому имени файла И по размеру файла
+            image_groups_by_name = defaultdict(list)
+            image_groups_by_size = defaultdict(list)
             
             for img in images:
                 if not img.image:
                     continue
                 
-                # Получаем имя файла
-                filename = os.path.basename(img.image.name)
-                # Убираем расширение
-                base_name = os.path.splitext(filename)[0]
-                # Убираем номер в конце (_1, _2, -1 и т.д.)
-                base_name = re.sub(r'[_-]?\d+$', '', base_name)
-                # Приводим к нижнему регистру для сравнения
-                base_name = base_name.lower()
-                
-                image_groups[base_name].append(img)
+                try:
+                    # Получаем имя файла
+                    filename = os.path.basename(img.image.name)
+                    # Убираем расширение
+                    base_name = os.path.splitext(filename)[0]
+                    # Убираем номер в конце (_1, _2, -1 и т.д.)
+                    base_name = re.sub(r'[_-]?\d+$', '', base_name)
+                    # Приводим к нижнему регистру для сравнения
+                    base_name = base_name.lower()
+                    
+                    image_groups_by_name[base_name].append(img)
+                    
+                    # Также группируем по размеру файла (если файл существует)
+                    if img.image and hasattr(img.image, 'size'):
+                        try:
+                            file_size = img.image.size
+                            image_groups_by_size[file_size].append(img)
+                        except:
+                            pass
+                except Exception as e:
+                    if verbose:
+                        self.stdout.write(
+                            self.style.WARNING(
+                                f'⚠ Ошибка при обработке изображения {img.id}: {e}'
+                            )
+                        )
+                    continue
             
-            # Удаляем дубликаты (оставляем первое изображение в группе)
+            # Удаляем дубликаты по имени файла
             deleted_in_product = 0
-            for base_name, group in image_groups.items():
+            for base_name, group in image_groups_by_name.items():
                 if len(group) > 1:
                     # Сортируем по ID, чтобы оставить самое старое
                     group_sorted = sorted(group, key=lambda x: x.id)
@@ -67,7 +91,7 @@ class Command(BaseCommand):
                         if dry_run:
                             self.stdout.write(
                                 f'[DRY RUN] Будет удалено изображение "{img.image.name}" '
-                                f'у товара "{product.name}" (ID: {product.pk}) - дубликат "{base_name}"'
+                                f'у товара "{product.name}" (ID: {product.pk}) - дубликат по имени "{base_name}"'
                             )
                         else:
                             img.delete()
@@ -79,8 +103,40 @@ class Command(BaseCommand):
                     
                     deleted_in_product += len(to_delete)
             
+            # Также проверяем дубликаты по размеру файла (если имя не совпало, но размер одинаковый)
+            for file_size, group in image_groups_by_size.items():
+                if len(group) > 1:
+                    # Проверяем, не были ли уже удалены эти изображения
+                    group = [img for img in group if img.id]  # Фильтруем уже удаленные
+                    if len(group) > 1:
+                        # Сортируем по ID, оставляем первое
+                        group_sorted = sorted(group, key=lambda x: x.id)
+                        to_delete = group_sorted[1:]
+                        
+                        for img in to_delete:
+                            # Проверяем, не было ли это уже удалено по имени
+                            if img.id:  # Если изображение еще существует
+                                if dry_run:
+                                    self.stdout.write(
+                                        f'[DRY RUN] Будет удалено изображение "{img.image.name}" '
+                                        f'у товара "{product.name}" (ID: {product.pk}) - дубликат по размеру ({file_size} байт)'
+                                    )
+                                else:
+                                    img.delete()
+                                    self.stdout.write(
+                                        self.style.SUCCESS(
+                                            f'✓ Удалено изображение "{img.image.name}" у товара "{product.name}" (дубликат по размеру)'
+                                        )
+                                    )
+                                deleted_in_product += 1
+            
             if deleted_in_product > 0:
                 total_deleted += deleted_in_product
+            elif verbose:
+                # Показываем информацию о товаре, если дубликатов не найдено
+                self.stdout.write(
+                    f'Товар "{product.name}" (ID: {product.pk}): {images.count()} изображений, дубликатов не найдено'
+                )
         
         if dry_run:
             self.stdout.write(
