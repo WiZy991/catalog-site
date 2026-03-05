@@ -641,8 +641,9 @@ class FarpostAPISettings(models.Model):
     packet_id = models.CharField(
         'ID пакет-объявления', 
         max_length=50, 
-        help_text='ID пакет-объявления на Farpost. Один пакет может содержать тысячи товаров из разных категорий. '
-                  'Можно создать несколько настроек с разными packet_id для разделения товаров по пакетам. '
+        blank=True,
+        default='',
+        help_text='ID пакет-объявления на Farpost (необязательно). '
                   'ID можно найти в URL пакета: https://www.farpost.ru/personal/goods/packet/{id}/recurrent-update'
     )
     
