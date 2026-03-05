@@ -2,8 +2,12 @@ from django import forms
 from django.contrib.auth.forms import AuthenticationForm, PasswordResetForm, SetPasswordForm
 from django.contrib.auth.models import User
 from django.contrib.auth import password_validation
+from django.contrib.auth.tokens import default_token_generator
+from django.contrib.sites.shortcuts import get_current_site
 from django.core.mail import EmailMessage
 from django.template.loader import render_to_string
+from django.utils.encoding import force_bytes
+from django.utils.http import urlsafe_base64_encode
 from .models import PartnerRequest, Partner
 
 
@@ -192,17 +196,57 @@ class PartnerPasswordResetForm(PasswordResetForm):
         # Фильтруем только тех, у кого есть партнёрский профиль
         return [u for u in active_users if hasattr(u, 'partner_profile')]
     
+    def save(self, domain_override=None,
+             subject_template_name='partners/password_reset_subject.txt',
+             email_template_name='partners/password_reset_email.txt',
+             use_https=False, token_generator=default_token_generator,
+             from_email=None, request=None,
+             html_email_template_name='partners/password_reset_email.html',
+             extra_email_context=None):
+        """
+        Полностью переопределяем save() для полного контроля над контекстом и отправкой.
+        """
+        email_addr = self.cleaned_data["email"]
+        if not domain_override:
+            current_site = get_current_site(request)
+            site_name = current_site.name
+            domain = current_site.domain
+        else:
+            site_name = domain = domain_override
+        
+        email_field_name = User.get_email_field_name()
+        for user in self.get_users(email_addr):
+            user_email = getattr(user, email_field_name)
+            uid = urlsafe_base64_encode(force_bytes(user.pk))
+            token = token_generator.make_token(user)
+            protocol = "https" if use_https else "http"
+            
+            context = {
+                "email": user_email,
+                "domain": domain,
+                "site_name": site_name,
+                "uid": uid,
+                "uidb64": uid,
+                "user": user,
+                "token": token,
+                "protocol": protocol,
+                "reset_url": f"{protocol}://{domain}/partners/password-reset/confirm/{uid}/{token}/",
+                **(extra_email_context or {}),
+            }
+            self.send_mail(
+                subject_template_name,
+                email_template_name,
+                context,
+                from_email,
+                user_email,
+                html_email_template_name=html_email_template_name,
+            )
+    
     def send_mail(self, subject_template_name, email_template_name, context,
                   from_email, to_email, html_email_template_name=None):
         """
-        Переопределяем send_mail формы, чтобы гарантированно отправлять HTML-письмо.
-        Используем EmailMessage + content_subtype="html" — тот же способ,
-        который работает в orders/views.py (send_order_email).
+        Отправляем HTML-письмо через EmailMessage + content_subtype="html".
         """
-        # Django передаёт uid, но шаблон может использовать uidb64 — добавляем оба
-        if 'uid' in context:
-            context['uidb64'] = context['uid']
-        
         subject = render_to_string(subject_template_name, context)
         subject = ''.join(subject.splitlines())
         
