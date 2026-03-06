@@ -1533,8 +1533,16 @@ def parse_commerceml_product(product_elem, namespaces, root_elem=None, groups_ca
                     pass
             
             if char_name_elem is not None and char_value_elem is not None:
+                # Извлекаем полное имя характеристики
                 char_name = char_name_elem.text.strip() if char_name_elem.text else ''
-                char_value = char_value_elem.text.strip() if char_value_elem.text else ''
+                # Извлекаем полное значение характеристики, включая весь текст из элемента и дочерних элементов
+                # Это важно для "Размера", который может содержать сложные значения типа "12V/140А/ПЛ.РЕМ.6Д/ОВ.Ф/ЗКОНТ"
+                # Используем itertext() для сбора всего текста, включая дочерние элементы
+                char_value_parts = []
+                for text in char_value_elem.itertext():
+                    if text:
+                        char_value_parts.append(text.strip())
+                char_value = ' '.join(char_value_parts).strip() if char_value_parts else ''
                 
                 if char_name and char_value:
                     char_name_lower = char_name.lower()
