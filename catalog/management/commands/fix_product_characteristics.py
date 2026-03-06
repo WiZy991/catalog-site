@@ -141,7 +141,16 @@ class Command(BaseCommand):
                             changed = True
                             char_changed = True
                     
+                    # ВАЖНО: Удаляем все строки "Размер:" после того, как значение перенесено в "Характеристика"
                     if changed:
+                        # Удаляем все строки, которые начинаются с "Размер:" или "Size:"
+                        char_lines = [
+                            line for line in char_lines
+                            if not (':' in line and (
+                                line.lower().strip().startswith('размер:') or
+                                line.lower().strip().startswith('size:')
+                            ))
+                        ]
                         product.characteristics = '\n'.join(char_lines)
 
             # 2. Исправляем применимость - удаляем Артикул2 (значения, начинающиеся с "/")

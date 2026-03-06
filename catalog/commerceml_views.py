@@ -3053,7 +3053,7 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
                             # ВАЖНО: "Размер" всегда должен попадать в характеристики БЕЗ фильтрации!
                             # Значение может быть любым: "12V/80А/ПЛ. РЕМ.5Д/ОВ.Ф./ЗКОНТ", "20*450" и т.д.
                             if 'размер' in char_name_lower or 'size' in char_name_lower:
-                                # Размер всегда добавляем как есть, без проверок
+                                # ВАЖНО: Значение "Размер" должно попадать в "Характеристика", а не создавать отдельную строку "Размер"!
                                 # Логируем для отладки (только первые 3 товара)
                                 if hasattr(process_product_from_commerceml, '_log_size_count'):
                                     process_product_from_commerceml._log_size_count += 1
@@ -3062,25 +3062,27 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
                                 if process_product_from_commerceml._log_size_count <= 3:
                                     logger.info(f"✓ Найден 'Размер' в XML: name='{char_name}', value='{char_value}' (длина={len(char_value)})")
                                 
-                                char_str = f"{char_name}: {char_value}"
-                                # Удаляем ВСЕ старые "Размер" из парсинга названия, если они есть
-                                # Ищем все характеристики, которые начинаются с "Размер:" или "Size:"
+                                # Удаляем ВСЕ старые "Размер" и "Характеристика" из парсинга названия, если они есть
+                                # Ищем все характеристики, которые начинаются с "Размер:", "Size:", "Характеристика:" или "Characteristic:"
                                 old_count = len(characteristics_parts)
                                 characteristics_parts = [
                                     c for c in characteristics_parts 
                                     if not (':' in c and (
                                         c.lower().strip().startswith('размер:') or 
-                                        c.lower().strip().startswith('size:')
+                                        c.lower().strip().startswith('size:') or
+                                        c.lower().strip().startswith('характеристика:') or
+                                        c.lower().strip().startswith('characteristic:')
                                     ))
                                 ]
                                 removed_count = old_count - len(characteristics_parts)
                                 if removed_count > 0 and process_product_from_commerceml._log_size_count <= 3:
-                                    logger.info(f"  Удалено {removed_count} старых 'Размер' из парсинга названия")
+                                    logger.info(f"  Удалено {removed_count} старых 'Размер'/'Характеристика' из парсинга названия")
                                 
-                                # Добавляем "Размер" из XML (он имеет приоритет) - ВСЕГДА добавляем, даже если похожий уже есть
+                                # Добавляем значение из "Размер" в "Характеристика" (не создаем строку "Размер"!)
+                                char_str = f"Характеристика: {char_value}"
                                 characteristics_parts.append(char_str)
                                 if process_product_from_commerceml._log_size_count <= 3:
-                                    logger.info(f"  Добавлен 'Размер' из XML: '{char_str}'")
+                                    logger.info(f"  Добавлено значение из 'Размер' в 'Характеристика': '{char_str}'")
                                 continue
                             
                             # Для остальных характеристик проверяем, что значение не является кодом модели/применимости
