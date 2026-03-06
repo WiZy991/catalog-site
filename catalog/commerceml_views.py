@@ -2978,15 +2978,23 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
                             if any(material in char_name_lower for material in excluded_materials):
                                 continue
                             
-                            # Проверяем, что значение не является кодом модели/применимости
-                            # Коды моделей обычно: 1-4 цифры + буквы (например, 1GEN, 1NZF, 2GR, 4AFE)
-                            # Но НЕ фильтруем размеры — они всегда должны попадать в характеристики
-                            if 'размер' not in char_name_lower and 'size' not in char_name_lower:
-                                if re.match(r'^[A-Z0-9#\-/]{1,10}$', char_value_upper) and not re.search(r'[*x]', char_value):
-                                    # Это похоже на код модели, а не на характеристику - пропускаем
-                                    continue
+                            # ВАЖНО: "Размер" всегда должен попадать в характеристики БЕЗ фильтрации!
+                            # Значение может быть любым: "12V/80А/ПЛ. РЕМ.5Д/ОВ.Ф./ЗКОНТ", "20*450" и т.д.
+                            if 'размер' in char_name_lower or 'size' in char_name_lower:
+                                # Размер всегда добавляем как есть, без проверок
+                                char_str = f"{char_name}: {char_value}"
+                                # Проверяем, нет ли уже такой характеристики
+                                if not any(char_str in existing for existing in characteristics_parts):
+                                    characteristics_parts.append(char_str)
+                                continue
                             
-                            # Добавляем характеристику (включая "Размер")
+                            # Для остальных характеристик проверяем, что значение не является кодом модели/применимости
+                            # Коды моделей обычно: 1-4 цифры + буквы (например, 1GEN, 1NZF, 2GR, 4AFE)
+                            if re.match(r'^[A-Z0-9#\-/]{1,10}$', char_value_upper) and not re.search(r'[*x]', char_value):
+                                # Это похоже на код модели, а не на характеристику - пропускаем
+                                continue
+                            
+                            # Добавляем характеристику
                             char_str = f"{char_name}: {char_value}"
                             # Проверяем, нет ли уже такой характеристики
                             if not any(char_str in existing for existing in characteristics_parts):

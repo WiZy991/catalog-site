@@ -771,6 +771,8 @@ def parse_product_name(name):
                 search_text = search_text.replace(char_value, '', 1)
         
         # Ищем оставшиеся слова (длина 3-20 символов, только буквы)
+        # ВАЖНО: Не извлекаем отдельные слова из сложных значений типа "12V/80А/ПЛ. РЕМ.5Д/ОВ.Ф./ЗКОНТ"
+        # Такие значения должны приходить из XML как характеристика "Размер"
         remaining_words = re.findall(r'\b([A-ZА-Я]{3,20})\b', search_text, re.IGNORECASE)
         for word in remaining_words:
             word_upper = word.upper()
@@ -783,6 +785,12 @@ def parse_product_name(name):
                 # Это может быть дополнительная характеристика
                 # Добавляем только если это не код двигателя
                 if not re.match(r'^\d[A-Z]{2,5}$', word_upper):
+                    # ВАЖНО: Пропускаем короткие слова (3-4 символа), которые могут быть частью сложных значений
+                    # Например, "РЕМ" из "12V/80А/ПЛ. РЕМ.5Д" - это не отдельная характеристика
+                    # Такие значения должны приходить из XML
+                    if len(word_upper) <= 4:
+                        # Пропускаем короткие слова, которые могут быть частью сложных значений
+                        continue
                     # Проверяем, что еще не добавлено
                     if not any('Характеристика:' in p and word_upper in p.upper() for p in characteristics_parts):
                         characteristics_parts.append(f"Характеристика: {word}")
