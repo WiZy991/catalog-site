@@ -93,44 +93,56 @@ class Command(BaseCommand):
                         # Берем самое длинное совпадение (оно должно быть полным)
                         size_value = max(size_matches, key=len)
                 
-                # Если нашли полное значение "Размер", исправляем характеристики
+                # Если нашли полное значение "Размер", исправляем "Характеристика"
                 if size_value:
                     # Проверяем текущие характеристики
                     current_chars = product.characteristics or ''
                     char_lines = [line.strip() for line in current_chars.split('\n') if line.strip()]
                     
-                    # Ищем, есть ли уже "Размер" в характеристиках
-                    has_size = False
-                    size_char_index = -1
+                    # Ищем строку "Характеристика: ..." в характеристиках
+                    characteristic_found = False
                     for i, line in enumerate(char_lines):
                         if ':' in line:
                             key, value = line.split(':', 1)
-                            if 'размер' in key.lower() or 'size' in key.lower():
-                                has_size = True
-                                size_char_index = i
+                            key_stripped = key.strip()
+                            value_stripped = value.strip()
+                            
+                            # Ищем "Характеристика" (не "Размер"!)
+                            if 'характеристика' in key_stripped.lower() or 'characteristic' in key_stripped.lower():
                                 # Проверяем, не является ли значение только частью (например, "РЕМ")
-                                if len(value.strip()) < len(size_value) and value.strip().upper() in size_value.upper():
-                                    # Это обрезанное значение - заменяем
-                                    char_lines[i] = f"Размер: {size_value}"
+                                if len(value_stripped) < len(size_value) and value_stripped.upper() in size_value.upper():
+                                    # Это обрезанное значение - заменяем на полное значение из "Размер"
+                                    char_lines[i] = f"{key_stripped}: {size_value}"
                                     changed = True
-                                    has_size = True
-                                break
+                                    char_changed = True
+                                    characteristic_found = True
+                                    break
+                                # Если значение уже полное, не трогаем
+                                elif size_value.upper() in value_stripped.upper() or value_stripped.upper() in size_value.upper():
+                                    # Значение уже содержит размер или размер содержит значение - не трогаем
+                                    characteristic_found = True
+                                    break
                     
-                    # Если "Размер" не найден или найден только частично, добавляем/заменяем
-                    if not has_size or (size_char_index >= 0 and changed):
-                        # Удаляем старые "Размер" из характеристик
-                        char_lines = [
-                            line for line in char_lines
-                            if not (':' in line and (
-                                line.lower().strip().startswith('размер:') or
-                                line.lower().strip().startswith('size:')
-                            ))
-                        ]
-                        # Добавляем полный "Размер"
-                        char_lines.append(f"Размер: {size_value}")
+                    # Если "Характеристика" не найдена, но есть "Размер" - заменяем "Размер" на "Характеристика"
+                    if not characteristic_found:
+                        for i, line in enumerate(char_lines):
+                            if ':' in line:
+                                key, value = line.split(':', 1)
+                                if 'размер' in key.lower() or 'size' in key.lower():
+                                    # Заменяем "Размер: ..." на "Характеристика: ..." с полным значением
+                                    char_lines[i] = f"Характеристика: {size_value}"
+                                    changed = True
+                                    char_changed = True
+                                    break
+                        
+                        # Если не нашли ни "Характеристика", ни "Размер", добавляем "Характеристика"
+                        if not changed:
+                            char_lines.append(f"Характеристика: {size_value}")
+                            changed = True
+                            char_changed = True
+                    
+                    if changed:
                         product.characteristics = '\n'.join(char_lines)
-                        changed = True
-                        char_changed = True
 
             # 2. Исправляем применимость - удаляем Артикул2 (значения, начинающиеся с "/")
             if product.applicability:
