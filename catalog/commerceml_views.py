@@ -1538,11 +1538,14 @@ def parse_commerceml_product(product_elem, namespaces, root_elem=None, groups_ca
                 # Извлекаем полное значение характеристики, включая весь текст из элемента и дочерних элементов
                 # Это важно для "Размера", который может содержать сложные значения типа "12V/140А/ПЛ.РЕМ.6Д/ОВ.Ф/ЗКОНТ"
                 # Используем itertext() для сбора всего текста, включая дочерние элементы
+                # ВАЖНО: Не используем strip() для каждой части, чтобы сохранить пробелы внутри значения
                 char_value_parts = []
                 for text in char_value_elem.itertext():
                     if text:
-                        char_value_parts.append(text.strip())
-                char_value = ' '.join(char_value_parts).strip() if char_value_parts else ''
+                        # Сохраняем текст как есть, только убираем лишние пробелы в начале/конце строк
+                        char_value_parts.append(text)
+                # Объединяем все части без добавления пробелов (они уже есть в тексте)
+                char_value = ''.join(char_value_parts).strip() if char_value_parts else ''
                 
                 if char_name and char_value:
                     char_name_lower = char_name.lower()
@@ -2835,6 +2838,10 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
                 if not part:
                     continue
                 
+                # Пропускаем артикулы, начинающиеся с "/" (например, /EW80A - это Артикул2)
+                if part.startswith('/'):
+                    continue
+                
                 # Пропускаем артикулы (OEM номера типа 89467-71020)
                 if re.match(r'^\d{5}-\d{5}$', part) or re.match(r'^\d{1}-\d{5}-\d{3}-\d{1}$', part) or re.match(r'^\d{5}-\d{3}$', part):
                     continue
@@ -2870,14 +2877,19 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
         # Артикул = OEM номер (кросс-номер)
         # Применимость может содержать артикулы альтернативные (TIS-166, GUIS-66) - это нормально
         # Убираем дубликаты и фильтруем пустые значения
+        # ВАЖНО: Исключаем артикулы (значения, начинающиеся с "/") из применимости
         unique_applicability = []
         seen = set()
         for p in applicability_parts:
             if p and str(p).strip():
-                p_upper = str(p).strip().upper()
+                p_str = str(p).strip()
+                # Пропускаем артикулы, начинающиеся с "/" (например, /EW80A - это Артикул2)
+                if p_str.startswith('/'):
+                    continue
+                p_upper = p_str.upper()
                 if p_upper not in seen:
                     seen.add(p_upper)
-                    unique_applicability.append(str(p).strip())
+                    unique_applicability.append(p_str)
         
         # Извлекаем вольтаж из применимости и переносим в характеристики
         # ВАЖНО: Вольтаж (12V, 24V и т.д.) должен быть в характеристиках, а не в применимости!
@@ -2967,6 +2979,26 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
                     # Если "Размер" есть в XML, пропускаем "Размер" из парсинга названия
                     if ('размер' in char_name_lower or 'size' in char_name_lower) and has_size_in_xml:
                         continue
+                    
+                    # ВАЖНО: Если "Размер" есть в XML, пропускаем короткие характеристики, которые могут быть частью значения "Размер"
+                    # Например, "РЕМ" из "12V/140А/ПЛ. РЕМ. 6Д/ОВ.Ф/ЗКОНТ" не должна добавляться как отдельная характеристика
+                    if has_size_in_xml and char_name_lower in ['характеристика', 'characteristic']:
+                        # Проверяем, не является ли значение частью "Размера" из XML
+                        should_skip_char = False
+                        if product_data.get('characteristics'):
+                            char_list = product_data.get('characteristics', [])
+                            if isinstance(char_list, list):
+                                for char_data in char_list:
+                                    if isinstance(char_data, dict):
+                                        xml_char_name = char_data.get('name', '').strip().lower()
+                                        xml_char_value = char_data.get('value', '').strip()
+                                        if 'размер' in xml_char_name or 'size' in xml_char_name:
+                                            # Если значение из парсинга содержится в значении "Размер" из XML, пропускаем
+                                            if char_value_stripped.upper() in xml_char_value.upper():
+                                                should_skip_char = True
+                                                break
+                        if should_skip_char:
+                            continue
                     
                     # Проверяем, что значение не является кодом модели/применимости
                     # Коды моделей обычно: 1-4 цифры + буквы (например, 1GEN, 1NZF, 2GR, 4AFE)
