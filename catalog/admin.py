@@ -761,6 +761,27 @@ class ProductAdmin(ImportExportModelAdmin, FarpostExportMixin, admin.ModelAdmin)
             'fields': ('is_active', 'is_featured')
         }),
     )
+    
+    def get_fieldsets(self, request, obj=None):
+        """Убираем поле 'Применимость' для оптовых товаров."""
+        fieldsets = list(super().get_fieldsets(request, obj))
+        
+        # Если это оптовый товар, убираем секцию "Применимость"
+        if obj and obj.catalog_type == 'wholesale':
+            fieldsets = [fs for fs in fieldsets if fs[0] != 'Применимость']
+        
+        return fieldsets
+    
+    def get_exclude(self, request, obj=None):
+        """Исключаем поле 'applicability' для оптовых товаров."""
+        exclude = list(super().get_exclude(request, obj) or [])
+        
+        # Если это оптовый товар, исключаем поле applicability
+        if obj and obj.catalog_type == 'wholesale':
+            if 'applicability' not in exclude:
+                exclude.append('applicability')
+        
+        return exclude if exclude else None
 
     def image_preview(self, obj):
         img = obj.get_main_image()
