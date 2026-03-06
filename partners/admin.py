@@ -564,6 +564,7 @@ class WholesaleProductAdmin(ImportExportModelAdmin, admin.ModelAdmin):
     actions = ['make_active', 'make_inactive']
     list_per_page = 50
     save_on_top = True
+    exclude = ['applicability']  # Убираем поле "Применимость" из формы
     
     # Кнопка массового импорта
     change_list_template = 'admin/partners/wholesaleproduct_changelist.html'
