@@ -370,6 +370,13 @@
                     </div>
                 </div>
                 {% endif %}
+                
+                {% if product.description %}
+                <div class="product-info__section">
+                    <h3 class="product-info__section-title">Применимость</h3>
+                    <div class="product-info__description">{{ product.description|linebreaks }}</div>
+                </div>
+                {% endif %}
             </div>
         </div>
         
@@ -408,8 +415,9 @@ function changeImage(url, thumb) {
                     const hasInput = section.querySelector('input, textarea');
                     
                     // Проверяем, есть ли реальное содержимое (не пустое поле ввода)
-                    const hasRealContent = section.querySelector('.product-info__description') && 
-                                          section.querySelector('.product-info__description').textContent.trim() !== '' ||
+                    const descriptionEl = section.querySelector('.product-info__description');
+                    const hasDescription = descriptionEl && descriptionEl.textContent.trim() !== '';
+                    const hasRealContent = hasDescription ||
                                           section.querySelector('.product-description') && 
                                           section.querySelector('.product-description').textContent.trim() !== '' ||
                                           section.textContent.includes('Кузов:') ||
