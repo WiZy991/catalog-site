@@ -402,37 +402,21 @@ function changeImage(url, thumb) {
     thumb.classList.add('product-gallery__thumb--active');
 }
 
-// Скрываем только секции "Применимость" с пустыми полями ввода (не трогаем секции с данными)
+// Скрываем ТОЛЬКО секции "Применимость" с полями ввода (input/textarea)
+// НЕ трогаем секции с данными (.product-info__description)
 (function() {
     function hideApplicabilityWithInput() {
         // Ищем все секции с заголовком "Применимость"
-        const sections = document.querySelectorAll('.product-info__section, [class*="section"]');
+        const sections = document.querySelectorAll('.product-info__section');
         sections.forEach(function(section) {
-            const title = section.querySelector('.product-info__section-title, h3, [class*="title"]');
-            if (title) {
-                const titleText = title.textContent.trim();
-                if (titleText === 'Применимость' || titleText.includes('Применимость')) {
-                    const hasInput = section.querySelector('input, textarea');
-                    
-                    // Проверяем, есть ли реальное содержимое (не пустое поле ввода)
-                    const descriptionEl = section.querySelector('.product-info__description');
-                    const hasDescription = descriptionEl && descriptionEl.textContent.trim() !== '';
-                    const hasRealContent = hasDescription ||
-                                          section.querySelector('.product-description') && 
-                                          section.querySelector('.product-description').textContent.trim() !== '' ||
-                                          section.textContent.includes('Кузов:') ||
-                                          section.textContent.includes('Двигатель:');
-                    
-                    // Скрываем ТОЛЬКО если есть поле ввода И нет реального содержимого
-                    if (hasInput && !hasRealContent) {
-                        section.classList.add('hide-applicability-input');
-                        section.style.display = 'none';
-                        section.style.visibility = 'hidden';
-                        section.style.height = '0';
-                        section.style.margin = '0';
-                        section.style.padding = '0';
-                        section.style.overflow = 'hidden';
-                    }
+            const title = section.querySelector('.product-info__section-title, h3');
+            if (title && title.textContent.trim() === 'Применимость') {
+                const hasInput = section.querySelector('input, textarea');
+                const hasDescription = section.querySelector('.product-info__description');
+                
+                // Скрываем ТОЛЬКО если есть поле ввода И НЕТ блока с описанием
+                if (hasInput && !hasDescription) {
+                    section.style.display = 'none';
                 }
             }
         });
@@ -445,14 +429,8 @@ function changeImage(url, thumb) {
         hideApplicabilityWithInput();
     }
     
-    // Также выполняем с задержками
-    setTimeout(hideApplicabilityWithInput, 50);
+    // Также выполняем с задержкой
     setTimeout(hideApplicabilityWithInput, 100);
-    setTimeout(hideApplicabilityWithInput, 300);
-    
-    // Отслеживаем динамические изменения
-    const observer = new MutationObserver(hideApplicabilityWithInput);
-    observer.observe(document.body, { childList: true, subtree: true });
 })();
 </script>
 {% endblock %}
