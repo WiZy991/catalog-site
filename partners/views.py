@@ -357,6 +357,7 @@ class PartnerProductView(PartnerRequiredMixin, DetailView):
                 characteristics.append(('Напряжение', voltage))
         
         context['characteristics'] = characteristics
+        context['applicability'] = product.get_applicability_list()
         
         # Похожие товары - ищем по кросс-номерам и категории
         similar_products = []

@@ -382,7 +382,7 @@ class Product(models.Model):
                 if word_count > 5:
                     # Слишком много слов - это описание, не применимость
                     continue
-                    result.append(item_stripped)
+                result.append(item_stripped)
         return result
     
     def get_voltage_from_applicability(self):
