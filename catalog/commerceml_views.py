@@ -2836,20 +2836,25 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
                 if part.upper() in known_brands:
                     continue
                 
-                # Ищем коды моделей/двигателей (формат: 2UZFE, 1GRFE, 1MZFE и т.д.)
-                # Паттерн: цифра + буквы + цифры (например, 2UZFE, 1GRFE, 1MZFE)
-                engine_model_pattern = r'^(\d?[A-Z]{2,5}\d?[A-Z]{0,3}-?[A-Z]{0,2}\d{0,2}[A-Z]?)$'
+                # Ищем коды моделей/двигателей (формат: 2UZFE, 1GRFE, 1MZFE, 2RZ, 3RZ и т.д.)
+                # Паттерн: цифра + буквы + (опционально) цифры + (опционально) буквы
+                # Поддерживает: 2RZ, 3RZ, 2UZFE, 1GRFE, 1MZFE, 4AFE и т.д.
+                engine_model_pattern = r'^(\d+[A-Z]{2,5}(?:\d+[A-Z]{0,3})?)$'
                 if re.match(engine_model_pattern, part, re.IGNORECASE):
                     # Это код модели/двигателя - добавляем в применимость
                     if part.upper() not in [p.upper() for p in applicability_parts]:
                         applicability_parts.append(part.upper())
                     continue
                 
-                # Ищем связки через слеш (например, 2UZFE/1GRFE)
+                # Ищем связки через слеш (например, 2UZFE/1GRFE, 2RZ/3RZ)
                 if '/' in part:
                     slash_parts = [p.strip() for p in part.split('/')]
                     for slash_part in slash_parts:
                         if re.match(engine_model_pattern, slash_part, re.IGNORECASE):
+                            if slash_part.upper() not in [p.upper() for p in applicability_parts]:
+                                applicability_parts.append(slash_part.upper())
+                        # Также проверяем, может быть это связка кодов двигателей (2RZ/3RZ)
+                        elif re.match(r'^\d+[A-Z]{2,5}$', slash_part, re.IGNORECASE):
                             if slash_part.upper() not in [p.upper() for p in applicability_parts]:
                                 applicability_parts.append(slash_part.upper())
         
@@ -2919,8 +2924,21 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
         characteristics_parts = []
         
         # Сначала добавляем характеристики из парсинга названия (это более надежно)
+        # ВАЖНО: Но "Размер" из XML имеет приоритет над "Размер" из парсинга названия
         import re
         excluded_materials = ['прокладка', 'gasket', 'паронит', 'paronit', 'материал', 'material']
+        
+        # Проверяем, есть ли "Размер" в XML
+        has_size_in_xml = False
+        if product_data.get('characteristics'):
+            char_list = product_data.get('characteristics', [])
+            if isinstance(char_list, list):
+                for char_data in char_list:
+                    if isinstance(char_data, dict):
+                        char_name = char_data.get('name', '').strip()
+                        if 'размер' in char_name.lower() or 'size' in char_name.lower():
+                            has_size_in_xml = True
+                            break
         
         if parsed.get('characteristics'):
             # parsed['characteristics'] - это строка с разделителями \n
@@ -2936,6 +2954,10 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
                     
                     # Пропускаем материалы
                     if any(material in char_name_lower for material in excluded_materials):
+                        continue
+                    
+                    # Если "Размер" есть в XML, пропускаем "Размер" из парсинга названия
+                    if ('размер' in char_name_lower or 'size' in char_name_lower) and has_size_in_xml:
                         continue
                     
                     # Проверяем, что значение не является кодом модели/применимости
