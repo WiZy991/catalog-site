@@ -1547,6 +1547,14 @@ def parse_commerceml_product(product_elem, namespaces, root_elem=None, groups_ca
                 # Объединяем все части без добавления пробелов (они уже есть в тексте)
                 char_value = ''.join(char_value_parts).strip() if char_value_parts else ''
                 
+                # Логируем извлечение "Размера" для отладки (только первые 3)
+                if char_name and ('размер' in char_name.lower() or 'size' in char_name.lower()):
+                    if not hasattr(parse_commerceml_product, '_log_size_extract_count'):
+                        parse_commerceml_product._log_size_extract_count = 0
+                    parse_commerceml_product._log_size_extract_count += 1
+                    if parse_commerceml_product._log_size_extract_count <= 3:
+                        logger.info(f"[XML] Извлечение 'Размер': name='{char_name}', value='{char_value}' (длина={len(char_value)})")
+                
                 if char_name and char_value:
                     char_name_lower = char_name.lower()
                     
@@ -3027,7 +3035,9 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
                 for char_data in char_list:
                     if isinstance(char_data, dict):
                         char_name = char_data.get('name', '').strip()
-                        char_value = char_data.get('value', '').strip()
+                        # ВАЖНО: Не используем strip() для значения, чтобы сохранить полное значение "Размер"
+                        # Значение уже было правильно извлечено из XML с помощью itertext()
+                        char_value = char_data.get('value', '')
                         if char_name and char_value:
                             char_name_lower = char_name.lower()
                             char_value_upper = char_value.upper()
@@ -3044,9 +3054,18 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
                             # Значение может быть любым: "12V/80А/ПЛ. РЕМ.5Д/ОВ.Ф./ЗКОНТ", "20*450" и т.д.
                             if 'размер' in char_name_lower or 'size' in char_name_lower:
                                 # Размер всегда добавляем как есть, без проверок
+                                # Логируем для отладки (только первые 3 товара)
+                                if hasattr(process_product_from_commerceml, '_log_size_count'):
+                                    process_product_from_commerceml._log_size_count += 1
+                                else:
+                                    process_product_from_commerceml._log_size_count = 1
+                                if process_product_from_commerceml._log_size_count <= 3:
+                                    logger.info(f"✓ Найден 'Размер' в XML: name='{char_name}', value='{char_value}' (длина={len(char_value)})")
+                                
                                 char_str = f"{char_name}: {char_value}"
                                 # Удаляем ВСЕ старые "Размер" из парсинга названия, если они есть
                                 # Ищем все характеристики, которые начинаются с "Размер:" или "Size:"
+                                old_count = len(characteristics_parts)
                                 characteristics_parts = [
                                     c for c in characteristics_parts 
                                     if not (':' in c and (
@@ -3054,8 +3073,14 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
                                         c.lower().strip().startswith('size:')
                                     ))
                                 ]
+                                removed_count = old_count - len(characteristics_parts)
+                                if removed_count > 0 and process_product_from_commerceml._log_size_count <= 3:
+                                    logger.info(f"  Удалено {removed_count} старых 'Размер' из парсинга названия")
+                                
                                 # Добавляем "Размер" из XML (он имеет приоритет) - ВСЕГДА добавляем, даже если похожий уже есть
                                 characteristics_parts.append(char_str)
+                                if process_product_from_commerceml._log_size_count <= 3:
+                                    logger.info(f"  Добавлен 'Размер' из XML: '{char_str}'")
                                 continue
                             
                             # Для остальных характеристик проверяем, что значение не является кодом модели/применимости
@@ -3088,8 +3113,22 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
                     characteristics_parts.append(voltage_char)
         
         # Объединяем все характеристики
+        # ВАЖНО: Всегда обновляем характеристики при импорте из XML, чтобы исправить неправильные значения
         if characteristics_parts:
-            product.characteristics = '\n'.join(characteristics_parts)
+            new_characteristics = '\n'.join(characteristics_parts)
+            # Логируем изменение характеристик для отладки (только первые 3 товара)
+            if hasattr(process_product_from_commerceml, '_log_char_update_count'):
+                process_product_from_commerceml._log_char_update_count += 1
+            else:
+                process_product_from_commerceml._log_char_update_count = 1
+            if process_product_from_commerceml._log_char_update_count <= 3:
+                old_chars = product.characteristics or ''
+                logger.info(f"Обновление характеристик товара {product.external_id or product.article}:")
+                logger.info(f"  Старые: '{old_chars[:100]}...' (длина={len(old_chars)})")
+                logger.info(f"  Новые: '{new_characteristics[:100]}...' (длина={len(new_characteristics)})")
+            product.characteristics = new_characteristics
+        # Если characteristics_parts пустой, но товар обновляется - не трогаем характеристики
+        # (возможно, они должны остаться как есть)
         
         # ВАЖНО: Сохраняем товар ПЕРЕД обработкой ProductCharacteristic
         # Это гарантирует, что товар будет создан даже если ProductCharacteristic не работает
