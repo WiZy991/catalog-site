@@ -163,18 +163,6 @@
                 
                 <!-- Информация о товаре -->
                 <div class="product-info__content">
-                    <!-- Применимость (кузов, двигатель) -->
-                    <div class="product-info__section">
-                        <h3 class="product-info__section-title">Применимость</h3>
-                        {% if product.description %}
-                        <div class="product-description">
-                            {{ product.description|linebreaks }}
-                        </div>
-                        {% else %}
-                        <p class="text-muted">Не указана</p>
-                        {% endif %}
-                    </div>
-                    
                     <!-- Характеристики -->
                     <div class="product-info__section">
                         <h3 class="product-info__section-title">Характеристики</h3>

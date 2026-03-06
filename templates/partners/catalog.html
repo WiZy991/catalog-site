@@ -599,49 +599,42 @@
     
     .products-table th:nth-child(1),
     .products-table td:nth-child(1) { 
-        width: 8%;
-        min-width: 100px;
-        max-width: 120px;
-    } /* Применимость */
-    
-    .products-table th:nth-child(2),
-    .products-table td:nth-child(2) { 
         width: 10%;
         min-width: 120px;
         max-width: 150px;
     } /* Код детали */
     
-    .products-table th:nth-child(3),
-    .products-table td:nth-child(3) { 
+    .products-table th:nth-child(2),
+    .products-table td:nth-child(2) { 
         width: 35%;
         min-width: 250px;
     } /* Описание */
     
-    .products-table th:nth-child(4),
-    .products-table td:nth-child(4) { 
+    .products-table th:nth-child(3),
+    .products-table td:nth-child(3) { 
         width: 15%;
         min-width: 140px;
         max-width: 180px;
     } /* Наличие */
     
-    .products-table th:nth-child(5),
-    .products-table td:nth-child(5) { 
+    .products-table th:nth-child(4),
+    .products-table td:nth-child(4) { 
         width: 8%;
         min-width: 80px;
         max-width: 100px;
         padding-right: 0.2rem !important;
     } /* Цена */
     
-    .products-table th:nth-child(6),
-    .products-table td:nth-child(6) { 
+    .products-table th:nth-child(5),
+    .products-table td:nth-child(5) { 
         width: 24%;
         min-width: 200px;
         padding-left: 0.3rem !important;
     } /* Количество + Заказ */
     
     /* Выравнивание колонки Количество по верху - ПРИНУДИТЕЛЬНО */
-    .products-table th:nth-child(6),
-    .products-table td:nth-child(6),
+    .products-table th:nth-child(5),
+    .products-table td:nth-child(5),
     .products-table__quantity {
         vertical-align: top !important;
         padding-top: 0.5rem !important;
@@ -2024,7 +2017,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     <table class="products-table">
                         <thead>
                             <tr>
-                                <th>Применимость</th>
                                 <th>Код детали</th>
                                 <th>Описание</th>
                                 <th>Наличие</th>
@@ -2035,13 +2027,6 @@ document.addEventListener('DOMContentLoaded', function() {
                         <tbody>
                             {% for product in products %}
                             <tr class="products-table__row">
-                                <td class="products-table__brand">
-                                    {% if product.brand %}
-                                        {{ product.brand }}
-                                    {% else %}
-                                        <span class="text-muted">—</span>
-                                    {% endif %}
-                                </td>
                                 <td class="products-table__article" title="{% if product.article %}{{ product.article }}{% endif %}">
                                     {% if product.article %}
                                         {{ product.article|truncatechars:20 }}
@@ -2059,13 +2044,6 @@ document.addEventListener('DOMContentLoaded', function() {
                                             Товар #{{ product.id }}
                                         {% endif %}
                                     </a>
-                                    {% if product.get_applicability_list %}
-                                    <div class="products-table__applicability">
-                                        {% for item in product.get_applicability_list|slice:":3" %}
-                                        <span class="products-table__applicability-tag" title="{{ item }}">{{ item|truncatechars:15 }}</span>
-                                        {% endfor %}
-                                    </div>
-                                    {% endif %}
                                 </td>
                                 <td class="products-table__availability">
                                     {% if product.availability == 'in_stock' %}

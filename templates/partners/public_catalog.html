@@ -596,7 +596,6 @@
                     <table class="products-table">
                         <thead>
                             <tr>
-                                <th>Применимость</th>
                                 <th>Код детали</th>
                                 <th>Описание</th>
                                 <th>Цена</th>
@@ -606,13 +605,6 @@
                         <tbody>
                             {% for product in products %}
                             <tr class="products-table__row">
-                                <td class="products-table__brand">
-                                    {% if product.brand %}
-                                        {{ product.brand }}
-                                    {% else %}
-                                        <span class="text-muted">—</span>
-                                    {% endif %}
-                                </td>
                                 <td class="products-table__article">
                                     {% if product.article %}
                                         {{ product.article }}
@@ -624,13 +616,6 @@
                                     <a href="{% url 'partners:public_product' product.slug %}" class="products-table__link">
                                         {{ product.name }}
                                     </a>
-                                    {% if product.get_applicability_list %}
-                                    <div class="products-table__applicability">
-                                        {% for item in product.get_applicability_list|slice:":3" %}
-                                        <span class="products-table__applicability-tag">{{ item }}</span>
-                                        {% endfor %}
-                                    </div>
-                                    {% endif %}
                                 </td>
                                 <td class="products-table__price">
                                     <div class="product-card__price-hidden">
