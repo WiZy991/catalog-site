@@ -3005,9 +3005,17 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
                             if 'размер' in char_name_lower or 'size' in char_name_lower:
                                 # Размер всегда добавляем как есть, без проверок
                                 char_str = f"{char_name}: {char_value}"
-                                # Проверяем, нет ли уже такой характеристики
-                                if not any(char_str in existing for existing in characteristics_parts):
-                                    characteristics_parts.append(char_str)
+                                # Удаляем ВСЕ старые "Размер" из парсинга названия, если они есть
+                                # Ищем все характеристики, которые начинаются с "Размер:" или "Size:"
+                                characteristics_parts = [
+                                    c for c in characteristics_parts 
+                                    if not (':' in c and (
+                                        c.lower().strip().startswith('размер:') or 
+                                        c.lower().strip().startswith('size:')
+                                    ))
+                                ]
+                                # Добавляем "Размер" из XML (он имеет приоритет) - ВСЕГДА добавляем, даже если похожий уже есть
+                                characteristics_parts.append(char_str)
                                 continue
                             
                             # Для остальных характеристик проверяем, что значение не является кодом модели/применимости

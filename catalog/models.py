@@ -335,15 +335,18 @@ class Product(models.Model):
                 if any(excluded in key_lower for excluded in excluded_keys):
                     continue
                 
-                # Проверяем, что значение не является кодом модели/применимости
-                # Коды моделей обычно: 1-4 цифры + буквы (например, 1GEN, 1NZF, 2GR, 4AFE)
-                # Или только буквы+цифры без * или x
-                if re.match(r'^[A-Z0-9#\-/]{1,10}$', value_stripped.upper()) and not re.search(r'[*x]', value_stripped):
-                    # Это похоже на код модели, а не на характеристику
-                    # Проверяем, не является ли это применимостью
-                    if self.applicability and value_stripped.upper() in self.applicability.upper():
-                        # Это применимость, не характеристика
-                        continue
+                # ВАЖНО: "Размер" всегда должен попадать в характеристики БЕЗ фильтрации!
+                # Значение может быть любым: "12V/80А/ПЛ. РЕМ.5Д/ОВ.Ф./ЗКОНТ", "20*450" и т.д.
+                if 'размер' not in key_lower and 'size' not in key_lower:
+                    # Проверяем, что значение не является кодом модели/применимости
+                    # Коды моделей обычно: 1-4 цифры + буквы (например, 1GEN, 1NZF, 2GR, 4AFE)
+                    # Или только буквы+цифры без * или x
+                    if re.match(r'^[A-Z0-9#\-/]{1,10}$', value_stripped.upper()) and not re.search(r'[*x]', value_stripped):
+                        # Это похоже на код модели, а не на характеристику
+                        # Проверяем, не является ли это применимостью
+                        if self.applicability and value_stripped.upper() in self.applicability.upper():
+                            # Это применимость, не характеристика
+                            continue
                 
                 result.append((key_stripped, value_stripped))
         
