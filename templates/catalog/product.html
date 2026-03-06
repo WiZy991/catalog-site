@@ -182,14 +182,20 @@
                     
                     <!-- Применимость -->
                     {% if applicability %}
+                        {% for item in applicability %}
+                            {% if item and item|strip %}
+                                {% if forloop.first %}
                     <div class="product-info__section">
                         <h3 class="product-info__section-title">Применимость</h3>
                         <ul class="applicability-list">
-                            {% for item in applicability %}
+                                {% endif %}
                             <li>{{ item }}</li>
-                            {% endfor %}
+                                {% if forloop.last %}
                         </ul>
                     </div>
+                                {% endif %}
+                            {% endif %}
+                        {% endfor %}
                     {% endif %}
                 </div>
                 
