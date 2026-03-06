@@ -228,9 +228,21 @@
         font-size: 0.9rem;
     }
     
-    /* Скрываем пустые секции "Применимость" */
-    .product-info__section.hide-empty-applicability {
+    /* Скрываем секции "Применимость" с полями ввода */
+    .product-info__section:has(input),
+    .product-info__section:has(textarea) {
         display: none !important;
+    }
+    
+    /* Альтернативный способ для старых браузеров */
+    .product-info__section.hide-empty-applicability,
+    .hide-applicability-input {
+        display: none !important;
+        visibility: hidden !important;
+        height: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        overflow: hidden !important;
     }
     
     
@@ -388,33 +400,24 @@ function changeImage(url, thumb) {
     thumb.classList.add('product-gallery__thumb--active');
 }
 
-// Скрываем пустые секции "Применимость"
+// Скрываем секции "Применимость" с полями ввода
 document.addEventListener('DOMContentLoaded', function() {
-    function hideEmptyApplicability() {
+    function hideApplicabilityWithInput() {
+        // Ищем все секции с заголовком "Применимость", которые содержат input или textarea
         const sections = document.querySelectorAll('.product-info__section');
         sections.forEach(function(section) {
             const title = section.querySelector('.product-info__section-title, h3');
             if (title && title.textContent.trim() === 'Применимость') {
-                // Проверяем, есть ли содержимое (кроме заголовка)
-                const hasContent = section.querySelector('.product-info__applicability-item') || 
-                                  section.querySelector('.product-info__description') ||
-                                  section.querySelector('.product-description');
-                
-                // Проверяем, есть ли пустые поля ввода
-                const hasEmptyInput = section.querySelector('input[type="text"]:not([value]), input[type="text"][value=""], textarea:empty, textarea:not(:has(*))');
-                
-                // Если нет содержимого ИЛИ есть пустое поле ввода - скрываем
-                if (!hasContent || hasEmptyInput) {
+                const hasInput = section.querySelector('input, textarea');
+                if (hasInput) {
                     section.style.display = 'none';
                 }
             }
         });
     }
     
-    // Выполняем сразу и после небольшой задержки (на случай динамической загрузки)
-    hideEmptyApplicability();
-    setTimeout(hideEmptyApplicability, 100);
-    setTimeout(hideEmptyApplicability, 500);
+    hideApplicabilityWithInput();
+    setTimeout(hideApplicabilityWithInput, 100);
 });
 </script>
 {% endblock %}
