@@ -2987,10 +2987,11 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
                                     # Это похоже на код модели, а не на характеристику - пропускаем
                                     continue
                             
-                                char_str = f"{char_name}: {char_value}"
-                                # Проверяем, нет ли уже такой характеристики
-                                if not any(char_str in existing for existing in characteristics_parts):
-                                    characteristics_parts.append(char_str)
+                            # Добавляем характеристику (включая "Размер")
+                            char_str = f"{char_name}: {char_value}"
+                            # Проверяем, нет ли уже такой характеристики
+                            if not any(char_str in existing for existing in characteristics_parts):
+                                characteristics_parts.append(char_str)
         
         # Добавляем вольтаж из применимости в характеристики (если он был найден)
         if voltage_from_applicability:
