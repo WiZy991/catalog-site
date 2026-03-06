@@ -2782,6 +2782,21 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
         applicability = None
         applicability_parts = []
         
+        # Для розничного каталога: добавляем "Кузов" и "Двигатель" в применимость
+        if catalog_type == 'retail':
+            # Кузов из 1С
+            if product_data.get('body'):
+                body_list = product_data['body'] if isinstance(product_data['body'], list) else [product_data['body']]
+                for body_item in body_list:
+                    if body_item and body_item.strip():
+                        applicability_parts.append(body_item.strip())
+            # Двигатель из 1С
+            if product_data.get('engine'):
+                engine_list = product_data['engine'] if isinstance(product_data['engine'], list) else [product_data['engine']]
+                for engine_item in engine_list:
+                    if engine_item and engine_item.strip():
+                        applicability_parts.append(engine_item.strip())
+        
         # Если applicability пришёл как список (из характеристик)
         if product_data.get('applicability'):
             if isinstance(product_data.get('applicability'), list):
