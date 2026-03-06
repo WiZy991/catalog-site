@@ -230,13 +230,8 @@
     
     /* Скрываем секции "Применимость" с полями ввода */
     .product-info__section:has(input),
-    .product-info__section:has(textarea) {
-        display: none !important;
-    }
-    
-    /* Альтернативный способ для старых браузеров */
-    .product-info__section.hide-empty-applicability,
-    .hide-applicability-input {
+    .product-info__section:has(textarea),
+    .product-info__section.hide-applicability-input {
         display: none !important;
         visibility: hidden !important;
         height: 0 !important;
@@ -401,23 +396,45 @@ function changeImage(url, thumb) {
 }
 
 // Скрываем секции "Применимость" с полями ввода
-document.addEventListener('DOMContentLoaded', function() {
+(function() {
     function hideApplicabilityWithInput() {
         // Ищем все секции с заголовком "Применимость", которые содержат input или textarea
-        const sections = document.querySelectorAll('.product-info__section');
+        const sections = document.querySelectorAll('.product-info__section, [class*="section"]');
         sections.forEach(function(section) {
-            const title = section.querySelector('.product-info__section-title, h3');
-            if (title && title.textContent.trim() === 'Применимость') {
-                const hasInput = section.querySelector('input, textarea');
-                if (hasInput) {
-                    section.style.display = 'none';
+            const title = section.querySelector('.product-info__section-title, h3, [class*="title"]');
+            if (title) {
+                const titleText = title.textContent.trim();
+                if (titleText === 'Применимость' || titleText.includes('Применимость')) {
+                    const hasInput = section.querySelector('input, textarea');
+                    if (hasInput) {
+                        section.classList.add('hide-applicability-input');
+                        section.style.display = 'none';
+                        section.style.visibility = 'hidden';
+                        section.style.height = '0';
+                        section.style.margin = '0';
+                        section.style.padding = '0';
+                        section.style.overflow = 'hidden';
+                    }
                 }
             }
         });
     }
     
-    hideApplicabilityWithInput();
+    // Выполняем сразу, если DOM уже загружен
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', hideApplicabilityWithInput);
+    } else {
+        hideApplicabilityWithInput();
+    }
+    
+    // Также выполняем с задержками
+    setTimeout(hideApplicabilityWithInput, 50);
     setTimeout(hideApplicabilityWithInput, 100);
-});
+    setTimeout(hideApplicabilityWithInput, 300);
+    
+    // Отслеживаем динамические изменения
+    const observer = new MutationObserver(hideApplicabilityWithInput);
+    observer.observe(document.body, { childList: true, subtree: true });
+})();
 </script>
 {% endblock %}
