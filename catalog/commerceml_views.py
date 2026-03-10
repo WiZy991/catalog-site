@@ -3785,6 +3785,29 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
         # ВАЖНО: Сохраняем товар ПЕРЕД обработкой ProductCharacteristic
         # Это гарантирует, что товар будет создан даже если ProductCharacteristic не работает
         try:
+            # Финальная "железная" очистка применимости:
+            # если применимость уже собрана строкой и содержит ровно "NHW" (без цифр),
+            # а рядом есть хотя бы один более точный код с цифрами (например, ZVW30),
+            # удаляем "NHW". Это защищает от любых путей, где NHW мог проскочить.
+            if product.applicability:
+                try:
+                    _tokens = [t.strip() for t in str(product.applicability).split(',') if t and str(t).strip()]
+                    _upper = [t.upper() for t in _tokens]
+                    if 'NHW' in _upper and any(any(ch.isdigit() for ch in tok) for tok in _upper if tok != 'NHW'):
+                        _new_tokens = [t for t in _tokens if t.strip().upper() != 'NHW']
+                        if _new_tokens != _tokens:
+                            old_app = product.applicability
+                            product.applicability = ', '.join(_new_tokens)
+                            logger.info(
+                                "APPLICABILITY_FINAL "
+                                f"(product_id={getattr(product, 'id', None)}, catalog_type={catalog_type}, "
+                                f"external_id='{external_id}', article='{article}') "
+                                f"'{old_app}' -> '{product.applicability}'"
+                            )
+                except Exception:
+                    # Никогда не ломаем импорт из-за чистки строки
+                    pass
+
             # ВАЖНО: При обновлении товара принудительно сохраняем все поля
             # Используем save() без update_fields, чтобы гарантировать сохранение ВСЕХ полей
             product.save()
