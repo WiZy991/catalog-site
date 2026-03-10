@@ -1297,8 +1297,23 @@ def process_commerceml_file(file_path, filename, request=None):
                 )
         
         logger.info(f"Импорт завершен: обработано {total_processed}, создано {total_created}, обновлено {total_updated}, скрыто {total_deleted}, ошибок {len(all_errors)}")
-        logger.info(f"  Розничный каталог: обработано={results['retail']['processed']}, создано={results['retail']['created']}, обновлено={results['retail']['updated']}")
-        logger.info(f"  Оптовый каталог: обработано={results['wholesale']['processed']}, создано={results['wholesale']['created']}, обновлено={results['wholesale']['updated']}")
+        # ВАЖНО: results может не содержать ключи 'retail'/'wholesale' при частичных сценариях — не падаем на логировании
+        retail_stats = results.get('retail') if isinstance(results, dict) else None
+        wholesale_stats = results.get('wholesale') if isinstance(results, dict) else None
+        if isinstance(retail_stats, dict):
+            logger.info(
+                f"  Розничный каталог: обработано={retail_stats.get('processed', 0)}, "
+                f"создано={retail_stats.get('created', 0)}, обновлено={retail_stats.get('updated', 0)}"
+            )
+        else:
+            logger.info("  Розничный каталог: нет данных статистики")
+        if isinstance(wholesale_stats, dict):
+            logger.info(
+                f"  Оптовый каталог: обработано={wholesale_stats.get('processed', 0)}, "
+                f"создано={wholesale_stats.get('created', 0)}, обновлено={wholesale_stats.get('updated', 0)}"
+            )
+        else:
+            logger.info("  Оптовый каталог: нет данных статистики")
         
         # ВАЖНО: Логируем информацию о создании маркера для отладки
         logger.info(f"Проверка создания маркера: total_processed={total_processed}, file_path={file_path}, exists={os.path.exists(file_path) if file_path else False}")
@@ -1310,8 +1325,9 @@ def process_commerceml_file(file_path, filename, request=None):
             'updated': total_updated,
             'deleted': total_deleted,
             'errors': len(all_errors),
-            'retail': results['retail'],
-            'wholesale': results['wholesale']
+            # Безопасно возвращаем статистику по каталогам (может отсутствовать в редких сценариях)
+            'retail': results.get('retail', {}) if isinstance(results, dict) else {},
+            'wholesale': results.get('wholesale', {}) if isinstance(results, dict) else {},
         }
         
     except ET.ParseError as e:
