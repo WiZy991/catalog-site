@@ -3479,6 +3479,20 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
         # Логирование делаем через INFO и привязываем к external_id/product.id (а не к article),
         # потому что в CommerceML часто <Артикул/> пустой и проверки по article могут не сработать.
         if unique_applicability:
+            # Точечная диагностика проблемного base_id (рулевая рейка 45510-47060) — чтобы понять,
+            # почему "NHW" не вычищается в рознице.
+            try:
+                base_id_dbg = str(external_id).split('#', 1)[0] if external_id else ''
+            except Exception:
+                base_id_dbg = ''
+            if base_id_dbg == '13a33496-235b-4440-ab12-15b1eb281f06' or getattr(product, 'id', None) == 50132:
+                logger.info(
+                    "APPLICABILITY_DBG "
+                    f"(product_id={getattr(product, 'id', None)}, catalog_type={catalog_type}, "
+                    f"external_id='{external_id}', article='{article}') "
+                    f"applicability_parts={applicability_parts} unique_before={list(unique_applicability)}"
+                )
+
             before_unique_applicability = list(unique_applicability)
             ua_upper = [str(x).strip().upper() for x in unique_applicability if x and str(x).strip()]
             removed_nhw = False
@@ -3498,6 +3512,14 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
                     f"external_id='{external_id}', "
                     f"article='{article}') "
                     f"before={before_unique_applicability} after={unique_applicability}"
+                )
+
+            if base_id_dbg == '13a33496-235b-4440-ab12-15b1eb281f06' or getattr(product, 'id', None) == 50132:
+                logger.info(
+                    "APPLICABILITY_DBG "
+                    f"(product_id={getattr(product, 'id', None)}, catalog_type={catalog_type}, "
+                    f"external_id='{external_id}', article='{article}') "
+                    f"ua_upper={ua_upper} removed_nhw={removed_nhw} unique_after={list(unique_applicability)}"
                 )
         
         # ВАЖНО: Всегда обновляем применимость из данных 1С, даже если она пустая
