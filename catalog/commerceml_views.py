@@ -2994,11 +2994,45 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
         # Артикул более стабилен и не меняется при обновлении товара в 1С
         if article and article.strip():
             article = article.strip()  # Нормализуем артикул
-            product = Product.objects.filter(article=article, catalog_type=catalog_type).first()
-            # Если не нашли в нужном типе каталога, ищем в любом каталоге
-            if not product:
-                product = Product.objects.filter(article=article).first()
-            if product:
+            # ВАЖНО: В базе могут быть ДУБЛИКАТЫ по артикулу в одном и том же каталоге.
+            # Тогда .first() даёт случайный товар → обновляется "не тот", а на сайте открывается другой по slug.
+            # Поэтому:
+            # - выбираем "правильный" товар (предпочтительно по external_id из 1С)
+            # - удаляем остальные дубликаты в этом catalog_type
+            candidates = list(Product.objects.filter(article=article, catalog_type=catalog_type))
+            if not candidates:
+                # Если не нашли в нужном типе каталога, ищем в любом каталоге (редкий fallback)
+                candidates = list(Product.objects.filter(article=article))
+            if candidates:
+                # Выбор целевого товара
+                product = None
+                if external_id:
+                    ext = external_id.strip()
+                    for p in candidates:
+                        if p.external_id == ext or (p.external_id and p.external_id.startswith(ext + '#')):
+                            product = p
+                            break
+                if not product:
+                    # fallback: берём самый "свежий" по updated_at/id
+                    product = sorted(
+                        candidates,
+                        key=lambda p: (getattr(p, 'updated_at', None) is not None, getattr(p, 'updated_at', None) or 0, p.id),
+                        reverse=True
+                    )[0]
+                
+                # Удаляем остальные дубликаты в этом каталоге (чтобы дальше обновлялся один товар)
+                duplicates = [p for p in candidates if p.id != product.id and p.catalog_type == catalog_type]
+                if duplicates:
+                    logger.warning(
+                        f"⚠ Найдены дубликаты по артикулу {article} (catalog_type={catalog_type}): "
+                        f"оставляем id={product.id}, удаляем {len(duplicates)} шт: {[p.id for p in duplicates][:10]}"
+                    )
+                    for dup in duplicates:
+                        try:
+                            dup.delete()
+                        except Exception as e:
+                            logger.error(f"Не удалось удалить дубликат товара id={dup.id}: {e}", exc_info=True)
+                
                 if process_product_from_commerceml._log_count <= 3:
                     logger.info(f"✓ Товар найден по артикулу {article}: {product.name[:50]}")
                     logger.info(f"  Текущие данные товара:")
