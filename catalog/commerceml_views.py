@@ -883,12 +883,13 @@ def process_commerceml_file(file_path, filename, request=None):
         
         # ВАЖНО: Собираем все варианты товаров, но для товаров с одинаковым базовым Ид
         # используем данные из ПОСЛЕДНЕГО варианта (это измененные данные из 1С)
+        # Все товары имеют Ид, поэтому группируем только по базовому Ид
         products_by_base_id = {}  # Словарь: базовый_Ид -> последние данные товара
         
         for idx, product_elem in enumerate(products_elements):
             product_data = parse_commerceml_product(product_elem, namespaces, root, groups_cache=groups_cache)
             if product_data:
-                # Определяем базовый Ид товара
+                # Определяем базовый Ид товара (все товары имеют Ид)
                 external_id = product_data.get('external_id') or product_data.get('sku', '')
                 if external_id:
                     external_id = external_id.strip()
@@ -908,8 +909,10 @@ def process_commerceml_file(file_path, filename, request=None):
                     else:
                         products_by_base_id[base_id] = product_data
                 else:
-                    # Если нет Ид, добавляем товар как есть (будет обработан по артикулу)
+                    # Если по какой-то причине Ид отсутствует, добавляем товар как есть
+                    # (но по словам пользователя таких товаров нет)
                     products_data.append(product_data)
+                    logger.warning(f"Товар #{idx+1}: отсутствует Ид, добавлен как есть")
                 
                 if idx < 3:  # Логируем первые 3 товара для отладки
                     logger.info(f"Товар #{idx+1}: sku={product_data.get('sku')}, name={product_data.get('name')[:50] if product_data.get('name') else 'N/A'}")
