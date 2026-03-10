@@ -3445,17 +3445,30 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
 
         # ВАЖНО: финальная очистка применимости от "NHW" (без цифр), если рядом есть более точный код (с цифрами)
         # Это покрывает случаи, когда NHW попадает из parse_product_name или других источников.
+        #
+        # Логирование делаем через INFO и привязываем к external_id/product.id (а не к article),
+        # потому что в CommerceML часто <Артикул/> пустой и проверки по article могут не сработать.
         if unique_applicability:
-            # Диагностика для проблемных товаров (временно): логируем применимость до/после чистки
-            if (article == '45510-47060') and (process_product_from_commerceml._log_count <= 20):
-                logger.info(f"[DEBUG] applicability before cleanup (article=45510-47060): {unique_applicability}")
+            before_unique_applicability = list(unique_applicability)
             ua_upper = [str(x).strip().upper() for x in unique_applicability if x and str(x).strip()]
+            removed_nhw = False
             if 'NHW' in ua_upper:
                 has_specific = any(re.match(r'^[A-Z]{2,6}\d{1,4}[A-Z0-9]{0,3}$', s) for s in ua_upper)
                 if has_specific:
                     unique_applicability = [x for x in unique_applicability if str(x).strip().upper() != 'NHW']
-            if (article == '45510-47060') and (process_product_from_commerceml._log_count <= 20):
-                logger.info(f"[DEBUG] applicability after cleanup (article=45510-47060): {unique_applicability}")
+                    removed_nhw = True
+
+            # Пишем лог только если NHW присутствует/удалён — чтобы не раздувать лог на каждом товаре.
+            after_upper = [str(x).strip().upper() for x in unique_applicability if x and str(x).strip()]
+            if removed_nhw or ('NHW' in after_upper) or ('NHW' in ua_upper):
+                logger.info(
+                    "APPLICABILITY_CLEANUP "
+                    f"(product_id={getattr(product, 'id', None)}, "
+                    f"catalog_type={catalog_type}, "
+                    f"external_id='{external_id}', "
+                    f"article='{article}') "
+                    f"before={before_unique_applicability} after={unique_applicability}"
+                )
         
         # ВАЖНО: Всегда обновляем применимость из данных 1С, даже если она пустая
         # Это позволяет синхронизировать изменения применимости из 1С
