@@ -978,7 +978,7 @@ def process_commerceml_file(file_path, filename, request=None):
             logger.info("=" * 80)
             logger.info(f"ОБРАБОТКА ДЛЯ КАТАЛОГА: {current_catalog_type.upper()}")
             logger.info("=" * 80)
-            
+
             # ВАЖНО: Сбрасываем счетчики для каждого каталога
             # Иначе данные из retail будут смешиваться с данными из wholesale
             processed_count = 0
@@ -987,71 +987,101 @@ def process_commerceml_file(file_path, filename, request=None):
             errors = []
             # ВАЖНО: Собираем external_id только из успешно обработанных товаров для текущего типа каталога
             processed_external_ids = set()
-            
-            logger.info(f"Начало обработки {len(products_data)} товаров для каталога {current_catalog_type} (оптимизированная обработка)")
-        
-        # ВАЖНО: Обрабатываем товары батчами для производительности
-        # Но все равно в отдельных транзакциях для надежности
-        batch_size = 100  # Обрабатываем по 100 товаров за раз
-        for batch_start in range(0, len(products_data), batch_size):
-            batch_end = min(batch_start + batch_size, len(products_data))
-            batch = products_data[batch_start:batch_end]
-            logger.info(f"Обработка батча {batch_start+1}-{batch_end} из {len(products_data)} товаров для {current_catalog_type}")
-            
-            for idx, product_data in enumerate(batch):
-                # Каждый товар обрабатывается в отдельной транзакции
-                # Это гарантирует, что ошибка одного товара не повлияет на обработку остальных
-                try:
-                    with transaction.atomic():
-                        # Логируем данные товара перед обработкой (для первых 3)
-                        if idx < 3:
-                            logger.info(f"Обработка товара #{idx+1} для {current_catalog_type}: sku={product_data.get('sku')}, name={product_data.get('name')[:50] if product_data.get('name') else 'N/A'}")
-                        
-                        product, error, was_created = process_product_from_commerceml(product_data, catalog_type=current_catalog_type)
-                        if product:
-                            processed_count += 1
-                            # ВАЖНО: Добавляем external_id только если товар успешно обработан для текущего типа каталога
-                            external_id = product.external_id or product_data.get('external_id') or product_data.get('sku')
-                            if external_id:
-                                processed_external_ids.add(str(external_id).strip())
-                                
-                            if was_created:
-                                created_count += 1
-                                logger.info(f"✓ Создан товар в каталоге {current_catalog_type}: {product.article} - {product.name[:50]}")
-                            else:
-                                updated_count += 1
-                                if idx < 10:  # Логируем первые 10 обновлений
-                                    logger.info(f"✓ Обновлен товар в каталоге {current_catalog_type}: {product.article} - {product.name[:50]}")
-                        elif error:
-                            # Ошибка внутри process_product_from_commerceml
-                            error_info = {
-                                'sku': product_data.get('sku', 'unknown'),
-                                'catalog_type': current_catalog_type,
-                                'error': error
-                            }
-                            errors.append(error_info)
-                            logger.warning(f"✗ Ошибка обработки товара {product_data.get('sku', 'unknown')} для {current_catalog_type}: {error}")
-                            # Выводим данные товара при ошибке (только для первых 5)
-                            if idx < 5:
-                                logger.warning(f"  Данные товара: {product_data}")
-                except Exception as e:
-                    # Исключение при обработке товара - транзакция автоматически откатывается
-                    error_msg = str(e)
-                    logger.error(f"✗ Исключение при обработке товара {product_data.get('sku', 'unknown')} для {current_catalog_type}: {error_msg}", exc_info=True)
-                    errors.append({
-                        'sku': product_data.get('sku', 'unknown'),
-                        'catalog_type': current_catalog_type,
-                        'error': error_msg
-                    })
-                    # Выводим данные товара при ошибке (только для первых 5)
-                    if idx < 5:
-                        logger.warning(f"  Данные товара: {product_data}")
-                    # Транзакция автоматически откатывается при исключении
-                    # Продолжаем обработку следующего товара
-        
-            logger.info(f"Обработка для {current_catalog_type} завершена: обработано={processed_count}, создано={created_count}, обновлено={updated_count}, ошибок={len(errors)}")
-            logger.info(f"Обработано товаров в обмене: {len(processed_external_ids)} с external_id для каталога {current_catalog_type}")
-            
+
+            logger.info(
+                f"Начало обработки {len(products_data)} товаров для каталога {current_catalog_type} "
+                f"(оптимизированная обработка)"
+            )
+
+            # ВАЖНО: Обрабатываем товары батчами для производительности
+            # Но все равно в отдельных транзакциях для надежности
+            batch_size = 100  # Обрабатываем по 100 товаров за раз
+            for batch_start in range(0, len(products_data), batch_size):
+                batch_end = min(batch_start + batch_size, len(products_data))
+                batch = products_data[batch_start:batch_end]
+                logger.info(
+                    f"Обработка батча {batch_start+1}-{batch_end} из {len(products_data)} товаров для {current_catalog_type}"
+                )
+
+                for idx, product_data in enumerate(batch):
+                    # Каждый товар обрабатывается в отдельной транзакции
+                    # Это гарантирует, что ошибка одного товара не повлияет на обработку остальных
+                    try:
+                        with transaction.atomic():
+                            # Логируем данные товара перед обработкой (для первых 3)
+                            if idx < 3:
+                                logger.info(
+                                    f"Обработка товара #{idx+1} для {current_catalog_type}: "
+                                    f"sku={product_data.get('sku')}, "
+                                    f"name={product_data.get('name')[:50] if product_data.get('name') else 'N/A'}"
+                                )
+
+                            product, error, was_created = process_product_from_commerceml(
+                                product_data, catalog_type=current_catalog_type
+                            )
+                            if product:
+                                processed_count += 1
+                                # ВАЖНО: Добавляем external_id только если товар успешно обработан для текущего типа каталога
+                                external_id = product.external_id or product_data.get('external_id') or product_data.get('sku')
+                                if external_id:
+                                    processed_external_ids.add(str(external_id).strip())
+
+                                if was_created:
+                                    created_count += 1
+                                    logger.info(
+                                        f"✓ Создан товар в каталоге {current_catalog_type}: "
+                                        f"{product.article} - {product.name[:50]}"
+                                    )
+                                else:
+                                    updated_count += 1
+                                    if idx < 10:  # Логируем первые 10 обновлений
+                                        logger.info(
+                                            f"✓ Обновлен товар в каталоге {current_catalog_type}: "
+                                            f"{product.article} - {product.name[:50]}"
+                                        )
+                            elif error:
+                                # Ошибка внутри process_product_from_commerceml
+                                error_info = {
+                                    'sku': product_data.get('sku', 'unknown'),
+                                    'catalog_type': current_catalog_type,
+                                    'error': error
+                                }
+                                errors.append(error_info)
+                                logger.warning(
+                                    f"✗ Ошибка обработки товара {product_data.get('sku', 'unknown')} "
+                                    f"для {current_catalog_type}: {error}"
+                                )
+                                # Выводим данные товара при ошибке (только для первых 5)
+                                if idx < 5:
+                                    logger.warning(f"  Данные товара: {product_data}")
+                    except Exception as e:
+                        # Исключение при обработке товара - транзакция автоматически откатывается
+                        error_msg = str(e)
+                        logger.error(
+                            f"✗ Исключение при обработке товара {product_data.get('sku', 'unknown')} "
+                            f"для {current_catalog_type}: {error_msg}",
+                            exc_info=True
+                        )
+                        errors.append({
+                            'sku': product_data.get('sku', 'unknown'),
+                            'catalog_type': current_catalog_type,
+                            'error': error_msg
+                        })
+                        # Выводим данные товара при ошибке (только для первых 5)
+                        if idx < 5:
+                            logger.warning(f"  Данные товара: {product_data}")
+                        # Транзакция автоматически откатывается при исключении
+                        # Продолжаем обработку следующего товара
+
+            logger.info(
+                f"Обработка для {current_catalog_type} завершена: обработано={processed_count}, "
+                f"создано={created_count}, обновлено={updated_count}, ошибок={len(errors)}"
+            )
+            logger.info(
+                f"Обработано товаров в обмене: {len(processed_external_ids)} с external_id "
+                f"для каталога {current_catalog_type}"
+            )
+
             # Сохраняем результаты для текущего каталога
             results[current_catalog_type] = {
                 'processed': processed_count,
@@ -1061,7 +1091,7 @@ def process_commerceml_file(file_path, filename, request=None):
                 'errors': errors.copy(),  # Копируем список ошибок
                 'processed_external_ids': processed_external_ids.copy()  # Сохраняем для скрытия товаров
             }
-            
+
             # Суммируем общие результаты
             total_processed += processed_count
             total_created += created_count
