@@ -1765,7 +1765,7 @@ def parse_commerceml_product(product_elem, namespaces, root_elem=None, groups_ca
                 # Если Наименование не найдено, используем Ид как fallback (для совместимости)
                 if prop_name_elem is None:
                     prop_id_elem = None
-                if namespace:
+                    if namespace:
                         prop_id_elem = prop_elem.find(f'{{{namespace}}}Ид')
                     if prop_id_elem is None:
                         prop_id_elem = prop_elem.find('Ид')
