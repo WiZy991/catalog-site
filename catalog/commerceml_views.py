@@ -2816,6 +2816,17 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
         if not name:
             return None, "Отсутствует название товара", False
         
+        # Парсим название для извлечения бренда, артикула и т.д.
+        # ВАЖНО: Делаем это ДО проверки на наличие идентификатора, чтобы извлечь артикул из названия
+        parsed = parse_product_name(name)
+        
+        # Используем артикул из данных или из парсинга
+        # ВАЖНО: external_id НЕ должен использоваться как артикул!
+        # Артикул должен быть только из поля "Артикул" в XML, "Артикул1" в характеристиках или из парсинга названия
+        if not article and parsed.get('article'):
+            article = parsed['article']
+        
+        # Проверяем наличие идентификатора (external_id или article)
         if not external_id and not article:
             return None, "Отсутствует идентификатор товара (Ид или Артикул)", False
         
@@ -2827,15 +2838,6 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
         
         if process_product_from_commerceml._log_count <= 3:
             logger.info(f"Обработка товара: external_id={external_id}, article={article}, name={name[:50]}")
-        
-        # Парсим название для извлечения бренда, артикула и т.д.
-        parsed = parse_product_name(name)
-        
-        # Используем артикул из данных или из парсинга
-        # ВАЖНО: external_id НЕ должен использоваться как артикул!
-        # Артикул должен быть только из поля "Артикул" в XML, "Артикул1" в характеристиках или из парсинга названия
-        if not article and parsed.get('article'):
-            article = parsed['article']
         
         # Определяем бренд - всегда строка, не None
         # Сначала берем из XML, потом из парсинга названия, потом пытаемся определить из названия напрямую
@@ -2961,42 +2963,68 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
             # ВАЖНО: Создаем товар активным по умолчанию (цены/количество придут из offers.xml)
             is_active = True  # Всегда активен при создании из import.xml
         
-        # Ищем товар по external_id (приоритет) или по артикулу в нужном типе каталога
+        # Ищем товар по external_id или по артикулу в нужном типе каталога
+        # ВАЖНО: 1С может давать новое Ид одному и тому же товару, поэтому поиск по артикулу имеет приоритет
         # ВАЖНО: В CommerceML 2.0 товар с вариантами характеристик имеет составной Ид вида "uuid#characteristic_id"
         # Мы извлекаем базовый Ид (до #) и используем его для поиска товара
         # Это позволяет обновлять один товар при наличии нескольких вариантов характеристик
         product = None
-        if external_id:
-            # Если есть external_id (базовый Ид), ищем по нему
-            product = Product.objects.filter(external_id=external_id, catalog_type=catalog_type).first()
-            # Если не нашли в нужном типе каталога, ищем в любом каталоге
-            if not product:
-                product = Product.objects.filter(external_id=external_id).first()
-            
-            # ВАЖНО: Если товар не найден по external_id, но есть артикул,
-            # ищем по артикулу - возможно, это тот же товар, но без external_id
-            # Это позволяет связать варианты товара с одинаковым артикулом
-            if not product and article:
-                product = Product.objects.filter(article=article, catalog_type=catalog_type).first()
-                # Если не нашли в нужном типе каталога, ищем в любом каталоге
-                if not product:
-                    product = Product.objects.filter(article=article).first()
-                # Если нашли товар по артикулу, но у него нет external_id,
-                # обновим external_id - это свяжет варианты товара
-                if product and not product.external_id:
-                    # Логируем для диагностики (только первые 3 товара)
-                    if process_product_from_commerceml._log_count <= 3:
-                        logger.info(f"Найден товар по артикулу {article}, устанавливаем external_id={external_id}")
-                    product.external_id = external_id
-                    # ВАЖНО: Сохраняем товар сразу, чтобы следующий вариант мог его найти по external_id
-                    product.save(update_fields=['external_id'])
+        from django.db.models import Q
         
-        # Если external_id нет, ищем по артикулу
-        if not product and article:
+        # ВАЖНО: Сначала ищем по артикулу (если он есть), так как 1С может давать новое Ид одному и тому же товару
+        # Артикул более стабилен и не меняется при обновлении товара в 1С
+        if article and article.strip():
+            article = article.strip()  # Нормализуем артикул
             product = Product.objects.filter(article=article, catalog_type=catalog_type).first()
             # Если не нашли в нужном типе каталога, ищем в любом каталоге
             if not product:
                 product = Product.objects.filter(article=article).first()
+            if product:
+                if process_product_from_commerceml._log_count <= 3:
+                    logger.info(f"✓ Товар найден по артикулу {article}: {product.name[:50]}")
+                # ВАЖНО: Если нашли товар по артикулу, обновляем external_id на новый из 1С
+                # Это позволяет связать товар с новым Ид из 1С
+                if external_id and external_id.strip():
+                    old_external_id = product.external_id
+                    product.external_id = external_id.strip()
+                    product.save(update_fields=['external_id'])
+                    if process_product_from_commerceml._log_count <= 3 and old_external_id != external_id:
+                        logger.info(f"  Обновлен external_id с {old_external_id} на {external_id}")
+        
+        # Если не нашли по артикулу, ищем по external_id
+        if not product and external_id:
+            # ВАЖНО: Ищем товары, у которых external_id начинается с базового Ид
+            # Это позволяет найти товары, созданные с составным Ид (например, "base_id#variant_id")
+            # или с базовым Ид (например, "base_id")
+            # Используем Q объекты для более гибкого поиска
+            
+            # Ищем товары, у которых external_id точно равен базовому Ид
+            # ИЛИ external_id начинается с базового Ид и содержит #
+            # Это покрывает оба случая: товары с базовым Ид и товары с составным Ид
+            product = Product.objects.filter(
+                Q(external_id=external_id) | Q(external_id__startswith=external_id + '#'),
+                catalog_type=catalog_type
+            ).first()
+            
+            # Если не нашли в нужном типе каталога, ищем в любом каталоге
+            if not product:
+                product = Product.objects.filter(
+                    Q(external_id=external_id) | Q(external_id__startswith=external_id + '#')
+                ).first()
+            
+            # Если нашли товар с составным Ид, обновляем external_id на базовый Ид для единообразия
+            if product and product.external_id and '#' in product.external_id:
+                if process_product_from_commerceml._log_count <= 3:
+                    logger.info(f"✓ Найден товар с составным Ид {product.external_id}, обновляем на базовый Ид {external_id}")
+                product.external_id = external_id
+                product.save(update_fields=['external_id'])
+            
+            # Логируем результат поиска для диагностики
+            if process_product_from_commerceml._log_count <= 3:
+                if product:
+                    logger.info(f"✓ Товар найден по external_id={external_id}: {product.article} - {product.name[:50]}")
+                else:
+                    logger.info(f"⚠ Товар не найден по external_id={external_id}, будет создан новый")
         
         was_created = product is None
         
@@ -3037,22 +3065,25 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
             # ВАЖНО: Всегда обновляем external_id из данных 1С
             if external_id and external_id.strip():
                 product.external_id = external_id.strip()
-            # ВАЖНО: Всегда обновляем артикул из данных 1С, даже если он уже был установлен
-            # Это позволяет синхронизировать изменения артикула из 1С
+            # ВАЖНО: Всегда обновляем артикул из данных 1С, даже если он пустой
+            # Это позволяет синхронизировать изменения артикула из 1С (включая удаление)
             if article:
                 product.article = article
-            elif product_data.get('article'):
+            elif 'article' in product_data:
+                # Если артикул явно указан в данных (даже если пустой), обновляем его
                 product.article = product_data.get('article', '').strip()
+            # Если артикул не указан в данных, оставляем существующий (не удаляем)
             # ВАЖНО: Всегда обновляем название товара из 1С, даже если оно уже было установлено
             # Это позволяет синхронизировать изменения названий из 1С
             # Обновляем название ВСЕГДА из данных 1С, чтобы синхронизировать изменения
+            # Приоритет: clean_name > name > product_data['name']
             if clean_name:
                 product.name = clean_name
             elif name:  # Если clean_name пустое, но name есть, используем name
                 product.name = name.strip()
-            # Если и clean_name и name пустые, но product_data['name'] есть, используем его
-            elif product_data.get('name'):
+            elif product_data.get('name'):  # Если и clean_name и name пустые, но product_data['name'] есть, используем его
                 product.name = product_data.get('name', '').strip()
+            # ВАЖНО: Если название не указано в данных, оставляем существующее (не удаляем)
             product.brand = brand or ''  # Всегда строка, не None
             # Обновляем цену только если она указана (не 0)
             # Это позволяет сохранить цену из offers.xml, если она уже была установлена
