@@ -3791,9 +3791,30 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
             # удаляем "NHW". Это защищает от любых путей, где NHW мог проскочить.
             if product.applicability:
                 try:
-                    _tokens = [t.strip() for t in str(product.applicability).split(',') if t and str(t).strip()]
+                    import re as _re
+                    _base_id_dbg = ''
+                    try:
+                        _base_id_dbg = str(external_id).split('#', 1)[0] if external_id else ''
+                    except Exception:
+                        _base_id_dbg = ''
+
+                    # Разделители в применимости могут быть разными: ",", ";", " , " и т.п.
+                    _raw = str(product.applicability)
+                    _tokens = [t.strip() for t in _re.split(r'[;,]', _raw) if t and str(t).strip()]
                     _upper = [t.upper() for t in _tokens]
-                    if 'NHW' in _upper and any(any(ch.isdigit() for ch in tok) for tok in _upper if tok != 'NHW'):
+                    _has_nhw = any(tok == 'NHW' for tok in _upper)
+                    _has_specific_digits = any(any(ch.isdigit() for ch in tok) for tok in _upper if tok != 'NHW')
+
+                    # Для проблемной рейки (base_id) логируем состояние перед финальной чисткой.
+                    if _base_id_dbg == '13a33496-235b-4440-ab12-15b1eb281f06' or getattr(product, 'id', None) == 50132:
+                        logger.info(
+                            "APPLICABILITY_FINAL_DBG "
+                            f"(product_id={getattr(product, 'id', None)}, catalog_type={catalog_type}, "
+                            f"external_id='{external_id}', article='{article}') "
+                            f"raw='{_raw}' tokens={_tokens} has_nhw={_has_nhw} has_digits={_has_specific_digits}"
+                        )
+
+                    if _has_nhw and _has_specific_digits:
                         _new_tokens = [t for t in _tokens if t.strip().upper() != 'NHW']
                         if _new_tokens != _tokens:
                             old_app = product.applicability
