@@ -1579,20 +1579,23 @@ def parse_commerceml_product(product_elem, namespaces, root_elem=None, groups_ca
                     elif char_name_lower in ['марка', 'brand', 'бренд']:
                         product_data['brand'] = char_value
                     
-                    # Двигатель → applicability (применимость) и engine (для раздела "Применимость")
+                    # Двигатель → engine (для раздела "Применимость")
+                    # ВАЖНО: Не добавляем в applicability здесь, чтобы избежать дублирования
+                    # applicability будет заполнено из engine при сохранении товара
                     elif char_name_lower in ['двигатель', 'engine', 'мотор']:
-                        if 'applicability' not in product_data:
-                            product_data['applicability'] = []
-                        product_data['applicability'].append(char_value)
                         if 'engine' not in product_data:
                             product_data['engine'] = []
-                        product_data['engine'].append(char_value)
+                        if char_value not in product_data['engine']:
+                            product_data['engine'].append(char_value)
                     
                     # Кузов → body (для раздела "Применимость"/описание)
+                    # ВАЖНО: Не добавляем в applicability здесь, чтобы избежать дублирования
+                    # applicability будет заполнено из body при сохранении товара
                     elif char_name_lower in ['кузов', 'body', 'тип кузова']:
                         if 'body' not in product_data:
                             product_data['body'] = []
-                        product_data['body'].append(char_value)
+                        if char_value not in product_data['body']:
+                            product_data['body'].append(char_value)
                     
                     # Размер → всегда в характеристики (без фильтрации)
                     elif 'размер' in char_name_lower or 'size' in char_name_lower:
@@ -1600,6 +1603,30 @@ def parse_commerceml_product(product_elem, namespaces, root_elem=None, groups_ca
                             'name': char_name,
                             'value': char_value
                         })
+                    
+                    # Проверяем, является ли значение размером (например, 128*410 мм, 20*450, 260*170*10*29)
+                    # ВАЖНО: Размеры могут быть в любых характеристиках, не только в поле "Размер"
+                    elif re.search(r'\d+(?:\*|x)\d+(?:(?:\*|x)\d+)*(?:\s*(?:мм|см|м|mm|cm|m))?', char_value, re.IGNORECASE):
+                        # Это размер - добавляем в характеристики как "Размер"
+                        # Ищем существующий Размер в characteristics и заменяем его
+                        size_found = False
+                        for i, char in enumerate(characteristics):
+                            if isinstance(char, dict) and ('размер' in char.get('name', '').lower() or 'size' in char.get('name', '').lower()):
+                                # Объединяем значения, если размер уже есть
+                                existing_value = char.get('value', '')
+                                if char_value not in existing_value:
+                                    characteristics[i] = {
+                                        'name': 'Размер',
+                                        'value': f"{existing_value}, {char_value}" if existing_value else char_value
+                                    }
+                                size_found = True
+                                break
+                        # Если не нашли, добавляем новый
+                        if not size_found:
+                            characteristics.append({
+                                'name': 'Размер',
+                                'value': char_value
+                            })
                     
                     # Все остальные характеристики добавляем в список
                     # ВАЖНО: Фильтруем неправильные значения (коды моделей, материалы и т.д.)
@@ -1626,68 +1653,204 @@ def parse_commerceml_product(product_elem, namespaces, root_elem=None, groups_ca
                         })
     
     # Вариант 2: ЗначенияСвойств (старый формат)
-    if not characteristics:
-        props_elem = None
+    # ВАЖНО: Обрабатываем ЗначенияСвойств всегда, даже если есть ХарактеристикиТовара,
+    # так как в XML могут быть оба варианта одновременно
+    props_elem = None
+    if namespace:
+        props_elem = product_elem.find(f'{{{namespace}}}ЗначенияСвойств')
+    if props_elem is None:
+        props_elem = product_elem.find('ЗначенияСвойств')
+    # Пробуем с префиксом catalog: только если он определен
+    if props_elem is None and 'catalog' in namespaces:
+        try:
+            props_elem = product_elem.find('catalog:ЗначенияСвойств', namespaces)
+        except (KeyError, ValueError):
+            pass
+    
+    if props_elem is not None:
+        prop_items = []
         if namespace:
-            props_elem = product_elem.find(f'{{{namespace}}}ЗначенияСвойств')
-        if props_elem is None:
-            props_elem = product_elem.find('ЗначенияСвойств')
+            prop_items = props_elem.findall(f'{{{namespace}}}ЗначенияСвойства')
+        if not prop_items:
+            prop_items = props_elem.findall('ЗначенияСвойства')
         # Пробуем с префиксом catalog: только если он определен
-        if props_elem is None and 'catalog' in namespaces:
+        if not prop_items and 'catalog' in namespaces:
             try:
-                props_elem = product_elem.find('catalog:ЗначенияСвойств', namespaces)
+                prop_items = props_elem.findall('catalog:ЗначенияСвойства', namespaces)
             except (KeyError, ValueError):
                 pass
         
-        if props_elem is not None:
-            prop_items = []
-            if namespace:
-                prop_items = props_elem.findall(f'{{{namespace}}}ЗначенияСвойства')
-            if not prop_items:
-                prop_items = props_elem.findall('ЗначенияСвойства')
-            # Пробуем с префиксом catalog: только если он определен
-            if not prop_items and 'catalog' in namespaces:
-                try:
-                    prop_items = props_elem.findall('catalog:ЗначенияСвойства', namespaces)
-                except (KeyError, ValueError):
-                    pass
-            
+        if prop_items:
+            # ВАЖНО: Обрабатываем ЗначенияСвойств всегда для специальных полей (Артикул1, Артикул2, Двигатель, Кузов, Размер)
+            # Эти поля должны браться из ЗначенияСвойств, а не из ХарактеристикиТовара
+            # Для остальных характеристик добавляем только если characteristics пуст, чтобы избежать дублирования
             for prop_elem in prop_items:
-                prop_id = None
+                # Ищем Наименование свойства (приоритет)
+                prop_name_elem = None
                 if namespace:
-                    prop_id = prop_elem.find(f'{{{namespace}}}Ид')
-                if prop_id is None:
-                    prop_id = prop_elem.find('Ид')
+                    prop_name_elem = prop_elem.find(f'{{{namespace}}}Наименование')
+                if prop_name_elem is None:
+                    prop_name_elem = prop_elem.find('Наименование')
                 # Пробуем с префиксом catalog: только если он определен
-                if prop_id is None and 'catalog' in namespaces:
+                if prop_name_elem is None and 'catalog' in namespaces:
                     try:
-                        prop_id = prop_elem.find('catalog:Ид', namespaces)
+                        prop_name_elem = prop_elem.find('catalog:Наименование', namespaces)
                     except (KeyError, ValueError):
                         pass
                 
-                prop_value = None
+                # Если Наименование не найдено, используем Ид как fallback (для совместимости)
+                if prop_name_elem is None:
+                    prop_id_elem = None
+                    if namespace:
+                        prop_id_elem = prop_elem.find(f'{{{namespace}}}Ид')
+                    if prop_id_elem is None:
+                        prop_id_elem = prop_elem.find('Ид')
+                    if prop_id_elem is None and 'catalog' in namespaces:
+                        try:
+                            prop_id_elem = prop_elem.find('catalog:Ид', namespaces)
+                        except (KeyError, ValueError):
+                            pass
+                    if prop_id_elem is not None:
+                        prop_name_elem = prop_id_elem  # Используем Ид как fallback
+                
+                # Ищем Значение свойства
+                prop_value_elem = None
                 if namespace:
-                    prop_value = prop_elem.find(f'{{{namespace}}}Значение')
-                if prop_value is None:
-                    prop_value = prop_elem.find('Значение')
+                    prop_value_elem = prop_elem.find(f'{{{namespace}}}Значение')
+                if prop_value_elem is None:
+                    prop_value_elem = prop_elem.find('Значение')
                 # Пробуем с префиксом catalog: только если он определен
-                if prop_value is None and 'catalog' in namespaces:
+                if prop_value_elem is None and 'catalog' in namespaces:
                     try:
-                        prop_value = prop_elem.find('catalog:Значение', namespaces)
+                        prop_value_elem = prop_elem.find('catalog:Значение', namespaces)
                     except (KeyError, ValueError):
                         pass
                 
-                if prop_id is not None and prop_value is not None:
-                    # Нужно найти название свойства по Ид
-                    # Пока используем Ид как название
-                    prop_name = prop_id.text.strip() if prop_id.text else 'Свойство'
-                    prop_val = prop_value.text.strip() if prop_value.text else ''
+                if prop_name_elem is not None and prop_value_elem is not None:
+                    # Извлекаем полное имя свойства
+                    prop_name = prop_name_elem.text.strip() if prop_name_elem.text else ''
+                    # Извлекаем полное значение свойства, включая весь текст из элемента и дочерних элементов
+                    prop_value_parts = []
+                    for text in prop_value_elem.itertext():
+                        if text:
+                            prop_value_parts.append(text)
+                    prop_val = ''.join(prop_value_parts).strip() if prop_value_parts else ''
                     
                     if prop_name and prop_val:
-                        characteristics.append({
-                            'name': prop_name,
-                            'value': prop_val
-                        })
+                        prop_name_lower = prop_name.lower()
+                        
+                        # Обрабатываем служебные свойства - они не должны попадать в characteristics
+                        # Артикул1 → article (кросс-номер)
+                        if prop_name_lower in ['артикул1', 'артикул 1', 'article1', 'article 1']:
+                            if not product_data.get('article'):
+                                product_data['article'] = prop_val
+                            # Добавляем в кросс-номера, если article уже был заполнен
+                            elif product_data.get('article') != prop_val:
+                                if 'cross_numbers' not in product_data:
+                                    product_data['cross_numbers'] = []
+                                if prop_val not in product_data['cross_numbers']:
+                                    product_data['cross_numbers'].append(prop_val)
+                        
+                        # Артикул2 → cross_numbers (OEM номер)
+                        elif prop_name_lower in ['артикул2', 'артикул 2', 'article2', 'article 2', 'oem', 'oem номер']:
+                            if 'cross_numbers' not in product_data:
+                                product_data['cross_numbers'] = []
+                            if prop_val not in product_data['cross_numbers']:
+                                product_data['cross_numbers'].append(prop_val)
+                        
+                        # Марка → brand (бренд)
+                        elif prop_name_lower in ['марка', 'brand', 'бренд']:
+                            product_data['brand'] = prop_val
+                        
+                        # Двигатель → engine (для раздела "Применимость")
+                        # ВАЖНО: Не добавляем в applicability здесь, чтобы избежать дублирования
+                        # applicability будет заполнено из engine при сохранении товара
+                        elif prop_name_lower in ['двигатель', 'engine', 'мотор']:
+                            if 'engine' not in product_data:
+                                product_data['engine'] = []
+                            if prop_val not in product_data['engine']:
+                                product_data['engine'].append(prop_val)
+                        
+                        # Кузов → body (для раздела "Применимость"/описание)
+                        # ВАЖНО: Не добавляем в applicability здесь, чтобы избежать дублирования
+                        # applicability будет заполнено из body при сохранении товара
+                        elif prop_name_lower in ['кузов', 'body', 'тип кузова']:
+                            if 'body' not in product_data:
+                                product_data['body'] = []
+                            if prop_val not in product_data['body']:
+                                product_data['body'].append(prop_val)
+                        
+                        # Размер → всегда в характеристики (без фильтрации)
+                        # ВАЖНО: Приоритет у ЗначенияСвойств - если Размер уже есть в characteristics,
+                        # заменяем его значением из ЗначенияСвойств
+                        elif 'размер' in prop_name_lower or 'size' in prop_name_lower:
+                            # Ищем существующий Размер в characteristics и заменяем его
+                            size_found = False
+                            for i, char in enumerate(characteristics):
+                                if isinstance(char, dict) and ('размер' in char.get('name', '').lower() or 'size' in char.get('name', '').lower()):
+                                    characteristics[i] = {
+                                        'name': prop_name,
+                                        'value': prop_val
+                                    }
+                                    size_found = True
+                                    break
+                            # Если не нашли, добавляем новый
+                            if not size_found:
+                                characteristics.append({
+                                    'name': prop_name,
+                                    'value': prop_val
+                                })
+                        
+                        # Проверяем, является ли значение размером (например, 128*410 мм, 20*450, 260*170*10*29)
+                        # ВАЖНО: Размеры могут быть в любых характеристиках, не только в поле "Размер"
+                        elif re.search(r'\d+(?:\*|x)\d+(?:(?:\*|x)\d+)*(?:\s*(?:мм|см|м|mm|cm|m))?', prop_val, re.IGNORECASE):
+                            # Это размер - добавляем в характеристики как "Размер"
+                            # Ищем существующий Размер в characteristics и заменяем его
+                            size_found = False
+                            for i, char in enumerate(characteristics):
+                                if isinstance(char, dict) and ('размер' in char.get('name', '').lower() or 'size' in char.get('name', '').lower()):
+                                    # Объединяем значения, если размер уже есть
+                                    existing_value = char.get('value', '')
+                                    if prop_val not in existing_value:
+                                        characteristics[i] = {
+                                            'name': 'Размер',
+                                            'value': f"{existing_value}, {prop_val}" if existing_value else prop_val
+                                        }
+                                    size_found = True
+                                    break
+                            # Если не нашли, добавляем новый
+                            if not size_found:
+                                characteristics.append({
+                                    'name': 'Размер',
+                                    'value': prop_val
+                                })
+                        
+                        # Все остальные свойства добавляем в список
+                        # ВАЖНО: Фильтруем неправильные значения (коды моделей, материалы и т.д.)
+                        # ВАЖНО: Добавляем обычные характеристики только если characteristics пуст,
+                        # чтобы избежать дублирования с ХарактеристикиТовара
+                        else:
+                            # Добавляем только если characteristics пуст (нет ХарактеристикиТовара)
+                            if not characteristics:
+                                # Исключаем материалы
+                                excluded_materials = ['прокладка', 'gasket', 'паронит', 'paronit', 'материал', 'material']
+                                
+                                # Пропускаем материалы
+                                if any(material in prop_name_lower for material in excluded_materials):
+                                    continue
+                                
+                                # Проверяем, что значение не является кодом модели/применимости
+                                # Коды моделей обычно: 1-4 цифры + буквы (например, 1GEN, 1NZF, 2GR, 4AFE)
+                                # Или только буквы+цифры без * или x
+                                prop_val_upper = prop_val.upper()
+                                if re.match(r'^[A-Z0-9#\-/]{1,10}$', prop_val_upper) and not re.search(r'[*x]', prop_val):
+                                    # Это похоже на код модели, а не на характеристику - пропускаем
+                                    continue
+                                
+                                characteristics.append({
+                                    'name': prop_name,
+                                    'value': prop_val
+                                })
     
     if characteristics:
         product_data['characteristics'] = characteristics
