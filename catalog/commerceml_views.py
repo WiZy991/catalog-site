@@ -913,10 +913,16 @@ def process_commerceml_file(file_path, filename, request=None):
 
                     key = (base_id, article_norm)
 
-                    # ВАЖНО: Обновляем external_id в product_data на базовый Ид
-                    # Это гарантирует, что при обработке будет использоваться базовый Ид
-                    product_data['external_id'] = base_id
-                    product_data['sku'] = base_id
+                    # ВАЖНО: НЕ затираем внешний Ид до base_id.
+                    # В реальной выгрузке 1С встречаются кейсы, когда один и тот же base_id используется
+                    # для разных артикулов — если принудительно заменить external_id на base_id,
+                    # то разные товары начнут конфликтовать по unique_together (external_id, catalog_type),
+                    # и мы можем случайно удалить/потерять товар (как произошло с id=50132).
+                    #
+                    # Вместо этого:
+                    # - сохраняем base_id отдельно (для группировки/поиска)
+                    # - external_id оставляем полным (base_id#характеристика) как пришло из XML
+                    product_data['base_id'] = base_id
                     
                     # ВАЖНО: Если товар с таким ключом уже встречался,
                     # заменяем его данными на последний вариант (измененные данные из 1С)
@@ -1437,9 +1443,9 @@ def parse_commerceml_product(product_elem, namespaces, root_elem=None, groups_ca
         # Это позволяет обновлять один товар при наличии нескольких вариантов характеристик
         if '#' in full_id:
             base_id = full_id.split('#')[0]
-            product_data['sku'] = base_id
-            product_data['external_id'] = base_id
-            product_data['full_external_id'] = full_id  # Сохраняем полный Ид для справки
+            product_data['base_id'] = base_id
+            product_data['external_id'] = full_id
+            product_data['sku'] = full_id
             # Логируем для диагностики (только первые 3 товара)
             if not hasattr(parse_commerceml_product, '_log_count'):
                 parse_commerceml_product._log_count = 0
@@ -1463,9 +1469,9 @@ def parse_commerceml_product(product_elem, namespaces, root_elem=None, groups_ca
             # Извлекаем основной Ид товара (до символа #)
             if '#' in full_id:
                 base_id = full_id.split('#')[0]
-                product_data['sku'] = base_id
-                product_data['external_id'] = base_id
-                product_data['full_external_id'] = full_id  # Сохраняем полный Ид для справки
+                product_data['base_id'] = base_id
+                product_data['external_id'] = full_id
+                product_data['sku'] = full_id
                 # Логируем для диагностики
                 if not hasattr(parse_commerceml_product, '_log_count'):
                     parse_commerceml_product._log_count = 0
@@ -2859,19 +2865,17 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
     
     try:
         # Получаем основные данные
-        external_id = product_data.get('external_id') or product_data.get('sku', '')
-        # Убираем пробелы и проверяем, что external_id не пустой
-        if external_id:
-            external_id = external_id.strip()
-            # ВАЖНО: Если external_id составной (содержит #), извлекаем базовый Ид
-            # Это уже должно быть сделано в parse_commerceml_product, но проверяем на всякий случай
-            # В CommerceML 2.0 товар с вариантами характеристик имеет составной Ид вида "uuid#characteristic_id"
-            # Например: "13a33496-235b-4440-ab12-15b1eb281f06#4f02ca3d-c696-11f0-811a-00155d01d802"
-            # Нужно использовать только базовый Ид (до #) для поиска и обновления товара
-            if '#' in external_id:
-                external_id = external_id.split('#')[0]
-        if not external_id:
-            external_id = None  # Используем None вместо пустой строки
+        # ВАЖНО: хранить в БД нужно ПОЛНЫЙ external_id (base_id#характеристика), иначе разные товары
+        # могут конфликтовать, если 1С по ошибке переиспользует base_id для разных артикулов.
+        full_external_id = (product_data.get('external_id') or product_data.get('sku') or '').strip()
+        if not full_external_id:
+            full_external_id = None
+
+        base_id = (product_data.get('base_id') or '').strip()
+        if not base_id and full_external_id:
+            base_id = full_external_id.split('#', 1)[0] if '#' in full_external_id else full_external_id
+
+        external_id = full_external_id
         
         name = product_data.get('name', '').strip()
         article = product_data.get('article', '').strip()
@@ -2900,7 +2904,7 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
             process_product_from_commerceml._log_count = 1
         
         if process_product_from_commerceml._log_count <= 3:
-            logger.info(f"Обработка товара: external_id={external_id}, article={article}, name={name[:50]}")
+            logger.info(f"Обработка товара: external_id={external_id}, base_id={base_id}, article={article}, name={name[:50]}")
         
         # Определяем бренд - всегда строка, не None
         # Сначала берем из XML, потом из парсинга названия, потом пытаемся определить из названия напрямую
@@ -3127,8 +3131,9 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
         else:
             skip_external_id_search = False
         
-        # Если не нашли по артикулу, ищем по external_id
-        if not skip_external_id_search and not product and external_id:
+        # Если не нашли по артикулу, ищем по base_id (по префиксу external_id в БД).
+        # ВАЖНО: external_id в БД хранится ПОЛНЫМ (base_id#характеристика), поэтому ищем по base_id.
+        if not skip_external_id_search and not product and base_id:
             # ВАЖНО: Ищем товары, у которых external_id начинается с базового Ид
             # Это позволяет найти товары, созданные с составным Ид (например, "base_id#variant_id")
             # или с базовым Ид (например, "base_id")
@@ -3138,29 +3143,25 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
             # ИЛИ external_id начинается с базового Ид и содержит #
             # Это покрывает оба случая: товары с базовым Ид и товары с составным Ид
             product = Product.objects.filter(
-                Q(external_id=external_id) | Q(external_id__startswith=external_id + '#'),
+                Q(external_id=base_id) | Q(external_id__startswith=base_id + '#'),
                 catalog_type=catalog_type
             ).first()
             
             # Если не нашли в нужном типе каталога, ищем в любом каталоге
             if not product:
                 product = Product.objects.filter(
-                    Q(external_id=external_id) | Q(external_id__startswith=external_id + '#')
+                    Q(external_id=base_id) | Q(external_id__startswith=base_id + '#')
                 ).first()
             
-            # Если нашли товар с составным Ид, обновляем external_id на базовый Ид для единообразия
-            if product and product.external_id and '#' in product.external_id:
-                if process_product_from_commerceml._log_count <= 3:
-                    logger.info(f"✓ Найден товар с составным Ид {product.external_id}, обновляем на базовый Ид {external_id}")
-                product.external_id = external_id
-                product.save(update_fields=['external_id'])
+            # ВАЖНО: больше не нормализуем найденный товар до base_id — это ломает уникальность
+            # и приводит к конфликтам, если 1С переиспользует base_id для разных артикулов.
             
             # Логируем результат поиска для диагностики
             if process_product_from_commerceml._log_count <= 3:
                 if product:
-                    logger.info(f"✓ Товар найден по external_id={external_id}: {product.article} - {product.name[:50]}")
+                    logger.info(f"✓ Товар найден по base_id={base_id}: {product.article} - {product.name[:50]}")
                 else:
-                    logger.info(f"⚠ Товар не найден по external_id={external_id}, будет создан новый")
+                    logger.info(f"⚠ Товар не найден по base_id={base_id}, будет создан новый")
         
         was_created = product is None
         
