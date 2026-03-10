@@ -1728,32 +1728,32 @@ def parse_commerceml_product(product_elem, namespaces, root_elem=None, groups_ca
     # Вариант 2: ЗначенияСвойств (старый формат)
     # ВАЖНО: Обрабатываем ЗначенияСвойств всегда, даже если есть ХарактеристикиТовара,
     # так как в XML могут быть оба варианта одновременно
-        props_elem = None
+    props_elem = None
+    prop_items = []  # ВАЖНО: всегда инициализируем, чтобы не было UnboundLocalError
+    if namespace:
+        props_elem = product_elem.find(f'{{{namespace}}}ЗначенияСвойств')
+    if props_elem is None:
+        props_elem = product_elem.find('ЗначенияСвойств')
+    # Пробуем с префиксом catalog: только если он определен
+    if props_elem is None and 'catalog' in namespaces:
+        try:
+            props_elem = product_elem.find('catalog:ЗначенияСвойств', namespaces)
+        except (KeyError, ValueError):
+            pass
+    
+    if props_elem is not None:
         if namespace:
-            props_elem = product_elem.find(f'{{{namespace}}}ЗначенияСвойств')
-        if props_elem is None:
-            props_elem = product_elem.find('ЗначенияСвойств')
+            prop_items = props_elem.findall(f'{{{namespace}}}ЗначенияСвойства')
+        if not prop_items:
+            prop_items = props_elem.findall('ЗначенияСвойства')
         # Пробуем с префиксом catalog: только если он определен
-        if props_elem is None and 'catalog' in namespaces:
+        if not prop_items and 'catalog' in namespaces:
             try:
-                props_elem = product_elem.find('catalog:ЗначенияСвойств', namespaces)
+                prop_items = props_elem.findall('catalog:ЗначенияСвойства', namespaces)
             except (KeyError, ValueError):
                 pass
         
-        if props_elem is not None:
-            prop_items = []
-            if namespace:
-                prop_items = props_elem.findall(f'{{{namespace}}}ЗначенияСвойства')
-            if not prop_items:
-                prop_items = props_elem.findall('ЗначенияСвойства')
-            # Пробуем с префиксом catalog: только если он определен
-            if not prop_items and 'catalog' in namespaces:
-                try:
-                    prop_items = props_elem.findall('catalog:ЗначенияСвойства', namespaces)
-                except (KeyError, ValueError):
-                    pass
-            
-        if prop_items:
+    if prop_items:
             # ВАЖНО: Обрабатываем ЗначенияСвойств всегда для специальных полей (Артикул1, Артикул2, Двигатель, Кузов, Размер)
             # Эти поля должны браться из ЗначенияСвойств, а не из ХарактеристикиТовара
             # Для остальных характеристик добавляем только если characteristics пуст, чтобы избежать дублирования
