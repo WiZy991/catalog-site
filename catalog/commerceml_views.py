@@ -2754,7 +2754,10 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
                 product.external_id = external_id.strip()
             if article and not product.article:
                 product.article = article
-            product.name = clean_name  # Используем чистое название
+            # ВАЖНО: Всегда обновляем название товара из 1С, даже если оно уже было установлено
+            # Это позволяет синхронизировать изменения названий из 1С
+            if clean_name:
+                product.name = clean_name
             product.brand = brand or ''  # Всегда строка, не None
             # Обновляем цену только если она указана (не 0)
             # Это позволяет сохранить цену из offers.xml, если она уже была установлена

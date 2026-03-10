@@ -253,12 +253,14 @@
     font-size: 0.875rem;
     color: var(--color-gray-500);
     margin-bottom: var(--space-xs);
+    white-space: nowrap;
 }
 
 .cart-item__price-total {
     font-size: 1.125rem;
     font-weight: 700;
     color: var(--color-primary);
+    white-space: nowrap;
 }
 
 .btn-remove {

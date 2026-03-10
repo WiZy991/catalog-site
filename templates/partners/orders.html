@@ -698,7 +698,11 @@ function removeOrderItem(orderId, itemId) {
         return;
     }
     
-    window.location.href = '{% url "partners:order_item_remove" 0 0 %}'.replace('0/0', orderId + '/' + itemId);
+    // Исправляем URL - заменяем оба нуля отдельно
+    let url = '{% url "partners:order_item_remove" 0 0 %}';
+    url = url.replace('/0/', '/' + orderId + '/');
+    url = url.replace('/0/', '/' + itemId + '/');
+    window.location.href = url;
 }
 
 function removeSelectedItems(orderId) {
