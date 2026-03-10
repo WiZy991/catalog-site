@@ -3236,7 +3236,7 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
         # Это позволяет синхронизировать изменения кросс-номеров из 1С
         if cross_numbers_parts:
             cross_numbers = ', '.join([p for p in cross_numbers_parts if p and str(p).strip()])
-                product.cross_numbers = cross_numbers
+            product.cross_numbers = cross_numbers
         else:
             # Если кросс-номера пустые в 1С, очищаем их на сайте
             product.cross_numbers = ''
