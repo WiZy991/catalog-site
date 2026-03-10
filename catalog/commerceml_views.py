@@ -1566,6 +1566,12 @@ def parse_commerceml_product(product_elem, namespaces, root_elem=None, groups_ca
         # Используем кэш групп для быстрого поиска (оптимизация производительности)
         if groups_cache and product_data['category_id'] in groups_cache:
             product_data['category_name'] = groups_cache[product_data['category_id']]
+            # Логируем для первых 3 товаров
+            if not hasattr(parse_commerceml_product, '_log_count'):
+                parse_commerceml_product._log_count = 0
+            parse_commerceml_product._log_count += 1
+            if parse_commerceml_product._log_count <= 3:
+                logger.info(f"Категория из кэша для Ид {product_data['category_id']}: '{product_data['category_name']}'")
         elif root is not None:
             # Fallback: поиск в XML (медленнее, но работает если кэш не создан)
             group_name_elem = None
@@ -2931,16 +2937,28 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
                     clean_name = clean_name[:last_open+1] + content + ')'
         
         # Убираем оставшиеся лишние запятые и пробелы
-        clean_name = re.sub(r',\s*,', ',', clean_name)
-        clean_name = re.sub(r'\s+', ' ', clean_name).strip()
+        clean_name = re.sub(r',\s*,', ',', clean_name)  # Запятые подряд
+        clean_name = re.sub(r'\s+', ' ', clean_name).strip()  # Множественные пробелы
         
         # Финальная очистка: убираем запятые в начале и конце, множественные запятые
         clean_name = re.sub(r'^,+|,+$', '', clean_name)  # Запятые в начале/конце
         clean_name = re.sub(r',\s*,', ',', clean_name)  # Множественные запятые
         clean_name = clean_name.strip()
         
+        # Дополнительная очистка: убираем запятые перед закрывающей скобкой и после открывающей
+        clean_name = re.sub(r',\s*\)', ')', clean_name)  # Запятая перед )
+        clean_name = re.sub(r'\(\s*,', '(', clean_name)  # Запятая после (
+        
+        # Убираем запятые, которые стоят отдельно (окружены пробелами с обеих сторон)
+        clean_name = re.sub(r'\s+,\s+', ' ', clean_name)  # Запятая между пробелами -> пробел
+        
+        # Финальная нормализация пробелов
+        clean_name = re.sub(r'\s+', ' ', clean_name).strip()
+        
         # Определяем категорию
         category_name = product_data.get('category_name', '').strip()
+        category = None
+        
         if category_name:
             from .models import Category as CategoryModel
             # Сначала ищем категорию напрямую по точному имени из 1С (любой уровень)
@@ -2951,8 +2969,21 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
             if not category:
                 # Если точного совпадения нет, пробуем через логику по ключевым словам
                 category = get_category_for_product(category_name)
-        else:
+                if process_product_from_commerceml._log_count <= 3:
+                    logger.info(f"  Категория из XML '{category_name}' -> определена как '{category.name if category else 'НЕ НАЙДЕНА'}'")
+        
+        # Если категория не определилась из XML, определяем по названию товара
+        if not category:
             category = get_category_for_product(clean_name)
+            if process_product_from_commerceml._log_count <= 3:
+                logger.info(f"  Категория определена по названию '{clean_name[:50]}' -> '{category.name if category else 'НЕ НАЙДЕНА'}'")
+        
+        # ВАЖНО: Если категория всё равно не найдена, берём первую основную категорию (fallback)
+        if not category:
+            from .models import Category as CategoryModel
+            category = CategoryModel.objects.filter(parent=None, is_active=True).first()
+            if process_product_from_commerceml._log_count <= 3:
+                logger.warning(f"  ⚠ Категория не найдена, используется fallback: '{category.name if category else 'НЕТ КАТЕГОРИЙ'}'")
         
         # Обрабатываем цену (как в Excel импорте - убираем пробелы и невидимые символы)
         price = 0
@@ -3198,18 +3229,19 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
             # ВАЖНО: Название должно обновляться ВСЕГДА из исходного name из XML
             # Приоритет: исходное name из XML (чтобы сохранить все данные из 1С)
             old_name_value = product.name
-            if name and name.strip():
-                # Используем исходное name из XML - это гарантирует, что все данные из 1С сохраняются
-                product.name = name.strip()
-                if process_product_from_commerceml._log_count <= 3 and old_name_value != name.strip():
-                    logger.info(f"  ✓ Название обновлено: '{old_name_value[:50]}' -> '{name.strip()[:50]}'")
-            elif clean_name and clean_name.strip():
-                # Если name пустой, используем clean_name
+            # ВАЖНО: Используем clean_name (очищенное название) вместо сырого name из XML
+            # Это гарантирует правильное отображение названий без лишних запятых и пробелов
+            if clean_name and clean_name.strip():
                 product.name = clean_name.strip()
                 if process_product_from_commerceml._log_count <= 3 and old_name_value != clean_name.strip():
-                    logger.info(f"  ✓ Название обновлено (clean_name): '{old_name_value[:50]}' -> '{clean_name.strip()[:50]}'")
+                    logger.info(f"  ✓ Название обновлено: '{old_name_value[:50]}' -> '{clean_name.strip()[:50]}'")
+            elif name and name.strip():
+                # Если clean_name пустой, используем исходное name из XML
+                product.name = name.strip()
+                if process_product_from_commerceml._log_count <= 3 and old_name_value != name.strip():
+                    logger.info(f"  ✓ Название обновлено (name): '{old_name_value[:50]}' -> '{name.strip()[:50]}'")
             elif product_data.get('name'):
-                # Если и name и clean_name пустые, используем name из product_data
+                # Если и clean_name и name пустые, используем name из product_data
                 new_name_value = product_data.get('name', '').strip()
                 product.name = new_name_value
                 if process_product_from_commerceml._log_count <= 3 and old_name_value != new_name_value:
