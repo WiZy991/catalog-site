@@ -3373,6 +3373,30 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
                         elif re.match(r'^[A-Z]{2,5}\d+[A-Z0-9]{0,3}$', slash_part, re.IGNORECASE) or re.match(r'^[A-Z]{1,3}\d+$', slash_part, re.IGNORECASE):
                             if slash_part.upper() not in [p.upper() for p in applicability_parts]:
                                 applicability_parts.append(slash_part.upper())
+
+        # ВАЖНО: если кузов (body) пришёл из 1С, он является источником истины.
+        # Тогда удаляем из применимости "коды кузова/модели", которые не совпадают с body,
+        # потому что парсер названия может подмешивать лишнее (например, NHW из "NHW/ZVW30").
+        if body_codes_upper:
+            filtered_parts = []
+            # Коды стороны/позиции оставляем всегда
+            allowed_short = {'RH', 'LH', 'R', 'L', 'F', 'FR', 'FL', 'RR', 'RL'}
+            # "Коды кузова/модели": NHW, ZVW30, NHW30, J10 и т.п.
+            model_code_re = re.compile(r'^[A-Z]{2,6}\d{0,3}[A-Z0-9]{0,3}$', re.IGNORECASE)
+            for item in applicability_parts:
+                if not item:
+                    continue
+                item_u = str(item).strip().upper()
+                if not item_u:
+                    continue
+                if item_u in allowed_short:
+                    filtered_parts.append(item_u)
+                    continue
+                # Если это код модели/кузова и он НЕ входит в body_codes_upper — выкидываем
+                if model_code_re.match(item_u) and item_u not in body_codes_upper:
+                    continue
+                filtered_parts.append(item_u)
+            applicability_parts = filtered_parts
         
         # ВАЖНО: TIS-166/GUIS-66 - это ПРИМЕНИМОСТЬ, не артикул!
         # Артикул = OEM номер (кросс-номер)
