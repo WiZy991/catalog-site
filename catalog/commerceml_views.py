@@ -2108,15 +2108,17 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                         product = Product.objects.filter(article=product_id, catalog_type=catalog_type).first()
                     
                     # Если не нашли в нужном типе каталога, ищем в любом каталоге
+                    existing_product = None  # Инициализируем переменную
                     if not product:
                         product = Product.objects.filter(external_id=product_id).first()
                     if not product:
                         product = Product.objects.filter(article=product_id).first()
                     
-                    # Если товар найден, но в другом каталоге, создаем копию в нужном каталоге
-                    if product and product.catalog_type != catalog_type:
-                        # Создаем товар в нужном каталоге на основе найденного
+                    # Сохраняем найденный товар (если он есть) для возможного создания копии
+                    if product:
                         existing_product = product
+                    
+                    # Проверяем, есть ли товар в нужном каталоге
                     product = Product.objects.filter(
                         external_id=product_id,
                         catalog_type=catalog_type
@@ -2127,8 +2129,9 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                             catalog_type=catalog_type
                         ).first()
                     
-                    if not product:
-                        # Создаем новый товар в нужном каталоге
+                    # Если товар не найден в нужном каталоге, но найден в другом - создаем копию
+                    if not product and existing_product:
+                        # Создаем новый товар в нужном каталоге на основе найденного
                         # external_id должен быть уникальным, поэтому используем его только если он есть
                         product_external_id = existing_product.external_id.strip() if existing_product.external_id and existing_product.external_id.strip() else None
                         product = Product(
@@ -3021,9 +3024,17 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
                         product.external_id = new_external_id
                         if process_product_from_commerceml._log_count <= 3 and old_external_id != new_external_id:
                             logger.info(f"  Будет обновлен external_id с {old_external_id} на {new_external_id}")
+                # ВАЖНО: Если товар найден по артикулу, НЕ ищем по external_id дальше
+                # Товар уже найден и будет обновлен, не нужно искать еще раз
+                # Это предотвращает перезапись переменной product другим товаром
+                skip_external_id_search = True
+            else:
+                skip_external_id_search = False
+        else:
+            skip_external_id_search = False
         
         # Если не нашли по артикулу, ищем по external_id
-        if not product and external_id:
+        if not skip_external_id_search and not product and external_id:
             # ВАЖНО: Ищем товары, у которых external_id начинается с базового Ид
             # Это позволяет найти товары, созданные с составным Ид (например, "base_id#variant_id")
             # или с базовым Ид (например, "base_id")
@@ -3594,6 +3605,7 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
         # Это гарантирует, что товар будет создан даже если ProductCharacteristic не работает
         try:
             # ВАЖНО: При обновлении товара принудительно сохраняем все поля
+            # Используем save() без update_fields, чтобы гарантировать сохранение ВСЕХ полей
             product.save()
             
             # ВАЖНО: Инвалидируем кеш при создании И при обновлении товара
