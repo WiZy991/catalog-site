@@ -2984,12 +2984,12 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
                     logger.info(f"✓ Товар найден по артикулу {article}: {product.name[:50]}")
                 # ВАЖНО: Если нашли товар по артикулу, обновляем external_id на новый из 1С
                 # Это позволяет связать товар с новым Ид из 1С
+                # НЕ сохраняем здесь - сохраним позже вместе со всеми полями
                 if external_id and external_id.strip():
                     old_external_id = product.external_id
                     product.external_id = external_id.strip()
-                    product.save(update_fields=['external_id'])
                     if process_product_from_commerceml._log_count <= 3 and old_external_id != external_id:
-                        logger.info(f"  Обновлен external_id с {old_external_id} на {external_id}")
+                        logger.info(f"  Будет обновлен external_id с {old_external_id} на {external_id}")
         
         # Если не нашли по артикулу, ищем по external_id
         if not product and external_id:
@@ -3076,14 +3076,18 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
             # ВАЖНО: Всегда обновляем название товара из 1С, даже если оно уже было установлено
             # Это позволяет синхронизировать изменения названий из 1С
             # Обновляем название ВСЕГДА из данных 1С, чтобы синхронизировать изменения
-            # Приоритет: clean_name > name > product_data['name']
-            if clean_name:
-                product.name = clean_name
-            elif name:  # Если clean_name пустое, но name есть, используем name
+            # ВАЖНО: Название должно обновляться ВСЕГДА из исходного name из XML
+            # Приоритет: исходное name из XML (чтобы сохранить все данные из 1С)
+            if name and name.strip():
+                # Используем исходное name из XML - это гарантирует, что все данные из 1С сохраняются
                 product.name = name.strip()
-            elif product_data.get('name'):  # Если и clean_name и name пустые, но product_data['name'] есть, используем его
+            elif clean_name and clean_name.strip():
+                # Если name пустой, используем clean_name
+                product.name = clean_name.strip()
+            elif product_data.get('name'):
+                # Если и name и clean_name пустые, используем name из product_data
                 product.name = product_data.get('name', '').strip()
-            # ВАЖНО: Если название не указано в данных, оставляем существующее (не удаляем)
+            # ВАЖНО: Название должно обновляться ВСЕГДА при обновлении товара
             product.brand = brand or ''  # Всегда строка, не None
             # Обновляем цену только если она указана (не 0)
             # Это позволяет сохранить цену из offers.xml, если она уже была установлена
@@ -3499,15 +3503,19 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
         # ВАЖНО: Сохраняем товар ПЕРЕД обработкой ProductCharacteristic
         # Это гарантирует, что товар будет создан даже если ProductCharacteristic не работает
         try:
+            # ВАЖНО: При обновлении товара принудительно сохраняем все поля
             product.save()
             
-            # ВАЖНО: Инвалидируем кеш ТОЛЬКО при создании нового товара (force=True)
-            # При обновлении существующего товара кеш НЕ очищаем для стабильности
-            if was_created:
+            # ВАЖНО: Инвалидируем кеш при создании И при обновлении товара
+            # Это гарантирует, что изменения сразу отображаются на сайте
+            if product.category:
                 invalidate_category_cache(product.category, force=True)
             
             if was_created:
                 logger.info(f"✓ Товар сохранен в БД: {product.external_id or product.article} (catalog_type={catalog_type})")
+            else:
+                if process_product_from_commerceml._log_count <= 3:
+                    logger.info(f"✓ Товар обновлен в БД: {product.external_id or product.article} - {product.name[:50]}")
         except Exception as save_error:
             error_msg = f"Ошибка сохранения товара: {str(save_error)}"
             logger.error(error_msg, exc_info=True)
