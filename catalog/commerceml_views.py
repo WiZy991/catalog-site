@@ -2916,14 +2916,25 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
             # Обновляем существующий товар
             # Всегда обновляем external_id, если он есть в данных (даже если уже был установлен)
             # Это важно для синхронизации с 1С
+            # ВАЖНО: Всегда обновляем external_id из данных 1С
             if external_id and external_id.strip():
                 product.external_id = external_id.strip()
-            if article and not product.article:
+            # ВАЖНО: Всегда обновляем артикул из данных 1С, даже если он уже был установлен
+            # Это позволяет синхронизировать изменения артикула из 1С
+            if article:
                 product.article = article
+            elif product_data.get('article'):
+                product.article = product_data.get('article', '').strip()
             # ВАЖНО: Всегда обновляем название товара из 1С, даже если оно уже было установлено
             # Это позволяет синхронизировать изменения названий из 1С
+            # Обновляем название ВСЕГДА из данных 1С, чтобы синхронизировать изменения
             if clean_name:
                 product.name = clean_name
+            elif name:  # Если clean_name пустое, но name есть, используем name
+                product.name = name.strip()
+            # Если и clean_name и name пустые, но product_data['name'] есть, используем его
+            elif product_data.get('name'):
+                product.name = product_data.get('name', '').strip()
             product.brand = brand or ''  # Всегда строка, не None
             # Обновляем цену только если она указана (не 0)
             # Это позволяет сохранить цену из offers.xml, если она уже была установлена
@@ -2960,10 +2971,15 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
             for engine_item in engine_list:
                 if engine_item and engine_item.strip():
                     description_parts.append(f"Двигатель: {engine_item.strip()}")
+        # ВАЖНО: Всегда обновляем описание из данных 1С, даже если оно пустое
+        # Это позволяет синхронизировать изменения описания из 1С
         if description_parts:
             product.description = '\n'.join(description_parts)
         elif product_data.get('description'):
             product.description = product_data.get('description')
+        else:
+            # Если описание пустое в 1С, очищаем его на сайте
+            product.description = ''
         
         # Применимость - используем из парсинга или из данных
         # ВАЖНО: Артикулы НЕ должны попадать в применимость!
@@ -3086,10 +3102,14 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
                     filtered_applicability.append(item)
             unique_applicability = filtered_applicability
         
+        # ВАЖНО: Всегда обновляем применимость из данных 1С, даже если она пустая
+        # Это позволяет синхронизировать изменения применимости из 1С
         if unique_applicability:
             applicability = ', '.join(unique_applicability)
-            if applicability:
-                product.applicability = applicability
+            product.applicability = applicability
+        else:
+            # Если применимость пустая в 1С, очищаем её на сайте
+            product.applicability = ''
         
         # Кросс-номера - объединяем из разных источников
         cross_numbers_parts = []
@@ -3112,10 +3132,14 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
             else:
                 cross_numbers_parts.append(parsed.get('cross_numbers'))
         
+        # ВАЖНО: Всегда обновляем кросс-номера из данных 1С, даже если они пустые
+        # Это позволяет синхронизировать изменения кросс-номеров из 1С
         if cross_numbers_parts:
             cross_numbers = ', '.join([p for p in cross_numbers_parts if p and str(p).strip()])
-            if cross_numbers:
-                product.cross_numbers = cross_numbers
+            product.cross_numbers = cross_numbers
+        else:
+            # Если кросс-номера пустые в 1С, очищаем их на сайте
+            product.cross_numbers = ''
         
         # Характеристики - объединяем из парсинга названия и из XML
         characteristics_parts = []
@@ -3298,6 +3322,8 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
         
         # Объединяем все характеристики
         # ВАЖНО: Всегда обновляем характеристики при импорте из XML, чтобы исправить неправильные значения
+        # ВАЖНО: Обновляем характеристики ВСЕГДА из данных 1С, даже если они пустые
+        # Это позволяет синхронизировать изменения характеристик из 1С
         if characteristics_parts:
             new_characteristics = '\n'.join(characteristics_parts)
             # Логируем изменение характеристик для отладки (только первые 3 товара)
@@ -3311,8 +3337,10 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
                 logger.info(f"  Старые: '{old_chars[:100]}...' (длина={len(old_chars)})")
                 logger.info(f"  Новые: '{new_characteristics[:100]}...' (длина={len(new_characteristics)})")
             product.characteristics = new_characteristics
-        # Если characteristics_parts пустой, но товар обновляется - не трогаем характеристики
-        # (возможно, они должны остаться как есть)
+        else:
+            # ВАЖНО: Если характеристики пустые в 1С, очищаем их на сайте
+            # Это позволяет синхронизировать изменения характеристик из 1С
+            product.characteristics = ''
         
         # ВАЖНО: Сохраняем товар ПЕРЕД обработкой ProductCharacteristic
         # Это гарантирует, что товар будет создан даже если ProductCharacteristic не работает
