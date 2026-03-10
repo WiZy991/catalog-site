@@ -2984,12 +2984,31 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
                     logger.info(f"✓ Товар найден по артикулу {article}: {product.name[:50]}")
                 # ВАЖНО: Если нашли товар по артикулу, обновляем external_id на новый из 1С
                 # Это позволяет связать товар с новым Ид из 1С
-                # НЕ сохраняем здесь - сохраним позже вместе со всеми полями
+                # НО: Проверяем, не используется ли новый external_id другим товаром
                 if external_id and external_id.strip():
+                    new_external_id = external_id.strip()
                     old_external_id = product.external_id
-                    product.external_id = external_id.strip()
-                    if process_product_from_commerceml._log_count <= 3 and old_external_id != external_id:
-                        logger.info(f"  Будет обновлен external_id с {old_external_id} на {external_id}")
+                    
+                    # Проверяем, не используется ли новый external_id другим товаром в том же каталоге
+                    if new_external_id != old_external_id:
+                        conflicting_product = Product.objects.filter(
+                            external_id=new_external_id,
+                            catalog_type=catalog_type
+                        ).exclude(pk=product.pk).first()
+                        
+                        if conflicting_product:
+                            # Если другой товар уже использует этот external_id, это дубликат
+                            # Объединяем данные: удаляем конфликтующий товар и обновляем текущий
+                            if process_product_from_commerceml._log_count <= 3:
+                                logger.warning(f"  ⚠ Найден конфликт: external_id {new_external_id} уже используется товаром {conflicting_product.pk}")
+                                logger.warning(f"  → Удаляем дубликат и обновляем текущий товар")
+                            # Удаляем конфликтующий товар (это дубликат)
+                            conflicting_product.delete()
+                        
+                        # Обновляем external_id на новый из 1С
+                        product.external_id = new_external_id
+                        if process_product_from_commerceml._log_count <= 3 and old_external_id != new_external_id:
+                            logger.info(f"  Будет обновлен external_id с {old_external_id} на {new_external_id}")
         
         # Если не нашли по артикулу, ищем по external_id
         if not product and external_id:
@@ -3057,14 +3076,45 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
             # Логируем обновление товара (только первые 3 товара)
             if process_product_from_commerceml._log_count <= 3:
                 old_name = product.name[:50] if product.name else ''
+                old_article = product.article or ''
+                old_external_id = product.external_id or ''
                 new_name = clean_name[:50] if clean_name else (name[:50] if name else '')
-                logger.info(f"ОБНОВЛЕНИЕ товара: external_id={external_id}, article={article}")
+                new_article = article or ''
+                new_external_id = external_id or ''
+                logger.info(f"ОБНОВЛЕНИЕ товара: external_id={new_external_id}, article={new_article}")
                 logger.info(f"  Старое название: {old_name}")
                 logger.info(f"  Новое название: {new_name}")
+                logger.info(f"  Старый артикул: {old_article}")
+                logger.info(f"  Новый артикул: {new_article}")
+                logger.info(f"  Старый external_id: {old_external_id}")
+                logger.info(f"  Новый external_id: {new_external_id}")
+                if old_name != new_name or old_article != new_article or old_external_id != new_external_id:
+                    logger.info(f"  → БУДУТ ОБНОВЛЕНЫ: название={old_name != new_name}, артикул={old_article != new_article}, external_id={old_external_id != new_external_id}")
             
             # ВАЖНО: Всегда обновляем external_id из данных 1С
+            # Но проверяем, не используется ли новый external_id другим товаром
             if external_id and external_id.strip():
-                product.external_id = external_id.strip()
+                new_external_id = external_id.strip()
+                old_external_id = product.external_id
+                
+                # Проверяем, не используется ли новый external_id другим товаром в том же каталоге
+                if new_external_id != old_external_id:
+                    conflicting_product = Product.objects.filter(
+                        external_id=new_external_id,
+                        catalog_type=catalog_type
+                    ).exclude(pk=product.pk).first()
+                    
+                    if conflicting_product:
+                        # Если другой товар уже использует этот external_id, это дубликат
+                        # Объединяем данные: удаляем конфликтующий товар и обновляем текущий
+                        if process_product_from_commerceml._log_count <= 3:
+                            logger.warning(f"  ⚠ Найден конфликт при обновлении: external_id {new_external_id} уже используется товаром {conflicting_product.pk}")
+                            logger.warning(f"  → Удаляем дубликат и обновляем текущий товар")
+                        # Удаляем конфликтующий товар (это дубликат)
+                        conflicting_product.delete()
+                    
+                    # Обновляем external_id на новый из 1С
+                    product.external_id = new_external_id
             # ВАЖНО: Всегда обновляем артикул из данных 1С, даже если он пустой
             # Это позволяет синхронизировать изменения артикула из 1С (включая удаление)
             if article:
@@ -3516,6 +3566,7 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
             else:
                 if process_product_from_commerceml._log_count <= 3:
                     logger.info(f"✓ Товар обновлен в БД: {product.external_id or product.article} - {product.name[:50]}")
+                    logger.info(f"  Проверка сохраненных данных: external_id={product.external_id}, article={product.article}, name={product.name[:50]}")
         except Exception as save_error:
             error_msg = f"Ошибка сохранения товара: {str(save_error)}"
             logger.error(error_msg, exc_info=True)
