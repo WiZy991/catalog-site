@@ -899,12 +899,21 @@ def process_commerceml_file(file_path, filename, request=None):
                     else:
                         base_id = external_id
                     
+                    # ВАЖНО: Обновляем external_id в product_data на базовый Ид
+                    # Это гарантирует, что при обработке будет использоваться базовый Ид
+                    product_data['external_id'] = base_id
+                    product_data['sku'] = base_id
+                    
                     # ВАЖНО: Если товар с таким базовым Ид уже встречался,
                     # заменяем его данными на последний вариант (измененные данные из 1С)
                     if base_id in products_by_base_id:
-                        # Логируем для диагностики (только первые 3 случая)
-                        if idx < 3:
-                            logger.info(f"Товар #{idx+1}: найден дубликат базового Ид {base_id}, используем данные из последнего варианта")
+                        # Логируем для диагностики
+                        old_name = products_by_base_id[base_id].get('name', '')[:50]
+                        new_name = product_data.get('name', '')[:50]
+                        logger.info(f"Товар #{idx+1}: найден дубликат базового Ид {base_id}")
+                        logger.info(f"  Старое название: {old_name}")
+                        logger.info(f"  Новое название: {new_name}")
+                        logger.info(f"  → Используем данные из последнего варианта (измененные из 1С)")
                         products_by_base_id[base_id] = product_data
                     else:
                         products_by_base_id[base_id] = product_data
@@ -3014,8 +3023,17 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
                 product.price = price
         else:
             # Обновляем существующий товар
-            # Всегда обновляем external_id, если он есть в данных (даже если уже был установлен)
-            # Это важно для синхронизации с 1С
+            # ВАЖНО: Всегда обновляем ВСЕ данные из 1С, даже если они уже были установлены
+            # Это позволяет синхронизировать любые изменения из 1С
+            
+            # Логируем обновление товара (только первые 3 товара)
+            if process_product_from_commerceml._log_count <= 3:
+                old_name = product.name[:50] if product.name else ''
+                new_name = clean_name[:50] if clean_name else (name[:50] if name else '')
+                logger.info(f"ОБНОВЛЕНИЕ товара: external_id={external_id}, article={article}")
+                logger.info(f"  Старое название: {old_name}")
+                logger.info(f"  Новое название: {new_name}")
+            
             # ВАЖНО: Всегда обновляем external_id из данных 1С
             if external_id and external_id.strip():
                 product.external_id = external_id.strip()
@@ -3144,25 +3162,30 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
                 if part.upper() in known_brands:
                     continue
                 
-                # Ищем коды моделей/двигателей (формат: 2UZFE, 1GRFE, 1MZFE, 2RZ, 3RZ и т.д.)
-                # Паттерн: цифра + буквы + (опционально) цифры + (опционально) буквы
-                # Поддерживает: 2RZ, 3RZ, 2UZFE, 1GRFE, 1MZFE, 4AFE и т.д.
-                engine_model_pattern = r'^(\d+[A-Z]{2,5}(?:\d+[A-Z]{0,3})?)$'
-                if re.match(engine_model_pattern, part, re.IGNORECASE):
-                    # Это код модели/двигателя - добавляем в применимость
+                # Ищем коды моделей/двигателей/кузова (формат: 2UZFE, 1GRFE, 1MZFE, 2RZ, 3RZ, ZVW30, NHW30 и т.д.)
+                # Паттерн 1: цифра + буквы + (опционально) цифры + (опционально) буквы (2UZFE, 1GRFE)
+                # Паттерн 2: буквы + цифры (ZVW30, NHW30, J10) - коды кузова и модели
+                engine_model_pattern1 = r'^(\d+[A-Z]{2,5}(?:\d+[A-Z]{0,3})?)$'  # 2UZFE, 1GRFE
+                engine_model_pattern2 = r'^([A-Z]{2,5}\d+[A-Z0-9]{0,3})$'  # ZVW30, NHW30, J10
+                if re.match(engine_model_pattern1, part, re.IGNORECASE) or re.match(engine_model_pattern2, part, re.IGNORECASE):
+                    # Это код модели/двигателя/кузова - добавляем в применимость
                     if part.upper() not in [p.upper() for p in applicability_parts]:
                         applicability_parts.append(part.upper())
                     continue
                 
-                # Ищем связки через слеш (например, 2UZFE/1GRFE, 2RZ/3RZ)
+                # Ищем связки через слеш (например, 2UZFE/1GRFE, 2RZ/3RZ, J10/RH)
                 if '/' in part:
                     slash_parts = [p.strip() for p in part.split('/')]
                     for slash_part in slash_parts:
-                        if re.match(engine_model_pattern, slash_part, re.IGNORECASE):
+                        if re.match(engine_model_pattern1, slash_part, re.IGNORECASE) or re.match(engine_model_pattern2, slash_part, re.IGNORECASE):
                             if slash_part.upper() not in [p.upper() for p in applicability_parts]:
                                 applicability_parts.append(slash_part.upper())
                         # Также проверяем, может быть это связка кодов двигателей (2RZ/3RZ)
                         elif re.match(r'^\d+[A-Z]{2,5}$', slash_part, re.IGNORECASE):
+                            if slash_part.upper() not in [p.upper() for p in applicability_parts]:
+                                applicability_parts.append(slash_part.upper())
+                        # Проверяем коды кузова/модели (ZVW30, J10, RH)
+                        elif re.match(r'^[A-Z]{2,5}\d+[A-Z0-9]{0,3}$', slash_part, re.IGNORECASE) or re.match(r'^[A-Z]{1,3}\d+$', slash_part, re.IGNORECASE):
                             if slash_part.upper() not in [p.upper() for p in applicability_parts]:
                                 applicability_parts.append(slash_part.upper())
         
