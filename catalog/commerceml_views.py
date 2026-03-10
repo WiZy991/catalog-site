@@ -3277,6 +3277,18 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
             for body_item in body_list:
                 if body_item and body_item.strip():
                     applicability_parts.append(body_item.strip())
+        
+        # ВАЖНО: если кузов пришёл из 1С, используем его как источник истины для кодов кузова/модели
+        # Это нужно, чтобы не подмешивать лишние коды из названия (например, "NHW/ZVW30" при кузове "ZVW30")
+        body_codes_upper = set()
+        if product_data.get('body'):
+            for body_item in (product_data['body'] if isinstance(product_data['body'], list) else [product_data['body']]):
+                if body_item and str(body_item).strip():
+                    # поддерживаем варианты со слешами: "NHW30/ZVW30" -> {"NHW30","ZVW30"}
+                    for part in str(body_item).replace(',', '/').split('/'):
+                        part = part.strip().upper()
+                        if part:
+                            body_codes_upper.add(part)
         # Двигатель из 1С
         if product_data.get('engine'):
             engine_list = product_data['engine'] if isinstance(product_data['engine'], list) else [product_data['engine']]
@@ -3342,6 +3354,13 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
                 # Ищем связки через слеш (например, 2UZFE/1GRFE, 2RZ/3RZ, J10/RH)
                 if '/' in part:
                     slash_parts = [p.strip() for p in part.split('/')]
+                    # Если есть кузов из 1С, и в связке есть совпадение с кузовом — оставляем только совпадающие части
+                    # Пример: part="NHW/ZVW30", body_codes_upper={"ZVW30"} -> оставляем только "ZVW30"
+                    if body_codes_upper:
+                        slash_parts_upper = [sp.strip().upper() for sp in slash_parts if sp and sp.strip()]
+                        matched = [sp for sp in slash_parts_upper if sp in body_codes_upper]
+                        if matched:
+                            slash_parts = matched
                     for slash_part in slash_parts:
                         if re.match(engine_model_pattern1, slash_part, re.IGNORECASE) or re.match(engine_model_pattern2, slash_part, re.IGNORECASE):
                             if slash_part.upper() not in [p.upper() for p in applicability_parts]:
