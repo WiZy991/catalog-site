@@ -1650,7 +1650,7 @@ def parse_commerceml_product(product_elem, namespaces, root_elem=None, groups_ca
                         if 'engine' not in product_data:
                             product_data['engine'] = []
                         if char_value not in product_data['engine']:
-                        product_data['engine'].append(char_value)
+                            product_data['engine'].append(char_value)
                     
                     # Кузов → body (для раздела "Применимость"/описание)
                     # ВАЖНО: Не добавляем в applicability здесь, чтобы избежать дублирования
@@ -1659,7 +1659,7 @@ def parse_commerceml_product(product_elem, namespaces, root_elem=None, groups_ca
                         if 'body' not in product_data:
                             product_data['body'] = []
                         if char_value not in product_data['body']:
-                        product_data['body'].append(char_value)
+                            product_data['body'].append(char_value)
                     
                     # Размер → всегда в характеристики (без фильтрации)
                     elif 'размер' in char_name_lower or 'size' in char_name_lower:
