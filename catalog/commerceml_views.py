@@ -3442,6 +3442,15 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
                     # Это не вольтаж - добавляем в применимость
                     filtered_applicability.append(item)
             unique_applicability = filtered_applicability
+
+        # ВАЖНО: финальная очистка применимости от "NHW" (без цифр), если рядом есть более точный код (с цифрами)
+        # Это покрывает случаи, когда NHW попадает из parse_product_name или других источников.
+        if unique_applicability:
+            ua_upper = [str(x).strip().upper() for x in unique_applicability if x and str(x).strip()]
+            if 'NHW' in ua_upper:
+                has_specific = any(re.match(r'^[A-Z]{2,6}\d{1,4}[A-Z0-9]{0,3}$', s) for s in ua_upper)
+                if has_specific:
+                    unique_applicability = [x for x in unique_applicability if str(x).strip().upper() != 'NHW']
         
         # ВАЖНО: Всегда обновляем применимость из данных 1С, даже если она пустая
         # Это позволяет синхронизировать изменения применимости из 1С
