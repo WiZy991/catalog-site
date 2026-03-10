@@ -881,10 +881,15 @@ def process_commerceml_file(file_path, filename, request=None):
         except Exception as e:
             logger.warning(f"Ошибка при создании кэша групп: {e}, продолжаем без кэша")
         
-        # ВАЖНО: Собираем все варианты товаров, но для товаров с одинаковым базовым Ид
-        # используем данные из ПОСЛЕДНЕГО варианта (это измененные данные из 1С)
-        # Все товары имеют Ид, поэтому группируем только по базовому Ид
-        products_by_base_id = {}  # Словарь: базовый_Ид -> последние данные товара
+        # ВАЖНО:
+        # Ранее мы группировали товары только по базовому Ид (base_id) и брали "последний вариант".
+        # Но на практике в выгрузке встречаются случаи, когда один и тот же base_id идёт для РАЗНЫХ товаров
+        # (например, с разными артикулами). Тогда "последний вариант" перетирает данные другого товара,
+        # и нужный артикул вообще не попадает в обработку.
+        #
+        # Поэтому группируем по (base_id + article). Это сохраняет идею "последнего варианта" для вариантов
+        # одного и того же товара, но не склеивает разные товары между собой.
+        products_by_key = {}  # Словарь: (base_id, article_norm) -> последние данные товара
         
         for idx, product_elem in enumerate(products_elements):
             product_data = parse_commerceml_product(product_elem, namespaces, root, groups_cache=groups_cache)
@@ -899,24 +904,30 @@ def process_commerceml_file(file_path, filename, request=None):
                     else:
                         base_id = external_id
                     
+                    # ВАЖНО: article может быть пустым в XML (<Артикул/>), но заполняться из парсинга названия.
+                    article_norm = (product_data.get('article') or '').strip().upper()
+                    if not article_norm:
+                        # Если артикул всё равно пустой — группируем отдельно по full external_id,
+                        # чтобы точно не склеивать разные товары.
+                        article_norm = external_id.strip().upper()
+
+                    key = (base_id, article_norm)
+
                     # ВАЖНО: Обновляем external_id в product_data на базовый Ид
                     # Это гарантирует, что при обработке будет использоваться базовый Ид
                     product_data['external_id'] = base_id
                     product_data['sku'] = base_id
                     
-                    # ВАЖНО: Если товар с таким базовым Ид уже встречался,
+                    # ВАЖНО: Если товар с таким ключом уже встречался,
                     # заменяем его данными на последний вариант (измененные данные из 1С)
-                    if base_id in products_by_base_id:
-                        # Логируем для диагностики
-                        old_name = products_by_base_id[base_id].get('name', '')[:50]
+                    if key in products_by_key:
+                        old_name = products_by_key[key].get('name', '')[:50]
                         new_name = product_data.get('name', '')[:50]
-                        logger.info(f"Товар #{idx+1}: найден дубликат базового Ид {base_id}")
+                        logger.info(f"Товар #{idx+1}: найден дубликат ключа (base_id+article) {base_id} / {article_norm}")
                         logger.info(f"  Старое название: {old_name}")
                         logger.info(f"  Новое название: {new_name}")
                         logger.info(f"  → Используем данные из последнего варианта (измененные из 1С)")
-                        products_by_base_id[base_id] = product_data
-                    else:
-                        products_by_base_id[base_id] = product_data
+                    products_by_key[key] = product_data
                 else:
                     # Если по какой-то причине Ид отсутствует, добавляем товар как есть
                     # (но по словам пользователя таких товаров нет)
@@ -933,10 +944,13 @@ def process_commerceml_file(file_path, filename, request=None):
                     for child in product_elem:
                         logger.warning(f"    Дочерний: {child.tag} = {child.text[:50] if child.text else 'None'}")
         
-        # Добавляем все уникальные товары (последние варианты для каждого базового Ид)
-        products_data.extend(products_by_base_id.values())
+        # Добавляем все уникальные товары (последние варианты для каждого ключа)
+        products_data.extend(products_by_key.values())
         
-        logger.info(f"Всего распарсено товаров: {len(products_data)} (уникальных по базовому Ид: {len(products_by_base_id)})")
+        logger.info(
+            f"Всего распарсено товаров: {len(products_data)} "
+            f"(уникальных по base_id+article: {len(products_by_key)})"
+        )
         
         if not products_data:
             logger.warning("Товары не найдены в файле после парсинга")
