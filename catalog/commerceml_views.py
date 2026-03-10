@@ -3206,7 +3206,7 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
         # Это позволяет синхронизировать изменения применимости из 1С
         if unique_applicability:
             applicability = ', '.join(unique_applicability)
-                product.applicability = applicability
+            product.applicability = applicability
         else:
             # Если применимость пустая в 1С, очищаем её на сайте
             product.applicability = ''
