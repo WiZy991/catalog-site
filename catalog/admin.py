@@ -193,8 +193,11 @@ class FarpostExportMixin:
         output = _io.StringIO()
         writer = csv.writer(output, delimiter=';')
         # Заголовки для Farpost
+        # ВАЖНО: Первым столбцом должен быть "Наименование" - Фарпост с первого столбца берет наименование товара
+        # Удален столбец "Заголовок" - Фарпост не хочет его считывать
+        # Столбец "Производитель" возвращен - Фарпост должен получать производителя "Onesimus" из прайс-листа
         writer.writerow([
-            'Заголовок', 'Название', 'Цена', 'Описание', 'Артикул', 'Бренд',
+            'Наименование', 'Цена', 'Описание', 'Артикул', 'Бренд',
             'Состояние', 'Наличие', 'Количество', 'Характеристики', 'Применимость',
             'Кросс-номера', 'Фото1', 'Фото2', 'Фото3', 'Фото4', 'Фото5',
             'Ссылка на сайт', 'Категория', 'Производитель'
@@ -203,7 +206,6 @@ class FarpostExportMixin:
         no_article_count = 0
         zero_price_count = 0
         for product in queryset:
-            title = generate_farpost_title(product)
             site_url = request.build_absolute_uri(product.get_absolute_url())
             description = generate_farpost_description(product, site_url)
             photo_urls = generate_farpost_images(product, request)
@@ -222,12 +224,12 @@ class FarpostExportMixin:
             if not product.price or product.price == 0:
                 zero_price_count += 1
             
-            # Очищаем название от информации в скобках
-            clean_name = clean_product_name(product.name) if product.name else ''
+            # ВАЖНО: Используем полное название товара, а не очищенное
+            # Фарпост должен видеть полное наименование товара
+            full_name = product.name if product.name else ''
             
             writer.writerow([
-                title,
-                clean_name,
+                full_name,  # Полное наименование товара (первый столбец)
                 str(product.price),
                 description,
                 product.article or '',
@@ -245,7 +247,7 @@ class FarpostExportMixin:
                 photo_urls[4],
                 site_url,
                 product.category.name if product.category else '',
-                'Onesimus',
+                'Onesimus',  # Производитель по умолчанию
             ])
         
         content = output.getvalue().encode('utf-8-sig')
