@@ -2982,6 +2982,18 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
             if product:
                 if process_product_from_commerceml._log_count <= 3:
                     logger.info(f"✓ Товар найден по артикулу {article}: {product.name[:50]}")
+                    logger.info(f"  Текущие данные товара:")
+                    logger.info(f"    external_id: {product.external_id}")
+                    logger.info(f"    article: {product.article}")
+                    logger.info(f"    name: {product.name[:80]}")
+                    logger.info(f"    body: {product_data.get('body', 'НЕТ')}")
+                    logger.info(f"    characteristics: {len(product_data.get('characteristics', []))} шт.")
+                    logger.info(f"  Данные из 1С:")
+                    logger.info(f"    external_id: {external_id}")
+                    logger.info(f"    article: {article}")
+                    logger.info(f"    name: {name[:80]}")
+                    logger.info(f"    body: {product_data.get('body', 'НЕТ')}")
+                    logger.info(f"    characteristics: {len(product_data.get('characteristics', []))} шт.")
                 # ВАЖНО: Если нашли товар по артикулу, обновляем external_id на новый из 1С
                 # Это позволяет связать товар с новым Ид из 1С
                 # НО: Проверяем, не используется ли новый external_id другим товаром
@@ -3128,15 +3140,23 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
             # Обновляем название ВСЕГДА из данных 1С, чтобы синхронизировать изменения
             # ВАЖНО: Название должно обновляться ВСЕГДА из исходного name из XML
             # Приоритет: исходное name из XML (чтобы сохранить все данные из 1С)
+            old_name_value = product.name
             if name and name.strip():
                 # Используем исходное name из XML - это гарантирует, что все данные из 1С сохраняются
                 product.name = name.strip()
+                if process_product_from_commerceml._log_count <= 3 and old_name_value != name.strip():
+                    logger.info(f"  ✓ Название обновлено: '{old_name_value[:50]}' -> '{name.strip()[:50]}'")
             elif clean_name and clean_name.strip():
                 # Если name пустой, используем clean_name
                 product.name = clean_name.strip()
+                if process_product_from_commerceml._log_count <= 3 and old_name_value != clean_name.strip():
+                    logger.info(f"  ✓ Название обновлено (clean_name): '{old_name_value[:50]}' -> '{clean_name.strip()[:50]}'")
             elif product_data.get('name'):
                 # Если и name и clean_name пустые, используем name из product_data
-                product.name = product_data.get('name', '').strip()
+                new_name_value = product_data.get('name', '').strip()
+                product.name = new_name_value
+                if process_product_from_commerceml._log_count <= 3 and old_name_value != new_name_value:
+                    logger.info(f"  ✓ Название обновлено (product_data): '{old_name_value[:50]}' -> '{new_name_value[:50]}'")
             # ВАЖНО: Название должно обновляться ВСЕГДА при обновлении товара
             product.brand = brand or ''  # Всегда строка, не None
             # Обновляем цену только если она указана (не 0)
@@ -3312,12 +3332,23 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
         
         # ВАЖНО: Всегда обновляем применимость из данных 1С, даже если она пустая
         # Это позволяет синхронизировать изменения применимости из 1С
+        old_applicability = product.applicability or ''
         if unique_applicability:
             applicability = ', '.join(unique_applicability)
             product.applicability = applicability
+            if process_product_from_commerceml._log_count <= 3:
+                if old_applicability != applicability:
+                    logger.info(f"  ✓ Применимость обновлена: '{old_applicability[:80]}' -> '{applicability[:80]}'")
+                else:
+                    logger.info(f"  → Применимость без изменений: '{applicability[:80]}'")
         else:
             # Если применимость пустая в 1С, очищаем её на сайте
             product.applicability = ''
+            if process_product_from_commerceml._log_count <= 3:
+                if old_applicability:
+                    logger.info(f"  ✓ Применимость очищена (было: '{old_applicability[:80]}')")
+                else:
+                    logger.info(f"  → Применимость пустая (без изменений)")
         
         # Кросс-номера - объединяем из разных источников
         cross_numbers_parts = []
@@ -3532,6 +3563,7 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
         # ВАЖНО: Всегда обновляем характеристики при импорте из XML, чтобы исправить неправильные значения
         # ВАЖНО: Обновляем характеристики ВСЕГДА из данных 1С, даже если они пустые
         # Это позволяет синхронизировать изменения характеристик из 1С
+        old_characteristics = product.characteristics or ''
         if characteristics_parts:
             new_characteristics = '\n'.join(characteristics_parts)
             # Логируем изменение характеристик для отладки (только первые 3 товара)
@@ -3540,15 +3572,23 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
             else:
                 process_product_from_commerceml._log_char_update_count = 1
             if process_product_from_commerceml._log_char_update_count <= 3:
-                old_chars = product.characteristics or ''
                 logger.info(f"Обновление характеристик товара {product.external_id or product.article}:")
-                logger.info(f"  Старые: '{old_chars[:100]}...' (длина={len(old_chars)})")
+                logger.info(f"  Старые: '{old_characteristics[:100]}...' (длина={len(old_characteristics)})")
                 logger.info(f"  Новые: '{new_characteristics[:100]}...' (длина={len(new_characteristics)})")
+                if old_characteristics != new_characteristics:
+                    logger.info(f"  ✓ Характеристики будут обновлены")
+                else:
+                    logger.info(f"  → Характеристики без изменений")
             product.characteristics = new_characteristics
         else:
             # ВАЖНО: Если характеристики пустые в 1С, очищаем их на сайте
             # Это позволяет синхронизировать изменения характеристик из 1С
             product.characteristics = ''
+            if process_product_from_commerceml._log_count <= 3:
+                if old_characteristics:
+                    logger.info(f"  ✓ Характеристики очищены (было: '{old_characteristics[:100]}...')")
+                else:
+                    logger.info(f"  → Характеристики пустые (без изменений)")
         
         # ВАЖНО: Сохраняем товар ПЕРЕД обработкой ProductCharacteristic
         # Это гарантирует, что товар будет создан даже если ProductCharacteristic не работает
@@ -3566,7 +3606,13 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
             else:
                 if process_product_from_commerceml._log_count <= 3:
                     logger.info(f"✓ Товар обновлен в БД: {product.external_id or product.article} - {product.name[:50]}")
-                    logger.info(f"  Проверка сохраненных данных: external_id={product.external_id}, article={product.article}, name={product.name[:50]}")
+                    logger.info(f"  Проверка сохраненных данных:")
+                    logger.info(f"    external_id: {product.external_id}")
+                    logger.info(f"    article: {product.article}")
+                    logger.info(f"    name: {product.name[:80]}")
+                    logger.info(f"    applicability: {product.applicability[:100] if product.applicability else 'ПУСТО'}")
+                    logger.info(f"    description: {product.description[:100] if product.description else 'ПУСТО'}")
+                    logger.info(f"    characteristics: {product.characteristics[:100] if product.characteristics else 'ПУСТО'}")
         except Exception as save_error:
             error_msg = f"Ошибка сохранения товара: {str(save_error)}"
             logger.error(error_msg, exc_info=True)
