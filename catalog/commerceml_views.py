@@ -1736,8 +1736,31 @@ def parse_commerceml_product(product_elem, namespaces, root_elem=None, groups_ca
                             prop_value_parts.append(text)
                     prop_val = ''.join(prop_value_parts).strip() if prop_value_parts else ''
                     
-                    if prop_name and prop_val:
+                    if prop_name:
                         prop_name_lower = prop_name.lower()
+                        
+                        # ВАЖНО: "Размер" обрабатываем ПЕРВЫМ и ВСЕГДА, даже если значение пустое!
+                        # Это гарантирует, что значение "Размер" всегда попадет в характеристики
+                        if 'размер' in prop_name_lower or 'size' in prop_name_lower:
+                            # Ищем существующий Размер в characteristics и заменяем его
+                            size_found = False
+                            for i, char in enumerate(characteristics):
+                                if isinstance(char, dict) and ('размер' in char.get('name', '').lower() or 'size' in char.get('name', '').lower()):
+                                    characteristics[i] = {
+                                        'name': prop_name,
+                                        'value': prop_val  # Добавляем значение, даже если оно пустое
+                                    }
+                                    size_found = True
+                                    break
+                            # Если не нашли, добавляем новый
+                            if not size_found:
+                                characteristics.append({
+                                    'name': prop_name,
+                                    'value': prop_val  # Добавляем значение, даже если оно пустое
+                                })
+                            # Продолжаем обработку только если значение не пустое (для остальных полей)
+                            if not prop_val:
+                                continue
                         
                         # Обрабатываем служебные свойства - они не должны попадать в characteristics
                         # Артикул1 → article (кросс-номер)
@@ -1780,30 +1803,10 @@ def parse_commerceml_product(product_elem, namespaces, root_elem=None, groups_ca
                             if prop_val not in product_data['body']:
                                 product_data['body'].append(prop_val)
                         
-                        # Размер → всегда в характеристики (без фильтрации)
-                        # ВАЖНО: Приоритет у ЗначенияСвойств - если Размер уже есть в characteristics,
-                        # заменяем его значением из ЗначенияСвойств
-                        elif 'размер' in prop_name_lower or 'size' in prop_name_lower:
-                            # Ищем существующий Размер в characteristics и заменяем его
-                            size_found = False
-                            for i, char in enumerate(characteristics):
-                                if isinstance(char, dict) and ('размер' in char.get('name', '').lower() or 'size' in char.get('name', '').lower()):
-                                    characteristics[i] = {
-                                        'name': prop_name,
-                                        'value': prop_val
-                                    }
-                                    size_found = True
-                                    break
-                            # Если не нашли, добавляем новый
-                            if not size_found:
-                                characteristics.append({
-                                    'name': prop_name,
-                                    'value': prop_val
-                                })
-                        
                         # Проверяем, является ли значение размером (например, 128*410 мм, 20*450, 260*170*10*29)
                         # ВАЖНО: Размеры могут быть в любых характеристиках, не только в поле "Размер"
-                        elif re.search(r'\d+(?:\*|x)\d+(?:(?:\*|x)\d+)*(?:\s*(?:мм|см|м|mm|cm|m))?', prop_val, re.IGNORECASE):
+                        # Но только если поле НЕ называется "Размер" (так как "Размер" уже обработан выше)
+                        elif prop_val and 'размер' not in prop_name_lower and 'size' not in prop_name_lower and re.search(r'\d+(?:\*|x)\d+(?:(?:\*|x)\d+)*(?:\s*(?:мм|см|м|mm|cm|m))?', prop_val, re.IGNORECASE):
                             # Это размер - добавляем в характеристики как "Размер"
                             # Ищем существующий Размер в characteristics и заменяем его
                             size_found = False
@@ -3210,21 +3213,16 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
                         # ВАЖНО: Не используем strip() для значения, чтобы сохранить полное значение "Размер"
                         # Значение уже было правильно извлечено из XML с помощью itertext()
                         char_value = char_data.get('value', '')
-                        if char_name and char_value:
+                        if char_name:
                             char_name_lower = char_name.lower()
-                            char_value_upper = char_value.upper()
-                            
-                            # Пропускаем служебные характеристики
-                            if char_name_lower in excluded_chars:
-                                continue
-                            
-                            # Пропускаем материалы
-                            if any(material in char_name_lower for material in excluded_materials):
-                                continue
                             
                             # ВАЖНО: "Размер" всегда должен попадать в характеристики БЕЗ фильтрации!
-                            # Значение может быть любым: "12V/80А/ПЛ. РЕМ.5Д/ОВ.Ф./ЗКОНТ", "20*450" и т.д.
+                            # Значение может быть любым: "12V/80А/ПЛ. РЕМ.5Д/ОВ.Ф./ЗКОНТ", "20*450", "70*117*27" и т.д.
+                            # Обрабатываем "Размер" ПЕРВЫМ, до всех других проверок, чтобы гарантировать попадание в характеристики
                             if 'размер' in char_name_lower or 'size' in char_name_lower:
+                                # ВАЖНО: Обрабатываем "Размер" даже если значение пустое или не проходит другие проверки
+                                if not char_value:
+                                    char_value = ''  # Разрешаем пустое значение для "Размер"
                                 # ВАЖНО: Значение "Размер" должно попадать в "Характеристика", а не создавать отдельную строку "Размер"!
                                 # Логируем для отладки (только первые 3 товара)
                                 if hasattr(process_product_from_commerceml, '_log_size_count'):
@@ -3257,7 +3255,19 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
                                     logger.info(f"  Добавлено значение из 'Размер' в 'Характеристика': '{char_str}'")
                                 continue
                             
-                            # Для остальных характеристик проверяем, что значение не является кодом модели/применимости
+                            # Пропускаем служебные характеристики
+                            if char_name_lower in excluded_chars:
+                                continue
+                            
+                            # Пропускаем материалы
+                            if any(material in char_name_lower for material in excluded_materials):
+                                continue
+                            
+                            # Для остальных характеристик проверяем, что значение не пустое и не является кодом модели/применимости
+                            if not char_value:
+                                continue
+                            
+                            char_value_upper = char_value.upper()
                             # Коды моделей обычно: 1-4 цифры + буквы (например, 1GEN, 1NZF, 2GR, 4AFE)
                             if re.match(r'^[A-Z0-9#\-/]{1,10}$', char_value_upper) and not re.search(r'[*x]', char_value):
                                 # Это похоже на код модели, а не на характеристику - пропускаем
