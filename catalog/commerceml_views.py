@@ -881,10 +881,36 @@ def process_commerceml_file(file_path, filename, request=None):
         except Exception as e:
             logger.warning(f"Ошибка при создании кэша групп: {e}, продолжаем без кэша")
         
+        # ВАЖНО: Собираем все варианты товаров, но для товаров с одинаковым базовым Ид
+        # используем данные из ПОСЛЕДНЕГО варианта (это измененные данные из 1С)
+        products_by_base_id = {}  # Словарь: базовый_Ид -> последние данные товара
+        
         for idx, product_elem in enumerate(products_elements):
             product_data = parse_commerceml_product(product_elem, namespaces, root, groups_cache=groups_cache)
             if product_data:
-                products_data.append(product_data)
+                # Определяем базовый Ид товара
+                external_id = product_data.get('external_id') or product_data.get('sku', '')
+                if external_id:
+                    external_id = external_id.strip()
+                    # Если Ид составной (содержит #), извлекаем базовый Ид
+                    if '#' in external_id:
+                        base_id = external_id.split('#')[0]
+                    else:
+                        base_id = external_id
+                    
+                    # ВАЖНО: Если товар с таким базовым Ид уже встречался,
+                    # заменяем его данными на последний вариант (измененные данные из 1С)
+                    if base_id in products_by_base_id:
+                        # Логируем для диагностики (только первые 3 случая)
+                        if idx < 3:
+                            logger.info(f"Товар #{idx+1}: найден дубликат базового Ид {base_id}, используем данные из последнего варианта")
+                        products_by_base_id[base_id] = product_data
+                    else:
+                        products_by_base_id[base_id] = product_data
+                else:
+                    # Если нет Ид, добавляем товар как есть (будет обработан по артикулу)
+                    products_data.append(product_data)
+                
                 if idx < 3:  # Логируем первые 3 товара для отладки
                     logger.info(f"Товар #{idx+1}: sku={product_data.get('sku')}, name={product_data.get('name')[:50] if product_data.get('name') else 'N/A'}")
             else:
@@ -895,7 +921,10 @@ def process_commerceml_file(file_path, filename, request=None):
                     for child in product_elem:
                         logger.warning(f"    Дочерний: {child.tag} = {child.text[:50] if child.text else 'None'}")
         
-        logger.info(f"Всего распарсено товаров: {len(products_data)}")
+        # Добавляем все уникальные товары (последние варианты для каждого базового Ид)
+        products_data.extend(products_by_base_id.values())
+        
+        logger.info(f"Всего распарсено товаров: {len(products_data)} (уникальных по базовому Ид: {len(products_by_base_id)})")
         
         if not products_data:
             logger.warning("Товары не найдены в файле после парсинга")
@@ -1329,25 +1358,57 @@ def parse_commerceml_product(product_elem, namespaces, root_elem=None, groups_ca
     # Идентификатор товара (Ид)
     id_elem = find_elem('Ид')
     if id_elem is not None and id_elem.text:
-        product_data['sku'] = id_elem.text.strip()
-        product_data['external_id'] = id_elem.text.strip()
-        # Логируем для диагностики (только первые 3 товара)
-        if not hasattr(parse_commerceml_product, '_log_count'):
-            parse_commerceml_product._log_count = 0
-        parse_commerceml_product._log_count += 1
-        if parse_commerceml_product._log_count <= 3:
-            logger.info(f"Найден Ид товара в XML: {product_data['external_id']}")
-    else:
-        # Пробуем найти Ид в атрибутах
-        if 'Ид' in product_elem.attrib:
-            product_data['sku'] = product_elem.attrib['Ид'].strip()
-            product_data['external_id'] = product_elem.attrib['Ид'].strip()
-            # Логируем для диагностики
+        full_id = id_elem.text.strip()
+        # ВАЖНО: В CommerceML 2.0 товар с вариантами характеристик имеет составной Ид вида "uuid#characteristic_id"
+        # Например: "13a33496-235b-4440-ab12-15b1eb281f06#4f02ca3d-c696-11f0-811a-00155d01d802"
+        # Нужно извлечь основной Ид товара (до символа #)
+        # Это позволяет обновлять один товар при наличии нескольких вариантов характеристик
+        if '#' in full_id:
+            base_id = full_id.split('#')[0]
+            product_data['sku'] = base_id
+            product_data['external_id'] = base_id
+            product_data['full_external_id'] = full_id  # Сохраняем полный Ид для справки
+            # Логируем для диагностики (только первые 3 товара)
             if not hasattr(parse_commerceml_product, '_log_count'):
                 parse_commerceml_product._log_count = 0
             parse_commerceml_product._log_count += 1
             if parse_commerceml_product._log_count <= 3:
-                logger.info(f"Найден Ид товара в атрибутах XML: {product_data['external_id']}")
+                logger.info(f"Найден составной Ид товара в XML: {full_id} -> базовый Ид: {base_id}")
+        else:
+            product_data['sku'] = full_id
+            product_data['external_id'] = full_id
+            # Логируем для диагностики (только первые 3 товара)
+            if not hasattr(parse_commerceml_product, '_log_count'):
+                parse_commerceml_product._log_count = 0
+            parse_commerceml_product._log_count += 1
+            if parse_commerceml_product._log_count <= 3:
+                logger.info(f"Найден Ид товара в XML: {product_data['external_id']}")
+    else:
+        # Пробуем найти Ид в атрибутах
+        if 'Ид' in product_elem.attrib:
+            full_id = product_elem.attrib['Ид'].strip()
+            # ВАЖНО: В CommerceML 2.0 товар с вариантами характеристик имеет составной Ид вида "uuid#characteristic_id"
+            # Извлекаем основной Ид товара (до символа #)
+            if '#' in full_id:
+                base_id = full_id.split('#')[0]
+                product_data['sku'] = base_id
+                product_data['external_id'] = base_id
+                product_data['full_external_id'] = full_id  # Сохраняем полный Ид для справки
+                # Логируем для диагностики
+                if not hasattr(parse_commerceml_product, '_log_count'):
+                    parse_commerceml_product._log_count = 0
+                parse_commerceml_product._log_count += 1
+                if parse_commerceml_product._log_count <= 3:
+                    logger.info(f"Найден составной Ид товара в атрибутах XML: {full_id} -> базовый Ид: {base_id}")
+            else:
+                product_data['sku'] = full_id
+                product_data['external_id'] = full_id
+                # Логируем для диагностики
+                if not hasattr(parse_commerceml_product, '_log_count'):
+                    parse_commerceml_product._log_count = 0
+                parse_commerceml_product._log_count += 1
+                if parse_commerceml_product._log_count <= 3:
+                    logger.info(f"Найден Ид товара в атрибутах XML: {product_data['external_id']}")
         else:
             # Логируем, если Ид не найден (только первые 3 товара)
             if not hasattr(parse_commerceml_product, '_log_count'):
@@ -1586,7 +1647,7 @@ def parse_commerceml_product(product_elem, namespaces, root_elem=None, groups_ca
                         if 'engine' not in product_data:
                             product_data['engine'] = []
                         if char_value not in product_data['engine']:
-                            product_data['engine'].append(char_value)
+                        product_data['engine'].append(char_value)
                     
                     # Кузов → body (для раздела "Применимость"/описание)
                     # ВАЖНО: Не добавляем в applicability здесь, чтобы избежать дублирования
@@ -1595,7 +1656,7 @@ def parse_commerceml_product(product_elem, namespaces, root_elem=None, groups_ca
                         if 'body' not in product_data:
                             product_data['body'] = []
                         if char_value not in product_data['body']:
-                            product_data['body'].append(char_value)
+                        product_data['body'].append(char_value)
                     
                     # Размер → всегда в характеристики (без фильтрации)
                     elif 'размер' in char_name_lower or 'size' in char_name_lower:
@@ -1625,8 +1686,8 @@ def parse_commerceml_product(product_elem, namespaces, root_elem=None, groups_ca
                         if not size_found:
                             characteristics.append({
                                 'name': 'Размер',
-                                'value': char_value
-                            })
+                            'value': char_value
+                        })
                     
                     # Все остальные характеристики добавляем в список
                     # ВАЖНО: Фильтруем неправильные значения (коды моделей, материалы и т.д.)
@@ -1655,31 +1716,31 @@ def parse_commerceml_product(product_elem, namespaces, root_elem=None, groups_ca
     # Вариант 2: ЗначенияСвойств (старый формат)
     # ВАЖНО: Обрабатываем ЗначенияСвойств всегда, даже если есть ХарактеристикиТовара,
     # так как в XML могут быть оба варианта одновременно
-    props_elem = None
-    if namespace:
-        props_elem = product_elem.find(f'{{{namespace}}}ЗначенияСвойств')
-    if props_elem is None:
-        props_elem = product_elem.find('ЗначенияСвойств')
-    # Пробуем с префиксом catalog: только если он определен
-    if props_elem is None and 'catalog' in namespaces:
-        try:
-            props_elem = product_elem.find('catalog:ЗначенияСвойств', namespaces)
-        except (KeyError, ValueError):
-            pass
-    
-    if props_elem is not None:
-        prop_items = []
+        props_elem = None
         if namespace:
-            prop_items = props_elem.findall(f'{{{namespace}}}ЗначенияСвойства')
-        if not prop_items:
-            prop_items = props_elem.findall('ЗначенияСвойства')
+            props_elem = product_elem.find(f'{{{namespace}}}ЗначенияСвойств')
+        if props_elem is None:
+            props_elem = product_elem.find('ЗначенияСвойств')
         # Пробуем с префиксом catalog: только если он определен
-        if not prop_items and 'catalog' in namespaces:
+        if props_elem is None and 'catalog' in namespaces:
             try:
-                prop_items = props_elem.findall('catalog:ЗначенияСвойства', namespaces)
+                props_elem = product_elem.find('catalog:ЗначенияСвойств', namespaces)
             except (KeyError, ValueError):
                 pass
         
+        if props_elem is not None:
+            prop_items = []
+            if namespace:
+                prop_items = props_elem.findall(f'{{{namespace}}}ЗначенияСвойства')
+            if not prop_items:
+                prop_items = props_elem.findall('ЗначенияСвойства')
+            # Пробуем с префиксом catalog: только если он определен
+            if not prop_items and 'catalog' in namespaces:
+                try:
+                    prop_items = props_elem.findall('catalog:ЗначенияСвойства', namespaces)
+                except (KeyError, ValueError):
+                    pass
+            
         if prop_items:
             # ВАЖНО: Обрабатываем ЗначенияСвойств всегда для специальных полей (Артикул1, Артикул2, Двигатель, Кузов, Размер)
             # Эти поля должны браться из ЗначенияСвойств, а не из ХарактеристикиТовара
@@ -1701,7 +1762,7 @@ def parse_commerceml_product(product_elem, namespaces, root_elem=None, groups_ca
                 # Если Наименование не найдено, используем Ид как fallback (для совместимости)
                 if prop_name_elem is None:
                     prop_id_elem = None
-                    if namespace:
+                if namespace:
                         prop_id_elem = prop_elem.find(f'{{{namespace}}}Ид')
                     if prop_id_elem is None:
                         prop_id_elem = prop_elem.find('Ид')
@@ -1850,10 +1911,10 @@ def parse_commerceml_product(product_elem, namespaces, root_elem=None, groups_ca
                                     # Это похоже на код модели, а не на характеристику - пропускаем
                                     continue
                                 
-                                characteristics.append({
-                                    'name': prop_name,
-                                    'value': prop_val
-                                })
+                        characteristics.append({
+                            'name': prop_name,
+                            'value': prop_val
+                        })
     
     if characteristics:
         product_data['characteristics'] = characteristics
@@ -2727,6 +2788,13 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
         # Убираем пробелы и проверяем, что external_id не пустой
         if external_id:
             external_id = external_id.strip()
+            # ВАЖНО: Если external_id составной (содержит #), извлекаем базовый Ид
+            # Это уже должно быть сделано в parse_commerceml_product, но проверяем на всякий случай
+            # В CommerceML 2.0 товар с вариантами характеристик имеет составной Ид вида "uuid#characteristic_id"
+            # Например: "13a33496-235b-4440-ab12-15b1eb281f06#4f02ca3d-c696-11f0-811a-00155d01d802"
+            # Нужно использовать только базовый Ид (до #) для поиска и обновления товара
+            if '#' in external_id:
+                external_id = external_id.split('#')[0]
         if not external_id:
             external_id = None  # Используем None вместо пустой строки
         
@@ -2882,12 +2950,41 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
             is_active = True  # Всегда активен при создании из import.xml
         
         # Ищем товар по external_id (приоритет) или по артикулу в нужном типе каталога
+        # ВАЖНО: В CommerceML 2.0 товар с вариантами характеристик имеет составной Ид вида "uuid#characteristic_id"
+        # Мы извлекаем базовый Ид (до #) и используем его для поиска товара
+        # Это позволяет обновлять один товар при наличии нескольких вариантов характеристик
         product = None
         if external_id:
+            # Если есть external_id (базовый Ид), ищем по нему
             product = Product.objects.filter(external_id=external_id, catalog_type=catalog_type).first()
+            # Если не нашли в нужном типе каталога, ищем в любом каталоге
+            if not product:
+                product = Product.objects.filter(external_id=external_id).first()
+            
+            # ВАЖНО: Если товар не найден по external_id, но есть артикул,
+            # ищем по артикулу - возможно, это тот же товар, но без external_id
+            # Это позволяет связать варианты товара с одинаковым артикулом
+            if not product and article:
+                product = Product.objects.filter(article=article, catalog_type=catalog_type).first()
+                # Если не нашли в нужном типе каталога, ищем в любом каталоге
+                if not product:
+                    product = Product.objects.filter(article=article).first()
+                # Если нашли товар по артикулу, но у него нет external_id,
+                # обновим external_id - это свяжет варианты товара
+                if product and not product.external_id:
+                    # Логируем для диагностики (только первые 3 товара)
+                    if process_product_from_commerceml._log_count <= 3:
+                        logger.info(f"Найден товар по артикулу {article}, устанавливаем external_id={external_id}")
+                    product.external_id = external_id
+                    # ВАЖНО: Сохраняем товар сразу, чтобы следующий вариант мог его найти по external_id
+                    product.save(update_fields=['external_id'])
         
+        # Если external_id нет, ищем по артикулу
         if not product and article:
             product = Product.objects.filter(article=article, catalog_type=catalog_type).first()
+            # Если не нашли в нужном типе каталога, ищем в любом каталоге
+            if not product:
+                product = Product.objects.filter(article=article).first()
         
         was_created = product is None
         
@@ -3106,7 +3203,7 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
         # Это позволяет синхронизировать изменения применимости из 1С
         if unique_applicability:
             applicability = ', '.join(unique_applicability)
-            product.applicability = applicability
+                product.applicability = applicability
         else:
             # Если применимость пустая в 1С, очищаем её на сайте
             product.applicability = ''
@@ -3136,7 +3233,7 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
         # Это позволяет синхронизировать изменения кросс-номеров из 1С
         if cross_numbers_parts:
             cross_numbers = ', '.join([p for p in cross_numbers_parts if p and str(p).strip()])
-            product.cross_numbers = cross_numbers
+                product.cross_numbers = cross_numbers
         else:
             # Если кросс-номера пустые в 1С, очищаем их на сайте
             product.cross_numbers = ''
