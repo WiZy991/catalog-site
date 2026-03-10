@@ -3403,6 +3403,15 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
         # Применимость может содержать артикулы альтернативные (TIS-166, GUIS-66) - это нормально
         # Убираем дубликаты и фильтруем пустые значения
         # ВАЖНО: Исключаем артикулы (значения, начинающиеся с "/") из применимости
+        # Доп. эвристика: если парсер названия добавил "NHW" (без цифр) вместе с более точным кодом (например ZVW30),
+        # то "NHW" почти всегда лишний и даёт неправильную применимость на карточке.
+        # Убираем ТОЛЬКО ровно "NHW" (не трогаем NHW20/NHW30 и т.п.).
+        parts_upper = [str(p).strip().upper() for p in applicability_parts if p and str(p).strip()]
+        if 'NHW' in parts_upper:
+            has_specific = any(re.match(r'^[A-Z]{2,6}\d{1,4}[A-Z0-9]{0,3}$', pu) for pu in parts_upper)
+            if has_specific:
+                applicability_parts = [p for p in applicability_parts if str(p).strip().upper() != 'NHW']
+
         unique_applicability = []
         seen = set()
         for p in applicability_parts:
