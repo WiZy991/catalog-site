@@ -2154,9 +2154,18 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                         continue
                     
                     product_id = product_id_elem.text.strip()
+                    # ВАЖНО: В CommerceML 2.0 Ид может быть составным: "uuid#характеристика".
+                    # В базе external_id у товаров может храниться как базовый uuid или как составной.
+                    # Для устойчивого матчинга используем базовый uuid.
+                    product_base_id = product_id.split('#', 1)[0].strip() if product_id else product_id
                     
                     # Ищем товар по external_id сначала в нужном типе каталога, потом в любом
-                    product = Product.objects.filter(external_id=product_id, catalog_type=catalog_type).first()
+                    product = Product.objects.filter(
+                        Q(external_id=product_id) |
+                        Q(external_id=product_base_id) |
+                        Q(external_id__startswith=product_base_id + '#'),
+                        catalog_type=catalog_type
+                    ).first()
                     if not product:
                         # Пробуем по артикулу в нужном типе каталога
                         product = Product.objects.filter(article=product_id, catalog_type=catalog_type).first()
@@ -2164,7 +2173,11 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                     # Если не нашли в нужном типе каталога, ищем в любом каталоге
                     existing_product = None  # Инициализируем переменную
                     if not product:
-                        product = Product.objects.filter(external_id=product_id).first()
+                        product = Product.objects.filter(
+                            Q(external_id=product_id) |
+                            Q(external_id=product_base_id) |
+                            Q(external_id__startswith=product_base_id + '#')
+                        ).first()
                     if not product:
                         product = Product.objects.filter(article=product_id).first()
                     
@@ -2174,7 +2187,9 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                     
                     # Проверяем, есть ли товар в нужном каталоге
                     product = Product.objects.filter(
-                        external_id=product_id,
+                        Q(external_id=product_id) |
+                        Q(external_id=product_base_id) |
+                        Q(external_id__startswith=product_base_id + '#'),
                         catalog_type=catalog_type
                     ).first()
                     if not product:
