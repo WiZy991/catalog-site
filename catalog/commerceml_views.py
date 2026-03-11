@@ -2982,9 +2982,15 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
         
         # Если категория не определилась из XML (или была слишком общей), определяем по названию товара
         if not category:
-            category = get_category_for_product(clean_name)
+            # ВАЖНО: Для определения категории используем исходное name (до очистки), 
+            # так как в нём могут быть важные ключевые слова для определения категории
+            # clean_name используется только для отображения (убирает лишние запятые)
+            category_input = name if name and name.strip() else clean_name
+            category = get_category_for_product(category_input)
             if process_product_from_commerceml._log_count <= 3:
-                logger.info(f"  Категория определена по названию '{clean_name[:50]}' -> '{category.name if category else 'НЕ НАЙДЕНА'}'")
+                logger.info(f"  Категория определена по названию '{category_input[:50]}' -> '{category.name if category else 'НЕ НАЙДЕНА'}'")
+                if category:
+                    logger.info(f"    Категория: {category.name}, родитель: {category.parent.name if category.parent else 'НЕТ'}")
         
         # ВАЖНО: Если категория всё равно не найдена, берём первую основную категорию (fallback)
         if not category:
