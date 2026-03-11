@@ -3333,30 +3333,41 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
         applicability_parts = []
         
         # Добавляем "Кузов" и "Двигатель" в применимость для всех типов каталогов
-        # Кузов из 1С
-        if product_data.get('body'):
-            body_list = product_data['body'] if isinstance(product_data['body'], list) else [product_data['body']]
-            for body_item in body_list:
-                if body_item and body_item.strip():
-                    applicability_parts.append(body_item.strip())
+        # ВАЖНО: Разбиваем значения по слешам, чтобы избежать дубликатов
+        # Например, "1HD/1HZ" должно стать ["1HD", "1HZ"], а не ["1HD/1HZ", "1HD", "1HZ"]
         
         # ВАЖНО: если кузов пришёл из 1С, используем его как источник истины для кодов кузова/модели
         # Это нужно, чтобы не подмешивать лишние коды из названия (например, "NHW/ZVW30" при кузове "ZVW30")
         body_codes_upper = set()
         if product_data.get('body'):
-            for body_item in (product_data['body'] if isinstance(product_data['body'], list) else [product_data['body']]):
+            body_list = product_data['body'] if isinstance(product_data['body'], list) else [product_data['body']]
+            for body_item in body_list:
                 if body_item and str(body_item).strip():
-                    # поддерживаем варианты со слешами: "NHW30/ZVW30" -> {"NHW30","ZVW30"}
-                    for part in str(body_item).replace(',', '/').split('/'):
-                        part = part.strip().upper()
+                    # Разбиваем по слешам: "NHW30/ZVW30" -> ["NHW30", "ZVW30"]
+                    body_parts = str(body_item).replace(',', '/').split('/')
+                    for part in body_parts:
+                        part = part.strip()
                         if part:
-                            body_codes_upper.add(part)
+                            part_upper = part.upper()
+                            body_codes_upper.add(part_upper)
+                            # Добавляем каждую часть отдельно в применимость
+                            if part_upper not in [p.upper() for p in applicability_parts]:
+                                applicability_parts.append(part)
+        
         # Двигатель из 1С
         if product_data.get('engine'):
             engine_list = product_data['engine'] if isinstance(product_data['engine'], list) else [product_data['engine']]
             for engine_item in engine_list:
                 if engine_item and engine_item.strip():
-                    applicability_parts.append(engine_item.strip())
+                    # Разбиваем по слешам: "1HD/1HZ" -> ["1HD", "1HZ"]
+                    engine_parts = str(engine_item).replace(',', '/').split('/')
+                    for part in engine_parts:
+                        part = part.strip()
+                        if part:
+                            part_upper = part.upper()
+                            # Добавляем каждую часть отдельно в применимость
+                            if part_upper not in [p.upper() for p in applicability_parts]:
+                                applicability_parts.append(part)
         
         # Если applicability пришёл как список (из характеристик)
         if product_data.get('applicability'):
