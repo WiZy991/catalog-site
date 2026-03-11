@@ -2693,8 +2693,12 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                             for w_elem in all_warehouse_elems:
                                 logger.debug(f"    <Склад> атрибуты: {w_elem.attrib}")
                 
-                # Синхронизируем категорию оптового товара с розничным аналогом
-                # Это гарантирует правильное распределение по категориям при каждом обмене
+                # ВАЖНО: Переопределяем категорию по названию товара при каждом обмене
+                # Это гарантирует правильное распределение по категориям, даже если при предыдущем обмене
+                # все товары попали в одну категорию
+                from .services import get_category_for_product
+                
+                # Для оптовых товаров сначала пытаемся синхронизировать с розничным аналогом
                 if catalog_type == 'wholesale':
                     retail_counterpart = None
                     if product.external_id:
@@ -2711,6 +2715,22 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                         product.category = retail_counterpart.category
                         if idx < 10:
                             logger.info(f"  ↳ Синхронизирована категория оптового товара {product_id}: {retail_counterpart.category}")
+                    elif not retail_counterpart:
+                        # Если розничного аналога нет, определяем категорию по названию
+                        new_category = get_category_for_product(product.name)
+                        if new_category and new_category.id != product.category_id:
+                            old_category = product.category
+                            product.category = new_category
+                            if idx < 10:
+                                logger.info(f"  ↳ Категория оптового товара {product_id} определена по названию: '{old_category.name if old_category else 'НЕТ'}' -> '{new_category.name}'")
+                else:
+                    # Для розничных товаров всегда определяем категорию по названию
+                    new_category = get_category_for_product(product.name)
+                    if new_category and new_category.id != product.category_id:
+                        old_category = product.category
+                        product.category = new_category
+                        if idx < 10:
+                            logger.info(f"  ↳ Категория розничного товара {product_id} определена по названию: '{old_category.name if old_category else 'НЕТ'}' -> '{new_category.name}'")
                 
                 product.save()
                 
