@@ -2959,7 +2959,12 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
         category_name = product_data.get('category_name', '').strip()
         category = None
         
-        if category_name:
+        # Список слишком общих категорий из XML, которые не помогают определить конкретную категорию
+        # Если category_name из XML - это общая категория, игнорируем её и определяем по названию товара
+        generic_categories = ['ЗАПЧАСТИ', 'ЗАПЧАСТЬ', 'ЗАПЧАСТИ ДЛЯ', 'ТОВАРЫ', 'ТОВАР', 'PRODUCTS', 'PARTS', 'ЗАПЧАСТИ ДЛЯ АВТОМОБИЛЕЙ']
+        is_generic_category = category_name.upper() in [gc.upper() for gc in generic_categories]
+        
+        if category_name and not is_generic_category:
             from .models import Category as CategoryModel
             # Сначала ищем категорию напрямую по точному имени из 1С (любой уровень)
             category = CategoryModel.objects.filter(
@@ -2971,8 +2976,11 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
                 category = get_category_for_product(category_name)
                 if process_product_from_commerceml._log_count <= 3:
                     logger.info(f"  Категория из XML '{category_name}' -> определена как '{category.name if category else 'НЕ НАЙДЕНА'}'")
+        elif is_generic_category:
+            if process_product_from_commerceml._log_count <= 3:
+                logger.info(f"  Категория из XML '{category_name}' слишком общая, определяем по названию товара")
         
-        # Если категория не определилась из XML, определяем по названию товара
+        # Если категория не определилась из XML (или была слишком общей), определяем по названию товара
         if not category:
             category = get_category_for_product(clean_name)
             if process_product_from_commerceml._log_count <= 3:
@@ -3266,8 +3274,12 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
             # НЕ меняем is_active при обновлении из import.xml - оставляем существующее значение
             # Если товар был активен, он останется активным
             # Если товар был неактивен, он останется неактивным (возможно, был скрыт вручную)
+            # ВАЖНО: Всегда обновляем категорию из данных 1С, чтобы товары правильно распределялись по категориям
             if category:
+                old_category = product.category
                 product.category = category
+                if process_product_from_commerceml._log_count <= 3 and old_category != category:
+                    logger.info(f"  ✓ Категория обновлена: '{old_category.name if old_category else 'НЕТ'}' -> '{category.name}'")
         
         # Описание (отображается как "Применимость") — заполняем из "Кузов" и "Двигатель" из 1С
         description_parts = []
