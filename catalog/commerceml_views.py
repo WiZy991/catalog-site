@@ -3355,6 +3355,8 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
                                 applicability_parts.append(part)
         
         # Двигатель из 1С
+        # ВАЖНО: Сохраняем коды двигателей из XML, чтобы не добавлять их из названия
+        engine_codes_upper = set()
         if product_data.get('engine'):
             engine_list = product_data['engine'] if isinstance(product_data['engine'], list) else [product_data['engine']]
             for engine_item in engine_list:
@@ -3365,28 +3367,81 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
                         part = part.strip()
                         if part:
                             part_upper = part.upper()
+                            engine_codes_upper.add(part_upper)
                             # Добавляем каждую часть отдельно в применимость
                             if part_upper not in [p.upper() for p in applicability_parts]:
                                 applicability_parts.append(part)
         
         # Если applicability пришёл как список (из характеристик)
+        # ВАЖНО: Разбиваем значения по слешам, чтобы избежать дубликатов
         if product_data.get('applicability'):
             if isinstance(product_data.get('applicability'), list):
-                applicability_parts.extend(product_data.get('applicability'))
+                for appl_item in product_data.get('applicability'):
+                    if appl_item and str(appl_item).strip():
+                        # Разбиваем по слешам: "1HD/1HZ" -> ["1HD", "1HZ"]
+                        appl_parts = str(appl_item).replace(',', '/').split('/')
+                        for part in appl_parts:
+                            part = part.strip()
+                            if part:
+                                part_upper = part.upper()
+                                if part_upper not in [p.upper() for p in applicability_parts]:
+                                    applicability_parts.append(part)
             else:
-                applicability_parts.append(product_data.get('applicability'))
+                appl_value = product_data.get('applicability')
+                if appl_value and str(appl_value).strip():
+                    # Разбиваем по слешам: "1HD/1HZ" -> ["1HD", "1HZ"]
+                    appl_parts = str(appl_value).replace(',', '/').split('/')
+                    for part in appl_parts:
+                        part = part.strip()
+                        if part:
+                            part_upper = part.upper()
+                            if part_upper not in [p.upper() for p in applicability_parts]:
+                                applicability_parts.append(part)
         
         # Добавляем из парсинга (может быть строка с разделителями)
+        # ВАЖНО: Разбиваем значения по слешам и запятым, чтобы избежать дубликатов
         if parsed.get('applicability'):
             parsed_applicability = parsed.get('applicability')
-            # Если это строка, разбиваем по запятым
+            # Если это строка, разбиваем по запятым и слешам
             if isinstance(parsed_applicability, str):
+                # Сначала разбиваем по запятым
                 parsed_parts = [p.strip() for p in parsed_applicability.split(',') if p.strip()]
-                applicability_parts.extend(parsed_parts)
+                # Затем разбиваем каждую часть по слешам
+                final_parts = []
+                for part in parsed_parts:
+                    if '/' in part:
+                        slash_parts = [p.strip() for p in part.split('/') if p.strip()]
+                        final_parts.extend(slash_parts)
+                    else:
+                        final_parts.append(part)
+                # Добавляем только уникальные значения
+                for part in final_parts:
+                    if part:
+                        part_upper = part.upper()
+                        if part_upper not in [p.upper() for p in applicability_parts]:
+                            applicability_parts.append(part)
             elif isinstance(parsed_applicability, list):
-                applicability_parts.extend(parsed_applicability)
+                for appl_item in parsed_applicability:
+                    if appl_item and str(appl_item).strip():
+                        # Разбиваем по слешам
+                        appl_parts = str(appl_item).replace(',', '/').split('/')
+                        for part in appl_parts:
+                            part = part.strip()
+                            if part:
+                                part_upper = part.upper()
+                                if part_upper not in [p.upper() for p in applicability_parts]:
+                                    applicability_parts.append(part)
             else:
-                applicability_parts.append(str(parsed_applicability))
+                appl_value = str(parsed_applicability)
+                if appl_value and appl_value.strip():
+                    # Разбиваем по слешам
+                    appl_parts = appl_value.replace(',', '/').split('/')
+                    for part in appl_parts:
+                        part = part.strip()
+                        if part:
+                            part_upper = part.upper()
+                            if part_upper not in [p.upper() for p in applicability_parts]:
+                                applicability_parts.append(part)
         
         # Извлекаем модели машин из скобок в названии
         # Пример: "Датчик кислородный (TOYOTA, 89467-71020, 2UZFE/1GRFE)" -> извлечь 2UZFE, 1GRFE
@@ -3418,9 +3473,16 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
                 # Паттерн 2: буквы + цифры (ZVW30, NHW30, J10) - коды кузова и модели
                 engine_model_pattern1 = r'^(\d+[A-Z]{2,5}(?:\d+[A-Z]{0,3})?)$'  # 2UZFE, 1GRFE
                 engine_model_pattern2 = r'^([A-Z]{2,5}\d+[A-Z0-9]{0,3})$'  # ZVW30, NHW30, J10
+                part_upper = part.upper()
+                
+                # ВАЖНО: Если кузов или двигатель уже пришли из XML, не добавляем их из названия
+                # Это предотвращает дубликаты типа "1HD/1HZ" из XML и "1HD", "1HZ" из названия
+                if part_upper in body_codes_upper or part_upper in engine_codes_upper:
+                    continue
+                
                 if re.match(engine_model_pattern1, part, re.IGNORECASE) or re.match(engine_model_pattern2, part, re.IGNORECASE):
-                    # Это код модели/двигателя/кузова - добавляем в применимость
-                    if part.upper() not in [p.upper() for p in applicability_parts]:
+                    # Это код модели/двигателя/кузова - добавляем в применимость только если его нет из XML
+                    if part_upper not in [p.upper() for p in applicability_parts]:
                         applicability_parts.append(part.upper())
                     continue
                 
@@ -3434,17 +3496,31 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
                         matched = [sp for sp in slash_parts_upper if sp in body_codes_upper]
                         if matched:
                             slash_parts = matched
+                    
+                    # ВАЖНО: Фильтруем части, которые уже есть из XML (кузов/двигатель)
+                    filtered_slash_parts = []
                     for slash_part in slash_parts:
+                        slash_part_upper = slash_part.strip().upper()
+                        # Пропускаем, если это уже есть из XML
+                        if slash_part_upper in body_codes_upper or slash_part_upper in engine_codes_upper:
+                            continue
+                        filtered_slash_parts.append(slash_part)
+                    
+                    # Используем отфильтрованные части
+                    slash_parts = filtered_slash_parts
+                    
+                    for slash_part in slash_parts:
+                        slash_part_upper = slash_part.strip().upper()
                         if re.match(engine_model_pattern1, slash_part, re.IGNORECASE) or re.match(engine_model_pattern2, slash_part, re.IGNORECASE):
-                            if slash_part.upper() not in [p.upper() for p in applicability_parts]:
+                            if slash_part_upper not in [p.upper() for p in applicability_parts]:
                                 applicability_parts.append(slash_part.upper())
                         # Также проверяем, может быть это связка кодов двигателей (2RZ/3RZ)
                         elif re.match(r'^\d+[A-Z]{2,5}$', slash_part, re.IGNORECASE):
-                            if slash_part.upper() not in [p.upper() for p in applicability_parts]:
+                            if slash_part_upper not in [p.upper() for p in applicability_parts]:
                                 applicability_parts.append(slash_part.upper())
                         # Проверяем коды кузова/модели (ZVW30, J10, RH)
                         elif re.match(r'^[A-Z]{2,5}\d+[A-Z0-9]{0,3}$', slash_part, re.IGNORECASE) or re.match(r'^[A-Z]{1,3}\d+$', slash_part, re.IGNORECASE):
-                            if slash_part.upper() not in [p.upper() for p in applicability_parts]:
+                            if slash_part_upper not in [p.upper() for p in applicability_parts]:
                                 applicability_parts.append(slash_part.upper())
 
         # ВАЖНО: если кузов (body) пришёл из 1С, он является источником истины.
@@ -3485,14 +3561,28 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
             if has_specific:
                 applicability_parts = [p for p in applicability_parts if str(p).strip().upper() != 'NHW']
 
-        unique_applicability = []
-        seen = set()
+        # ВАЖНО: Финальная проверка - разбиваем все значения со слешами перед удалением дубликатов
+        # Это гарантирует, что значения типа "1HD/1HZ" будут разбиты на ["1HD", "1HZ"]
+        final_applicability_parts = []
         for p in applicability_parts:
             if p and str(p).strip():
                 p_str = str(p).strip()
                 # Пропускаем артикулы, начинающиеся с "/" (например, /EW80A - это Артикул2)
                 if p_str.startswith('/'):
                     continue
+                # Разбиваем значения со слешами: "1HD/1HZ" -> ["1HD", "1HZ"]
+                if '/' in p_str:
+                    slash_parts = [sp.strip() for sp in p_str.split('/') if sp.strip()]
+                    final_applicability_parts.extend(slash_parts)
+                else:
+                    final_applicability_parts.append(p_str)
+        
+        # Удаляем дубликаты, сохраняя порядок
+        unique_applicability = []
+        seen = set()
+        for p_str in final_applicability_parts:
+            if p_str and str(p_str).strip():
+                p_str = str(p_str).strip()
                 p_upper = p_str.upper()
                 if p_upper not in seen:
                     seen.add(p_upper)
