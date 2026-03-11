@@ -372,6 +372,7 @@ def sync_subcategories_from_keywords(parent_category: Category, *, deactivate_re
     - создаст/обновит дочерние категории с именами: "Шаровая", "Амортизатор", "Пружина"
     - каждой дочке выставит keywords равным своему имени (чтобы detect_subcategory_info мог находить)
     - если ключевые слова удалены, а deactivate_removed=True — отключит лишние дочерние категории (is_active=False)
+    - предотвращает дублирование подкатегорий (например, "Радиатор" и "Радиаторы" → только "Радиатор")
     """
     if not parent_category:
         return (0, 0, 0)
@@ -386,25 +387,131 @@ def sync_subcategories_from_keywords(parent_category: Category, *, deactivate_re
         # (англ. ключевые слова могут оставаться в keywords для автоопределения категории).
         return bool(re.search(r'[а-яё]', s, re.IGNORECASE))
 
-    desired_names = []
+    def _normalize_to_singular(word: str) -> str:
+        """
+        Приводит русское слово к единственному числу для группировки дубликатов.
+        Например: "радиаторы" → "радиатор", "генераторы" → "генератор", "стартеры" → "стартер"
+        """
+        word_lower = word.lower().strip()
+        if not word_lower:
+            return word_lower
+        
+        # Множественное число: заканчивается на -ы, -и, -а, -я
+        # Убираем окончания множественного числа
+        
+        # Самый частый случай: окончание -ы (радиаторы, генераторы, стартеры, термостаты)
+        if word_lower.endswith('ы') and len(word_lower) > 2:
+            return word_lower[:-1]  # радиаторы → радиатор
+        
+        # Окончание -и (более редкое, но встречается)
+        elif word_lower.endswith('и') and len(word_lower) > 3:
+            # Проверяем, что перед "и" согласная (не гласная)
+            # Это поможет отличить множественное число от других слов
+            prev_char = word_lower[-2]
+            if prev_char not in 'аеёиоуыэюя':
+                return word_lower[:-1]  # генераторы → генератор (если было "генератори")
+        
+        # Окончание -а (дома → дом, но осторожно, так как много слов на -а в единственном числе)
+        elif word_lower.endswith('а') and len(word_lower) > 4:
+            # Только если перед "а" согласная и слово достаточно длинное
+            prev_char = word_lower[-2]
+            if prev_char not in 'аеёиоуыэюя':
+                # Дополнительная проверка: не обрабатываем слова, которые могут быть в единственном числе
+                # Например, "пружина" не трогаем, но "дома" → "дом"
+                return word_lower[:-1]
+        
+        # Окончание -я (поля → поле, но редко в наших категориях)
+        # Пока не обрабатываем, так как это может быть часть слова
+        
+        return word_lower
+
+    # Группируем ключевые слова по нормализованной форме (единственное число)
+    # чтобы избежать дубликатов типа "Радиатор" и "Радиаторы"
+    normalized_groups = {}  # {normalized_key: (original_name, original_keyword)}
+    
     for kw in keywords:
         kw_clean = (kw or '').strip()
         if not kw_clean:
             continue
         if not _is_cyrillic_keyword(kw_clean):
             continue
-        # Нормализуем отображаемое имя (с заглавной)
-        desired_names.append(capfirst(kw_clean))
+        
+        # Нормализуем к единственному числу для группировки
+        normalized = _normalize_to_singular(kw_clean)
+        
+        # Если уже есть слово с такой нормализованной формой, выбираем более короткое
+        # (обычно единственное число короче множественного)
+        if normalized not in normalized_groups:
+            normalized_groups[normalized] = (capfirst(kw_clean), kw_clean.lower())
+        else:
+            existing_name, existing_kw = normalized_groups[normalized]
+            # Предпочитаем единственное число (более короткое слово)
+            if len(kw_clean) < len(existing_kw):
+                normalized_groups[normalized] = (capfirst(kw_clean), kw_clean.lower())
+            # Если одинаковой длины, предпочитаем то, что уже в единственном числе
+            elif len(kw_clean) == len(existing_kw):
+                if not kw_clean.lower().endswith(('ы', 'и', 'а', 'я')):
+                    normalized_groups[normalized] = (capfirst(kw_clean), kw_clean.lower())
+
+    # Формируем список уникальных имен подкатегорий
+    desired_names = [name for name, _ in normalized_groups.values()]
+    # Словарь для быстрого поиска: normalized_key -> (display_name, keyword)
+    normalized_to_display = {_normalize_to_singular(kw.lower()): (name, kw.lower()) 
+                             for name, kw in normalized_groups.values()}
 
     created = 0
     updated = 0
+    deactivated = 0
 
     # Существующие дети под этим родителем
-    existing_children = {c.name.strip().lower(): c for c in Category.objects.filter(parent=parent_category)}
+    # Создаем два индекса: по точному имени и по нормализованному
+    existing_children_by_name = {c.name.strip().lower(): c for c in Category.objects.filter(parent=parent_category)}
+    existing_children_by_normalized = {}
+    duplicates_to_deactivate = []  # Список дубликатов для деактивации
+    
+    for name_lower, child in existing_children_by_name.items():
+        normalized = _normalize_to_singular(name_lower)
+        # Если уже есть запись с такой нормализацией, выбираем более короткое имя
+        if normalized not in existing_children_by_normalized:
+            existing_children_by_normalized[normalized] = child
+        else:
+            existing = existing_children_by_normalized[normalized]
+            existing_name_lower = existing.name.strip().lower()
+            # Предпочитаем более короткое имя (обычно единственное число)
+            if len(name_lower) < len(existing_name_lower):
+                # Старая запись становится дубликатом
+                duplicates_to_deactivate.append(existing)
+                existing_children_by_normalized[normalized] = child
+            else:
+                # Текущая запись - дубликат
+                duplicates_to_deactivate.append(child)
+    
+    # Деактивируем найденные дубликаты (если они автосгенерированные)
+    for duplicate in duplicates_to_deactivate:
+        duplicate_keywords = (duplicate.keywords or '').strip().lower()
+        duplicate_name = duplicate.name.strip().lower()
+        # Деактивируем только автосгенерированные (keywords совпадает с именем)
+        if duplicate_keywords == duplicate_name or _normalize_to_singular(duplicate_keywords) == _normalize_to_singular(duplicate_name):
+            if duplicate.is_active:
+                duplicate.is_active = False
+                duplicate.save(update_fields=['is_active', 'updated_at'])
+                deactivated += 1
 
     for name in desired_names:
         key = name.strip().lower()
-        child = existing_children.get(key)
+        normalized_key = _normalize_to_singular(key)
+        
+        # Сначала ищем по точному совпадению
+        child = existing_children_by_name.get(key)
+        
+        # Если не нашли, ищем по нормализованному ключу (для объединения дубликатов)
+        if not child and normalized_key in existing_children_by_normalized:
+            child = existing_children_by_normalized[normalized_key]
+            # Если имя отличается, обновляем его на желаемое (единственное число)
+            if child.name.strip().lower() != key:
+                child.name = name.strip()
+                child.save(update_fields=['name', 'updated_at'])
+        
         if child:
             changed = False
             if child.parent_id != parent_category.id:
@@ -413,32 +520,47 @@ def sync_subcategories_from_keywords(parent_category: Category, *, deactivate_re
             if not child.is_active:
                 child.is_active = True
                 changed = True
-            # чтобы подкатегория искалась по своему слову
-            if (child.keywords or '').strip().lower() != key:
-                child.keywords = key
+            # Обновляем keywords: добавляем все варианты (единственное и множественное число)
+            desired_kw = normalized_to_display.get(normalized_key, (name, key))[1]
+            current_kw = (child.keywords or '').strip().lower()
+            if current_kw != desired_kw:
+                child.keywords = desired_kw
                 changed = True
             if changed:
                 child.save(update_fields=['parent', 'is_active', 'keywords', 'updated_at'])
                 updated += 1
         else:
+            # Создаем новую подкатегорию
+            desired_kw = normalized_to_display.get(normalized_key, (name, key))[1]
             Category.objects.create(
                 name=name.strip(),
                 parent=parent_category,
                 is_active=True,
-                keywords=key,
+                keywords=desired_kw,
             )
             created += 1
 
-    deactivated = 0
     if deactivate_removed:
-        desired_set = set(n.strip().lower() for n in desired_names if n.strip())
-        for key, child in existing_children.items():
-            if key not in desired_set and child.is_active:
-                # Отключаем только те, которые выглядят как "автосгенерированные" (keyword == name)
-                if (child.keywords or '').strip().lower() == key:
-                    child.is_active = False
-                    child.save(update_fields=['is_active', 'updated_at'])
-                    deactivated += 1
+        # Создаем множество нормализованных ключей желаемых подкатегорий
+        desired_normalized_set = set(_normalize_to_singular(n.strip().lower()) 
+                                     for n in desired_names if n.strip())
+        
+        for name_lower, child in existing_children_by_name.items():
+            if not child.is_active:
+                continue
+            
+            normalized_name = _normalize_to_singular(name_lower)
+            
+            # Проверяем, есть ли эта подкатегория в желаемых (по нормализованному ключу)
+            if normalized_name in desired_normalized_set:
+                continue  # Эта подкатегория нужна, не деактивируем
+            
+            # Отключаем только те, которые выглядят как "автосгенерированные" (keyword == name)
+            child_keywords = (child.keywords or '').strip().lower()
+            if child_keywords == name_lower or _normalize_to_singular(child_keywords) == normalized_name:
+                child.is_active = False
+                child.save(update_fields=['is_active', 'updated_at'])
+                deactivated += 1
 
     return (created, updated, deactivated)
 
