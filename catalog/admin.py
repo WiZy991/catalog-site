@@ -322,6 +322,15 @@ class CategoryAdmin(DraggableMPTTAdmin):
                 pass
         
         super().save_model(request, obj, form, change)
+
+        # Автосоздание/обновление подкатегорий из ключевых слов
+        # (актуально, когда пользователь ожидает, что keywords -> список подкатегорий)
+        try:
+            from catalog.services import sync_subcategories_from_keywords
+            sync_subcategories_from_keywords(obj, deactivate_removed=True)
+        except Exception:
+            # Не ломаем сохранение категории из-за авто-синхронизации
+            pass
         
         # Если изменился order, пересчитываем дерево MPTT
         if change and old_order is not None and old_order != obj.order:

@@ -5,6 +5,7 @@ import re
 import os
 from django.core.files.base import ContentFile
 from django.db import transaction
+from django.utils.text import capfirst
 from .models import Category, Product, ProductImage, Brand
 
 
@@ -324,12 +325,130 @@ def detect_subcategory_info(text):
     Возвращает кортеж (основная_категория, подкатегория) или None.
     """
     text_lower = text.lower()
+
+    # 0) Сначала проверяем подкатегории из БД (динамические, настраиваются в админке).
+    # Подкатегория = Category с parent != None и заполненными keywords.
+    try:
+        db_subcats = Category.objects.filter(
+            parent__isnull=False,
+            is_active=True,
+            keywords__isnull=False,
+        ).exclude(keywords='')
+
+        # Собираем все (keyword -> (parent_name, subcat_name)), сортируем по длине keyword
+        candidates = []
+        for subcat in db_subcats.select_related('parent'):
+            parent = subcat.parent
+            if not parent or not parent.is_active:
+                continue
+            for kw in subcat.get_keywords_list():
+                candidates.append((len(kw), kw, parent.name, subcat.name))
+            # Дополнительно: имя подкатегории тоже считаем ключевым словом (если keywords пустые/неполные)
+            name_kw = (subcat.name or '').strip().lower()
+            if name_kw:
+                candidates.append((len(name_kw), name_kw, parent.name, subcat.name))
+
+        candidates.sort(key=lambda x: x[0], reverse=True)
+        for _len, kw, parent_name, subcat_name in candidates:
+            if kw and kw in text_lower:
+                return (parent_name, subcat_name)
+    except Exception:
+        # Если БД недоступна/ошибка — fallback на хардкод ниже
+        pass
     
     for keyword, (main_cat, subcat) in SUBCATEGORY_KEYWORDS.items():
         if keyword.lower() in text_lower:
             return (main_cat, subcat)
     
     return None
+
+
+def sync_subcategories_from_keywords(parent_category: Category, *, deactivate_removed: bool = True):
+    """
+    Синхронизирует подкатегории (children) из ключевых слов родительской категории.
+
+    Логика:
+    - parent_category.keywords = "шаровая, амортизатор, пружина"
+    - создаст/обновит дочерние категории с именами: "Шаровая", "Амортизатор", "Пружина"
+    - каждой дочке выставит keywords равным своему имени (чтобы detect_subcategory_info мог находить)
+    - если ключевые слова удалены, а deactivate_removed=True — отключит лишние дочерние категории (is_active=False)
+    """
+    if not parent_category:
+        return (0, 0, 0)
+
+    keywords = parent_category.get_keywords_list()
+    # Не синхронизируем, если ключевых слов нет
+    if not keywords:
+        return (0, 0, 0)
+
+    desired_names = []
+    for kw in keywords:
+        # Нормализуем отображаемое имя (с заглавной)
+        desired_names.append(capfirst(kw.strip()))
+
+    created = 0
+    updated = 0
+
+    # Существующие дети под этим родителем
+    existing_children = {c.name.strip().lower(): c for c in Category.objects.filter(parent=parent_category)}
+
+    for name in desired_names:
+        key = name.strip().lower()
+        child = existing_children.get(key)
+        if child:
+            changed = False
+            if child.parent_id != parent_category.id:
+                child.parent = parent_category
+                changed = True
+            if not child.is_active:
+                child.is_active = True
+                changed = True
+            # чтобы подкатегория искалась по своему слову
+            if (child.keywords or '').strip().lower() != key:
+                child.keywords = key
+                changed = True
+            if changed:
+                child.save(update_fields=['parent', 'is_active', 'keywords', 'updated_at'])
+                updated += 1
+        else:
+            Category.objects.create(
+                name=name.strip(),
+                parent=parent_category,
+                is_active=True,
+                keywords=key,
+            )
+            created += 1
+
+    deactivated = 0
+    if deactivate_removed:
+        desired_set = set(n.strip().lower() for n in desired_names if n.strip())
+        for key, child in existing_children.items():
+            if key not in desired_set and child.is_active:
+                # Отключаем только те, которые выглядят как "автосгенерированные" (keyword == name)
+                if (child.keywords or '').strip().lower() == key:
+                    child.is_active = False
+                    child.save(update_fields=['is_active', 'updated_at'])
+                    deactivated += 1
+
+    return (created, updated, deactivated)
+
+
+def sync_all_subcategories_from_keywords(*, root_only: bool = True):
+    """
+    Синхронизирует подкатегории по keywords для всех категорий.
+    Обычно вызывается перед/после обмена или при массовом обновлении.
+    """
+    qs = Category.objects.filter(is_active=True, keywords__isnull=False).exclude(keywords='')
+    if root_only:
+        qs = qs.filter(parent__isnull=True)
+
+    totals = {'created': 0, 'updated': 0, 'deactivated': 0}
+    for cat in qs:
+        c, u, d = sync_subcategories_from_keywords(cat, deactivate_removed=True)
+        totals['created'] += c
+        totals['updated'] += u
+        totals['deactivated'] += d
+    return totals
 
 
 def detect_brand(text):

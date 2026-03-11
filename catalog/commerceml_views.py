@@ -517,6 +517,14 @@ def process_commerceml_file(file_path, filename, request=None):
     logger.info(f"Файл существует: {os.path.exists(file_path)}")
     
     try:
+        # Перед обработкой обмена синхронизируем подкатегории из keywords категорий.
+        # Это нужно, чтобы изменения ключевых слов в админке начинали работать автоматически "после обмена".
+        try:
+            from catalog.services import sync_all_subcategories_from_keywords
+            sync_all_subcategories_from_keywords(root_only=True)
+        except Exception:
+            pass
+
         # Проверяем размер файла
         file_size = os.path.getsize(file_path)
         logger.info(f"Размер файла: {file_size} байт")
