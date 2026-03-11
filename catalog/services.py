@@ -381,10 +381,20 @@ def sync_subcategories_from_keywords(parent_category: Category, *, deactivate_re
     if not keywords:
         return (0, 0, 0)
 
+    def _is_cyrillic_keyword(s: str) -> bool:
+        # Создаём подкатегории только по ключам с кириллицей, чтобы не плодить engine/piston/valve и т.п.
+        # (англ. ключевые слова могут оставаться в keywords для автоопределения категории).
+        return bool(re.search(r'[а-яё]', s, re.IGNORECASE))
+
     desired_names = []
     for kw in keywords:
+        kw_clean = (kw or '').strip()
+        if not kw_clean:
+            continue
+        if not _is_cyrillic_keyword(kw_clean):
+            continue
         # Нормализуем отображаемое имя (с заглавной)
-        desired_names.append(capfirst(kw.strip()))
+        desired_names.append(capfirst(kw_clean))
 
     created = 0
     updated = 0
