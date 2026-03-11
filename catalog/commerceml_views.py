@@ -2718,19 +2718,32 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                     elif not retail_counterpart:
                         # Если розничного аналога нет, определяем категорию по названию
                         new_category = get_category_for_product(product.name)
-                        if new_category and new_category.id != product.category_id:
+                        if new_category:
+                            # ВАЖНО: Всегда обновляем категорию, даже если она уже установлена
                             old_category = product.category
-                            product.category = new_category
+                            if not old_category or old_category.id != new_category.id:
+                                product.category = new_category
+                                if idx < 10:
+                                    logger.info(f"  ↳ Категория оптового товара {product_id} определена по названию: '{old_category.name if old_category else 'НЕТ'}' -> '{new_category.name}'")
+                        else:
+                            # Если категория не определена, логируем предупреждение
                             if idx < 10:
-                                logger.info(f"  ↳ Категория оптового товара {product_id} определена по названию: '{old_category.name if old_category else 'НЕТ'}' -> '{new_category.name}'")
+                                logger.warning(f"  ⚠ Не удалось определить категорию для оптового товара {product_id}: {product.name[:50]}")
                 else:
                     # Для розничных товаров всегда определяем категорию по названию
                     new_category = get_category_for_product(product.name)
-                    if new_category and new_category.id != product.category_id:
+                    if new_category:
+                        # ВАЖНО: Всегда обновляем категорию, даже если она уже установлена
+                        # Это гарантирует правильное распределение при каждом обмене
                         old_category = product.category
-                        product.category = new_category
+                        if not old_category or old_category.id != new_category.id:
+                            product.category = new_category
+                            if idx < 10:
+                                logger.info(f"  ↳ Категория розничного товара {product_id} определена по названию: '{old_category.name if old_category else 'НЕТ'}' -> '{new_category.name}'")
+                    else:
+                        # Если категория не определена, логируем предупреждение
                         if idx < 10:
-                            logger.info(f"  ↳ Категория розничного товара {product_id} определена по названию: '{old_category.name if old_category else 'НЕТ'}' -> '{new_category.name}'")
+                            logger.warning(f"  ⚠ Не удалось определить категорию для товара {product_id}: {product.name[:50]}")
                 
                 product.save()
                 
