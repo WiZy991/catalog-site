@@ -3372,156 +3372,8 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
                             if part_upper not in [p.upper() for p in applicability_parts]:
                                 applicability_parts.append(part)
         
-        # Если applicability пришёл как список (из характеристик)
-        # ВАЖНО: Разбиваем значения по слешам, чтобы избежать дубликатов
-        if product_data.get('applicability'):
-            if isinstance(product_data.get('applicability'), list):
-                for appl_item in product_data.get('applicability'):
-                    if appl_item and str(appl_item).strip():
-                        # Разбиваем по слешам: "1HD/1HZ" -> ["1HD", "1HZ"]
-                        appl_parts = str(appl_item).replace(',', '/').split('/')
-                        for part in appl_parts:
-                            part = part.strip()
-                            if part:
-                                part_upper = part.upper()
-                                if part_upper not in [p.upper() for p in applicability_parts]:
-                                    applicability_parts.append(part)
-            else:
-                appl_value = product_data.get('applicability')
-                if appl_value and str(appl_value).strip():
-                    # Разбиваем по слешам: "1HD/1HZ" -> ["1HD", "1HZ"]
-                    appl_parts = str(appl_value).replace(',', '/').split('/')
-                    for part in appl_parts:
-                        part = part.strip()
-                        if part:
-                            part_upper = part.upper()
-                            if part_upper not in [p.upper() for p in applicability_parts]:
-                                applicability_parts.append(part)
-        
-        # Добавляем из парсинга (может быть строка с разделителями)
-        # ВАЖНО: Разбиваем значения по слешам и запятым, чтобы избежать дубликатов
-        if parsed.get('applicability'):
-            parsed_applicability = parsed.get('applicability')
-            # Если это строка, разбиваем по запятым и слешам
-            if isinstance(parsed_applicability, str):
-                # Сначала разбиваем по запятым
-                parsed_parts = [p.strip() for p in parsed_applicability.split(',') if p.strip()]
-                # Затем разбиваем каждую часть по слешам
-                final_parts = []
-                for part in parsed_parts:
-                    if '/' in part:
-                        slash_parts = [p.strip() for p in part.split('/') if p.strip()]
-                        final_parts.extend(slash_parts)
-                    else:
-                        final_parts.append(part)
-                # Добавляем только уникальные значения
-                for part in final_parts:
-                    if part:
-                        part_upper = part.upper()
-                        if part_upper not in [p.upper() for p in applicability_parts]:
-                            applicability_parts.append(part)
-            elif isinstance(parsed_applicability, list):
-                for appl_item in parsed_applicability:
-                    if appl_item and str(appl_item).strip():
-                        # Разбиваем по слешам
-                        appl_parts = str(appl_item).replace(',', '/').split('/')
-                        for part in appl_parts:
-                            part = part.strip()
-                            if part:
-                                part_upper = part.upper()
-                                if part_upper not in [p.upper() for p in applicability_parts]:
-                                    applicability_parts.append(part)
-            else:
-                appl_value = str(parsed_applicability)
-                if appl_value and appl_value.strip():
-                    # Разбиваем по слешам
-                    appl_parts = appl_value.replace(',', '/').split('/')
-                    for part in appl_parts:
-                        part = part.strip()
-                        if part:
-                            part_upper = part.upper()
-                            if part_upper not in [p.upper() for p in applicability_parts]:
-                                applicability_parts.append(part)
-        
-        # Извлекаем модели машин из скобок в названии
-        # Пример: "Датчик кислородный (TOYOTA, 89467-71020, 2UZFE/1GRFE)" -> извлечь 2UZFE, 1GRFE
-        import re
-        bracket_matches = re.findall(r'\(([^)]+)\)', clean_name)
-        for bracket_content in bracket_matches:
-            # Разбиваем содержимое скобок по запятым
-            parts = [p.strip() for p in bracket_content.split(',')]
-            for part in parts:
-                part = part.strip()
-                if not part:
-                    continue
-                
-                # Пропускаем артикулы, начинающиеся с "/" (например, /EW80A - это Артикул2)
-                if part.startswith('/'):
-                    continue
-                
-                # Пропускаем артикулы (OEM номера типа 89467-71020)
-                if re.match(r'^\d{5}-\d{5}$', part) or re.match(r'^\d{1}-\d{5}-\d{3}-\d{1}$', part) or re.match(r'^\d{5}-\d{3}$', part):
-                    continue
-                
-                # Пропускаем бренды (TOYOTA, DENSO и т.д.) - они не являются применимостью
-                known_brands = ['TOYOTA', 'DENSO', 'NGK', 'BOSCH', 'HONDA', 'NISSAN', 'MAZDA', 'MITSUBISHI', 'SUBARU', 'SUZUKI', 'ISUZU', 'TOYO', 'GMB', 'FEBEST']
-                if part.upper() in known_brands:
-                    continue
-                
-                # Ищем коды моделей/двигателей/кузова (формат: 2UZFE, 1GRFE, 1MZFE, 2RZ, 3RZ, ZVW30, NHW30 и т.д.)
-                # Паттерн 1: цифра + буквы + (опционально) цифры + (опционально) буквы (2UZFE, 1GRFE)
-                # Паттерн 2: буквы + цифры (ZVW30, NHW30, J10) - коды кузова и модели
-                engine_model_pattern1 = r'^(\d+[A-Z]{2,5}(?:\d+[A-Z]{0,3})?)$'  # 2UZFE, 1GRFE
-                engine_model_pattern2 = r'^([A-Z]{2,5}\d+[A-Z0-9]{0,3})$'  # ZVW30, NHW30, J10
-                part_upper = part.upper()
-                
-                # ВАЖНО: Если кузов или двигатель уже пришли из XML, не добавляем их из названия
-                # Это предотвращает дубликаты типа "1HD/1HZ" из XML и "1HD", "1HZ" из названия
-                if part_upper in body_codes_upper or part_upper in engine_codes_upper:
-                    continue
-                
-                if re.match(engine_model_pattern1, part, re.IGNORECASE) or re.match(engine_model_pattern2, part, re.IGNORECASE):
-                    # Это код модели/двигателя/кузова - добавляем в применимость только если его нет из XML
-                    if part_upper not in [p.upper() for p in applicability_parts]:
-                        applicability_parts.append(part.upper())
-                    continue
-                
-                # Ищем связки через слеш (например, 2UZFE/1GRFE, 2RZ/3RZ, J10/RH)
-                if '/' in part:
-                    slash_parts = [p.strip() for p in part.split('/')]
-                    # Если есть кузов из 1С, и в связке есть совпадение с кузовом — оставляем только совпадающие части
-                    # Пример: part="NHW/ZVW30", body_codes_upper={"ZVW30"} -> оставляем только "ZVW30"
-                    if body_codes_upper:
-                        slash_parts_upper = [sp.strip().upper() for sp in slash_parts if sp and sp.strip()]
-                        matched = [sp for sp in slash_parts_upper if sp in body_codes_upper]
-                        if matched:
-                            slash_parts = matched
-                    
-                    # ВАЖНО: Фильтруем части, которые уже есть из XML (кузов/двигатель)
-                    filtered_slash_parts = []
-                    for slash_part in slash_parts:
-                        slash_part_upper = slash_part.strip().upper()
-                        # Пропускаем, если это уже есть из XML
-                        if slash_part_upper in body_codes_upper or slash_part_upper in engine_codes_upper:
-                            continue
-                        filtered_slash_parts.append(slash_part)
-                    
-                    # Используем отфильтрованные части
-                    slash_parts = filtered_slash_parts
-                    
-                    for slash_part in slash_parts:
-                        slash_part_upper = slash_part.strip().upper()
-                        if re.match(engine_model_pattern1, slash_part, re.IGNORECASE) or re.match(engine_model_pattern2, slash_part, re.IGNORECASE):
-                            if slash_part_upper not in [p.upper() for p in applicability_parts]:
-                                applicability_parts.append(slash_part.upper())
-                        # Также проверяем, может быть это связка кодов двигателей (2RZ/3RZ)
-                        elif re.match(r'^\d+[A-Z]{2,5}$', slash_part, re.IGNORECASE):
-                            if slash_part_upper not in [p.upper() for p in applicability_parts]:
-                                applicability_parts.append(slash_part.upper())
-                        # Проверяем коды кузова/модели (ZVW30, J10, RH)
-                        elif re.match(r'^[A-Z]{2,5}\d+[A-Z0-9]{0,3}$', slash_part, re.IGNORECASE) or re.match(r'^[A-Z]{1,3}\d+$', slash_part, re.IGNORECASE):
-                            if slash_part_upper not in [p.upper() for p in applicability_parts]:
-                                applicability_parts.append(slash_part.upper())
+        # ВАЖНО: Используем ТОЛЬКО данные из XML (Кузов, Двигатель)
+        # НЕ извлекаем применимость из названия товара или парсинга
 
         # ВАЖНО: если кузов (body) пришёл из 1С, он является источником истины.
         # Тогда удаляем из применимости "коды кузова/модели", которые не совпадают с body,
@@ -3705,81 +3557,11 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
             # Если кросс-номера пустые в 1С, очищаем их на сайте
             product.cross_numbers = ''
         
-        # Характеристики - объединяем из парсинга названия и из XML
+        # Характеристики - используем ТОЛЬКО из XML (Размер)
+        # ВАЖНО: НЕ используем характеристики из парсинга названия
         characteristics_parts = []
-        
-        # Сначала добавляем характеристики из парсинга названия (это более надежно)
-        # ВАЖНО: Но "Размер" из XML имеет приоритет над "Размер" из парсинга названия
         import re
         excluded_materials = ['прокладка', 'gasket', 'паронит', 'paronit', 'материал', 'material']
-        
-        # Проверяем, есть ли "Размер" в XML
-        has_size_in_xml = False
-        if product_data.get('characteristics'):
-            char_list = product_data.get('characteristics', [])
-            if isinstance(char_list, list):
-                for char_data in char_list:
-                    if isinstance(char_data, dict):
-                        char_name = char_data.get('name', '').strip()
-                        if 'размер' in char_name.lower() or 'size' in char_name.lower():
-                            has_size_in_xml = True
-                            break
-        
-        if parsed.get('characteristics'):
-            # parsed['characteristics'] - это строка с разделителями \n
-            parsed_chars = parsed.get('characteristics').split('\n')
-            for char_line in parsed_chars:
-                char_line = char_line.strip()
-                if char_line and ':' in char_line:
-                    char_name, char_value = char_line.split(':', 1)
-                    char_name_stripped = char_name.strip()
-                    char_value_stripped = char_value.strip()
-                    char_name_lower = char_name_stripped.lower()
-                    char_value_upper = char_value_stripped.upper()
-                    
-                    # Пропускаем материалы
-                    if any(material in char_name_lower for material in excluded_materials):
-                        continue
-                    
-                    # Если "Размер" есть в XML, пропускаем "Размер" из парсинга названия
-                    # ВАЖНО: Удаляем строки "Размер:" из парсинга, так как значение уже попало в "Характеристика:" из XML
-                    if ('размер' in char_name_lower or 'size' in char_name_lower) and has_size_in_xml:
-                        continue
-                    
-                    # Также удаляем строки "Размер:" из парсинга названия, даже если "Размер" не в XML
-                    # Потому что значение должно быть только в "Характеристика:", а не в "Размер:"
-                    if 'размер' in char_name_lower or 'size' in char_name_lower:
-                        continue
-                    
-                    # ВАЖНО: Если "Размер" есть в XML, пропускаем короткие характеристики, которые могут быть частью значения "Размер"
-                    # Например, "РЕМ" из "12V/140А/ПЛ. РЕМ. 6Д/ОВ.Ф/ЗКОНТ" не должна добавляться как отдельная характеристика
-                    if has_size_in_xml and char_name_lower in ['характеристика', 'characteristic']:
-                        # Проверяем, не является ли значение частью "Размера" из XML
-                        should_skip_char = False
-                        if product_data.get('characteristics'):
-                            char_list = product_data.get('characteristics', [])
-                            if isinstance(char_list, list):
-                                for char_data in char_list:
-                                    if isinstance(char_data, dict):
-                                        xml_char_name = char_data.get('name', '').strip().lower()
-                                        xml_char_value = char_data.get('value', '').strip()
-                                        if 'размер' in xml_char_name or 'size' in xml_char_name:
-                                            # Если значение из парсинга содержится в значении "Размер" из XML, пропускаем
-                                            if char_value_stripped.upper() in xml_char_value.upper():
-                                                should_skip_char = True
-                                                break
-                        if should_skip_char:
-                            continue
-                    
-                    # Проверяем, что значение не является кодом модели/применимости
-                    # Коды моделей обычно: 1-4 цифры + буквы (например, 1GEN, 1NZF, 2GR, 4AFE)
-                    # Но НЕ фильтруем размеры — они всегда должны попадать в характеристики
-                    if 'размер' not in char_name_lower and 'size' not in char_name_lower:
-                        if re.match(r'^[A-Z0-9#\-/]{1,10}$', char_value_upper) and not re.search(r'[*x]', char_value_stripped):
-                            # Это похоже на код модели, а не на характеристику - пропускаем
-                            continue
-                    
-                    characteristics_parts.append(char_line)
         
         # Затем добавляем характеристики из XML (как список словарей)
         # ИСКЛЮЧАЕМ служебные характеристики: Артикул1, Артикул2, Марка, Двигатель
@@ -3819,22 +3601,6 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
                                     process_product_from_commerceml._log_size_count = 1
                                 if process_product_from_commerceml._log_size_count <= 3:
                                     logger.info(f"✓ Найден 'Размер' в XML: name='{char_name}', value='{char_value}' (длина={len(char_value)})")
-                                
-                                # Удаляем ВСЕ старые "Размер" и "Характеристика" из парсинга названия, если они есть
-                                # Ищем все характеристики, которые начинаются с "Размер:", "Size:", "Характеристика:" или "Characteristic:"
-                                old_count = len(characteristics_parts)
-                                characteristics_parts = [
-                                    c for c in characteristics_parts 
-                                    if not (':' in c and (
-                                        c.lower().strip().startswith('размер:') or 
-                                        c.lower().strip().startswith('size:') or
-                                        c.lower().strip().startswith('характеристика:') or
-                                        c.lower().strip().startswith('characteristic:')
-                                    ))
-                                ]
-                                removed_count = old_count - len(characteristics_parts)
-                                if removed_count > 0 and process_product_from_commerceml._log_size_count <= 3:
-                                    logger.info(f"  Удалено {removed_count} старых 'Размер'/'Характеристика' из парсинга названия")
                                 
                                 # Добавляем значение из "Размер" в "Характеристика" (не создаем строку "Размер"!)
                                 char_str = f"Характеристика: {char_value}"
