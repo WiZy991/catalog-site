@@ -1099,12 +1099,18 @@ def process_commerceml_file(file_path, filename, request=None):
         # ВАЖНО: Скрываем товары ТОЛЬКО при обработке через веб-интерфейс (когда 1С загружает файлы напрямую)
         # При обработке через скрипт (request=None) НЕ скрываем товары - это может быть повторная обработка
         should_hide_products = False
+
+        # Глобальный флаг: если выключен — никогда не скрываем товары, которых нет в exchange.
+        # Это возвращает поведение "только обновлять/добавлять", без массовых скрытий.
+        if not getattr(settings, 'ONE_C_HIDE_MISSING_PRODUCTS', False):
+            should_hide_products = False
+            logger.info("ONE_C_HIDE_MISSING_PRODUCTS=False — товары, отсутствующие в обмене, НЕ скрываем")
         
         # Если обработка через скрипт (request=None), НЕ скрываем товары вообще
         if request is None:
             logger.info(f"Обработка через скрипт (request=None) - НЕ скрываем товары для безопасности (предотвращает случайное скрытие при повторной обработке)")
             should_hide_products = False
-        else:
+        elif getattr(settings, 'ONE_C_HIDE_MISSING_PRODUCTS', False):
             # Обработка через веб-интерфейс - проверяем, нужно ли скрывать товары
             # Проверяем тип файла - скрываем товары только для import.xml
             filename_lower = filename.lower() if filename else ''
@@ -3195,11 +3201,13 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
                 article=article or '',
                 name=clean_name or '',  # Используем чистое название
                 brand=brand or '',  # Всегда строка, не None
-                quantity=quantity or 0,
-                availability=availability or 'out_of_stock',
+                # ВАЖНО: Новый товар из import.xml НЕ показываем пользователям до offers.xml
+                # (в import.xml часто нет актуальных остатков/наличия).
+                quantity=0,
+                availability='out_of_stock',
                 category=category,
                 catalog_type=catalog_type,  # Используем переданный тип каталога
-                is_active=is_active  # Активен только если есть остаток
+                is_active=False
             )
             # Для оптового каталога устанавливаем wholesale_price, для розничного - price
             if catalog_type == 'wholesale':
@@ -3295,12 +3303,9 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
                 else:
                     product.price = price
             
-            # ВАЖНО: При обновлении из import.xml НЕ меняем is_active
-            # Товар должен оставаться активным, если он уже был активен
-            # Цены и количество придут из offers.xml и обновят статус
-            # Это гарантирует, что товары не деактивируются при обновлении из import.xml
-            product.quantity = quantity
-            product.availability = availability
+            # ВАЖНО: При обновлении из import.xml НЕ меняем quantity/availability/is_active.
+            # Иначе витрина "мигает": товары временно пропадают до прихода offers.xml.
+            # Остатки/наличие обновляются ТОЛЬКО из offers.xml.
             # НЕ меняем is_active при обновлении из import.xml - оставляем существующее значение
             # Если товар был активен, он останется активным
             # Если товар был неактивен, он останется неактивным (возможно, был скрыт вручную)

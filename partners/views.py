@@ -656,10 +656,12 @@ class PartnerCatalogView(PartnerRequiredMixin, ListView):
         queryset = Product.objects.filter(
             is_active=True,
             catalog_type='wholesale',
+        ).select_related('category').prefetch_related('images')
+        queryset = queryset.filter(
             availability__in=['in_stock', 'order']  # Только в наличии или под заказ
         ).filter(
             Q(quantity__gt=0) | Q(wholesale_price__gt=0)  # Товары с остатком ИЛИ оптовой ценой
-        ).select_related('category').prefetch_related('images')
+        )
         
         # Фильтр по категории
         category_slug = self.kwargs.get('category_slug')

@@ -178,6 +178,11 @@ ONE_C_EXCHANGE_DIR = os.path.join(MEDIA_ROOT, '1c_exchange')  # Директор
 ONE_C_FILE_LIMIT = 104857600  # Максимальный размер файла в байтах (100 MB)
 ONE_C_SUPPORT_ZIP = True  # Поддержка ZIP сжатия
 
+# CommerceML: скрывать ли товары, которые НЕ пришли в текущем exchange.
+# Если 1С присылает полный каталог — включайте, чтобы удаление в 1С отражалось на сайте.
+# Если нужно поведение "только добавлять/обновлять, ничего не скрывать" — выключите (False).
+ONE_C_HIDE_MISSING_PRODUCTS = True
+
 # Site info (for SEO and templates)
 SITE_NAME = 'Onesimus'
 COMPANY_NAME = 'Onesimus'
