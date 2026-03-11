@@ -2956,41 +2956,24 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
         clean_name = re.sub(r'\s+', ' ', clean_name).strip()
         
         # Определяем категорию
+        # ВАЖНО: Всегда определяем категорию по названию товара, игнорируя категорию из XML
+        # Категория из XML часто слишком общая (например, "ЗАПЧАСТИ" или "Двигатель и выхлопная система")
+        # и приводит к тому, что все товары попадают в одну категорию
         category_name = product_data.get('category_name', '').strip()
         category = None
         
-        # Список слишком общих категорий из XML, которые не помогают определить конкретную категорию
-        # Если category_name из XML - это общая категория, игнорируем её и определяем по названию товара
-        generic_categories = ['ЗАПЧАСТИ', 'ЗАПЧАСТЬ', 'ЗАПЧАСТИ ДЛЯ', 'ТОВАРЫ', 'ТОВАР', 'PRODUCTS', 'PARTS', 'ЗАПЧАСТИ ДЛЯ АВТОМОБИЛЕЙ']
-        is_generic_category = category_name.upper() in [gc.upper() for gc in generic_categories]
+        # ВАЖНО: Для определения категории используем исходное name (до очистки), 
+        # так как в нём могут быть важные ключевые слова для определения категории
+        # clean_name используется только для отображения (убирает лишние запятые)
+        category_input = name if name and name.strip() else clean_name
+        category = get_category_for_product(category_input)
         
-        if category_name and not is_generic_category:
-            from .models import Category as CategoryModel
-            # Сначала ищем категорию напрямую по точному имени из 1С (любой уровень)
-            category = CategoryModel.objects.filter(
-                name__iexact=category_name,
-                is_active=True
-            ).first()
-            if not category:
-                # Если точного совпадения нет, пробуем через логику по ключевым словам
-                category = get_category_for_product(category_name)
-                if process_product_from_commerceml._log_count <= 3:
-                    logger.info(f"  Категория из XML '{category_name}' -> определена как '{category.name if category else 'НЕ НАЙДЕНА'}'")
-        elif is_generic_category:
-            if process_product_from_commerceml._log_count <= 3:
-                logger.info(f"  Категория из XML '{category_name}' слишком общая, определяем по названию товара")
-        
-        # Если категория не определилась из XML (или была слишком общей), определяем по названию товара
-        if not category:
-            # ВАЖНО: Для определения категории используем исходное name (до очистки), 
-            # так как в нём могут быть важные ключевые слова для определения категории
-            # clean_name используется только для отображения (убирает лишние запятые)
-            category_input = name if name and name.strip() else clean_name
-            category = get_category_for_product(category_input)
-            if process_product_from_commerceml._log_count <= 3:
-                logger.info(f"  Категория определена по названию '{category_input[:50]}' -> '{category.name if category else 'НЕ НАЙДЕНА'}'")
-                if category:
-                    logger.info(f"    Категория: {category.name}, родитель: {category.parent.name if category.parent else 'НЕТ'}")
+        if process_product_from_commerceml._log_count <= 3:
+            logger.info(f"  Категория определена по названию '{category_input[:50]}' -> '{category.name if category else 'НЕ НАЙДЕНА'}'")
+            if category:
+                logger.info(f"    Категория: {category.name}, родитель: {category.parent.name if category.parent else 'НЕТ'}")
+            if category_name:
+                logger.info(f"    (Категория из XML '{category_name}' проигнорирована - определяем по названию товара)")
         
         # ВАЖНО: Если категория всё равно не найдена, берём первую основную категорию (fallback)
         if not category:
