@@ -2158,13 +2158,14 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                     
                     product_id = product_id_elem.text.strip()
                     
-                    # ВАЖНО: Логируем обработку каждого товара для диагностики (первые 100 и товары с артикулом 8-97086-338-2)
-                    if idx < 100 or '8-97086-338-2' in str(product_id):
-                        logger.info(f"Обработка предложения #{idx+1}: Ид={product_id}")
                     # ВАЖНО: В CommerceML 2.0 Ид может быть составным: "uuid#характеристика".
                     # В базе external_id у товаров может храниться как базовый uuid или как составной.
                     # Для устойчивого матчинга используем базовый uuid.
                     product_base_id = product_id.split('#', 1)[0].strip() if product_id else product_id
+                    
+                    # ВАЖНО: Логируем обработку каждого товара для диагностики (первые 100 и товары с артикулом 8-97086-338-2 или base_id 86491d95)
+                    if idx < 100 or '8-97086-338-2' in str(product_id) or '86491d95-6cf4-44be-969c-e7f53c1bdb64' in str(product_id) or '86491d95-6cf4-44be-969c-e7f53c1bdb64' in str(product_base_id):
+                        logger.info(f"🔄 Обработка предложения #{idx+1} в offers.xml: Ид={product_id}, base_id={product_base_id}")
                     
                     # ВАЖНО: Извлекаем артикул из характеристик товара в offers.xml
                     # Ищем элемент ХарактеристикиТовара или ЗначенияСвойства
@@ -2316,8 +2317,16 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                             article=article_from_xml,
                             catalog_type=catalog_type
                         ).first()
-                        if product and idx < 10:
-                            logger.info(f"Товар найден по артикулу из XML ({article_from_xml}) в каталоге {catalog_type}: {product.article} - {product.name[:50]}")
+                        if product:
+                            # ВАЖНО: Логируем ВСЕ товары, найденные по артикулу из XML
+                            logger.info(f"✓ Товар найден по артикулу из XML ({article_from_xml}) в каталоге {catalog_type}: {product.article} - {product.name[:50]}")
+                    
+                    # ВАЖНО: Логируем, найден ли товар для диагностики (особенно для товара 8-97086-338-2)
+                    if '86491d95-6cf4-44be-969c-e7f53c1bdb64' in str(product_id) or '86491d95-6cf4-44be-969c-e7f53c1bdb64' in str(product_base_id) or (product and '8-97086-338-2' in str(product.article)):
+                        if product:
+                            logger.info(f"✓ Товар найден в offers.xml для каталога {catalog_type}: Ид={product_id}, артикул={product.article}, текущий остаток={product.quantity}")
+                        else:
+                            logger.warning(f"⚠ Товар НЕ найден в offers.xml для каталога {catalog_type}: Ид={product_id}, base_id={product_base_id}, артикул из XML={article_from_xml}")
                     
                     # Если товар не найден в нужном каталоге, но найден в другом - создаем копию
                     if not product and existing_product:
