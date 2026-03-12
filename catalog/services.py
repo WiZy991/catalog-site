@@ -1131,44 +1131,44 @@ def get_category_for_product(product_name):
     """
     Определяет категорию и подкатегорию для товара по его названию.
     Возвращает объект Category (подкатегорию если найдена, иначе основную категорию).
+    ВАЖНО: Возвращает только активные категории, чтобы товары не попадали в неактивные категории.
     """
     # Сначала пытаемся определить подкатегорию
     subcat_info = detect_subcategory_info(product_name)
     
     if subcat_info:
         main_cat_name, subcat_name = subcat_info
-        # Находим основную категорию
+        # Находим основную категорию (только активную)
         main_category = Category.objects.filter(
             name__iexact=main_cat_name,
-            parent=None
+            parent=None,
+            is_active=True  # ВАЖНО: Только активные категории
         ).first()
         
         if main_category:
-            # Ищем или создаем подкатегорию
+            # Ищем подкатегорию (только активную)
             subcategory = Category.objects.filter(
                 name__iexact=subcat_name,
-                parent=main_category
+                parent=main_category,
+                is_active=True  # ВАЖНО: Только активные подкатегории
             ).first()
             
-            if not subcategory:
-                subcategory = Category.objects.create(
-                    name=subcat_name,
-                    parent=main_category,
-                    is_active=True
-                )
-            
-            return subcategory
+            if subcategory:
+                return subcategory
+            # Если подкатегория не найдена или неактивна, возвращаем основную категорию
+            return main_category
     
     # Если подкатегория не определена, определяем основную категорию
     main_cat_name = detect_category(product_name)
     main_category = Category.objects.filter(
         name__iexact=main_cat_name,
-        parent=None
+        parent=None,
+        is_active=True  # ВАЖНО: Только активные категории
     ).first()
     
-    # Если основная категория не найдена, берем первую из 4
+    # Если основная категория не найдена, берем первую активную из корневых
     if not main_category:
-        main_category = Category.objects.filter(parent=None).first()
+        main_category = Category.objects.filter(parent=None, is_active=True).first()
     
     return main_category
 
