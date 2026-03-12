@@ -3045,28 +3045,50 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                 # Переопределение категории приводит к тому, что товары попадают в неактивные категории
                 # и потом скрываются
                 # Категория обновляется ТОЛЬКО если текущая категория неактивна
-                if product.category and not product.category.is_active:
-                    from .services import get_category_for_product
-                    # Только если категория неактивна, ищем активную
-                    new_category = get_category_for_product(product.name)
-                    if new_category and new_category.is_active:
-                        old_category = product.category
-                        product.category = new_category
-                        # Сохраняем категорию сразу
-                        product.save(update_fields=['category'])
-                        if idx < 10:
-                            logger.warning(f"  ⚠ Товар {product_id} был в неактивной категории '{old_category.name}', перемещен в активную '{new_category.name}'")
-                    elif not new_category or not new_category.is_active:
-                        # Ищем активную родительскую категорию
-                        current_cat = product.category
-                        while current_cat.parent:
-                            if current_cat.parent.is_active:
-                                product.category = current_cat.parent
-                                product.save(update_fields=['category'])
-                                if idx < 10:
-                                    logger.warning(f"  ⚠ Товар {product_id} перемещен в активную родительскую категорию '{product.category.name}'")
-                                break
-                            current_cat = current_cat.parent
+                # ВАЖНО: Проверяем, что товар не находится в неактивной категории
+                if product.category:
+                    if not product.category.is_active:
+                        from .services import get_category_for_product
+                        # Только если категория неактивна, ищем активную
+                        new_category = get_category_for_product(product.name)
+                        if new_category and new_category.is_active:
+                            old_category = product.category
+                            product.category = new_category
+                            # Сохраняем категорию сразу
+                            product.save(update_fields=['category'])
+                            # Логируем ВСЕ перемещения из неактивных категорий
+                            should_log_category = (
+                                idx < 10 or 
+                                '8-97086-338-2' in str(product.article) or
+                                article_from_xml == '8-97086-338-2' or
+                                '86491d95-6cf4-44be-969c-e7f53c1bdb64' in str(product_id)
+                            )
+                            if should_log_category:
+                                logger.warning(f"  ⚠ Товар {product_id} (артикул: {product.article}) был в неактивной категории '{old_category.name}', перемещен в активную '{new_category.name}'")
+                        elif not new_category or not new_category.is_active:
+                            # Ищем активную родительскую категорию
+                            current_cat = product.category
+                            while current_cat.parent:
+                                if current_cat.parent.is_active:
+                                    old_category = product.category
+                                    product.category = current_cat.parent
+                                    product.save(update_fields=['category'])
+                                    # Логируем ВСЕ перемещения в родительские категории
+                                    should_log_category = (
+                                        idx < 10 or 
+                                        '8-97086-338-2' in str(product.article) or
+                                        article_from_xml == '8-97086-338-2' or
+                                        '86491d95-6cf4-44be-969c-e7f53c1bdb64' in str(product_id)
+                                    )
+                                    if should_log_category:
+                                        logger.warning(f"  ⚠ Товар {product_id} (артикул: {product.article}) перемещен в активную родительскую категорию '{product.category.name}' (было: '{old_category.name}')")
+                                    break
+                                current_cat = current_cat.parent
+                    # ВАЖНО: Дополнительная проверка - если категория стала неактивной после обновления
+                    # (например, если категория была деактивирована в админке после последнего обмена)
+                    elif not product.category.is_active:
+                        # Это не должно происходить, но на всякий случай проверяем
+                        logger.error(f"  ⚠ ОШИБКА: Товар {product_id} (артикул: {product.article}) находится в неактивной категории '{product.category.name}' после проверки!")
                 
                 product.save()
                 
@@ -3535,6 +3557,44 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
             # external_id должен быть уникальным, поэтому используем его только если он есть
             # Если external_id пустой, используем None (не пустую строку), чтобы избежать конфликтов с unique=True
             product_external_id = external_id.strip() if external_id and external_id.strip() else None
+            
+            # ВАЖНО: Проверяем, что категория активна перед созданием товара
+            # Если категория неактивна, ищем активную родительскую или активную корневую
+            final_category = category
+            if category and not category.is_active:
+                # Ищем активную родительскую категорию
+                current_cat = category
+                active_parent = None
+                while current_cat:
+                    if current_cat.parent and current_cat.parent.is_active:
+                        active_parent = current_cat.parent
+                        break
+                    current_cat = current_cat.parent
+                
+                if active_parent:
+                    final_category = active_parent
+                    if process_product_from_commerceml._log_count <= 3:
+                        logger.warning(f"  ⚠ Категория '{category.name}' неактивна, новый товар будет создан в активной родительской категории: '{active_parent.name}'")
+                else:
+                    # Если нет активной родительской, ищем любую активную корневую категорию
+                    fallback_category = Category.objects.filter(parent=None, is_active=True).first()
+                    if fallback_category:
+                        final_category = fallback_category
+                        if process_product_from_commerceml._log_count <= 3:
+                            logger.warning(f"  ⚠ Категория '{category.name}' неактивна и нет активной родительской, новый товар будет создан в активной корневой категории: '{fallback_category.name}'")
+                    else:
+                        # Если нет активных категорий вообще, создаем товар без категории (category=None)
+                        final_category = None
+                        if process_product_from_commerceml._log_count <= 3:
+                            logger.error(f"  ⚠ ОШИБКА: Категория '{category.name}' неактивна, нет активных родительских и корневых категорий! Товар будет создан без категории.")
+            elif not category:
+                # Если категория не определена, ищем активную корневую категорию как fallback
+                fallback_category = Category.objects.filter(parent=None, is_active=True).first()
+                if fallback_category:
+                    final_category = fallback_category
+                    if process_product_from_commerceml._log_count <= 3:
+                        logger.warning(f"  ⚠ Категория не определена, новый товар будет создан в активной корневой категории: '{fallback_category.name}'")
+            
             product = Product(
                 external_id=product_external_id,
                 article=article or '',
@@ -3544,7 +3604,7 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
                 # (в import.xml часто нет актуальных остатков/наличия).
                 quantity=0,
                 availability='out_of_stock',
-                category=category,
+                category=final_category,  # ВАЖНО: Используем проверенную активную категорию
                 catalog_type=catalog_type,  # Используем переданный тип каталога
                 is_active=False
             )
@@ -3650,30 +3710,57 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
             # Если товар был неактивен, он останется неактивным (возможно, был скрыт вручную)
             # ВАЖНО: Всегда обновляем категорию из данных 1С, чтобы товары правильно распределялись по категориям
             # НО: только если категория активна, чтобы товары не попадали в неактивные категории
-            if category and category.is_active:
-                old_category = product.category
-                product.category = category
-                if process_product_from_commerceml._log_count <= 3 and old_category != category:
-                    logger.info(f"  ✓ Категория обновлена: '{old_category.name if old_category else 'НЕТ'}' -> '{category.name}'")
-            elif category and not category.is_active:
-                # Если категория неактивна, ищем активную родительскую категорию
-                current_cat = category
-                active_parent = None
-                while current_cat:
-                    if current_cat.parent and current_cat.parent.is_active:
-                        active_parent = current_cat.parent
-                        break
-                    current_cat = current_cat.parent
-                
-                if active_parent:
+            if category:
+                if category.is_active:
                     old_category = product.category
-                    product.category = active_parent
-                    if process_product_from_commerceml._log_count <= 3:
-                        logger.warning(f"  ⚠ Категория '{category.name}' неактивна, товар перемещен в активную родительскую: '{active_parent.name}'")
+                    # ВАЖНО: Проверяем, что старая категория тоже активна или товар перемещается из неактивной
+                    if old_category and not old_category.is_active:
+                        # Товар был в неактивной категории - перемещаем в активную
+                        product.category = category
+                        if process_product_from_commerceml._log_count <= 3:
+                            logger.warning(f"  ⚠ Товар перемещен из неактивной категории '{old_category.name}' в активную '{category.name}'")
+                    elif old_category != category:
+                        # Категория изменилась, но обе активны - это нормально
+                        product.category = category
+                        if process_product_from_commerceml._log_count <= 3:
+                            logger.info(f"  ✓ Категория обновлена: '{old_category.name if old_category else 'НЕТ'}' -> '{category.name}'")
+                    elif not old_category:
+                        # Товар без категории - устанавливаем активную
+                        product.category = category
+                        if process_product_from_commerceml._log_count <= 3:
+                            logger.info(f"  ✓ Категория установлена: '{category.name}'")
                 else:
-                    # Если нет активной родительской, не обновляем категорию товара (оставляем существующую)
-                    if process_product_from_commerceml._log_count <= 3:
-                        logger.warning(f"  ⚠ Категория '{category.name}' неактивна и нет активной родительской, категория товара не обновлена (остается: '{product.category.name if product.category else 'НЕТ'}')")
+                    # Если категория неактивна, ищем активную родительскую категорию
+                    current_cat = category
+                    active_parent = None
+                    while current_cat:
+                        if current_cat.parent and current_cat.parent.is_active:
+                            active_parent = current_cat.parent
+                            break
+                        current_cat = current_cat.parent
+                    
+                    if active_parent:
+                        old_category = product.category
+                        product.category = active_parent
+                        if process_product_from_commerceml._log_count <= 3:
+                            logger.warning(f"  ⚠ Категория '{category.name}' неактивна, товар перемещен в активную родительскую: '{active_parent.name}' (было: '{old_category.name if old_category else 'НЕТ'}')")
+                    else:
+                        # Если нет активной родительской, не обновляем категорию товара (оставляем существующую)
+                        # НО: если текущая категория тоже неактивна, ищем любую активную корневую категорию
+                        if product.category and not product.category.is_active:
+                            # Ищем любую активную корневую категорию как fallback
+                            fallback_category = Category.objects.filter(parent=None, is_active=True).first()
+                            if fallback_category:
+                                old_category = product.category
+                                product.category = fallback_category
+                                if process_product_from_commerceml._log_count <= 3:
+                                    logger.warning(f"  ⚠ Категория '{category.name}' неактивна и нет активной родительской, товар перемещен в активную корневую категорию: '{fallback_category.name}' (было: '{old_category.name}')")
+                            else:
+                                if process_product_from_commerceml._log_count <= 3:
+                                    logger.error(f"  ⚠ ОШИБКА: Категория '{category.name}' неактивна, нет активной родительской и нет активных корневых категорий!")
+                        else:
+                            if process_product_from_commerceml._log_count <= 3:
+                                logger.warning(f"  ⚠ Категория '{category.name}' неактивна и нет активной родительской, категория товара не обновлена (остается: '{product.category.name if product.category else 'НЕТ'}')")
         
         # Описание (отображается как "Применимость") — заполняем из "Кузов" и "Двигатель" из 1С
         description_parts = []
