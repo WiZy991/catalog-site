@@ -2169,6 +2169,8 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                     if not product:
                         # Пробуем по артикулу в нужном типе каталога
                         product = Product.objects.filter(article=product_id, catalog_type=catalog_type).first()
+                        if product and idx < 10:
+                            logger.info(f"Товар {product_id} найден по артикулу в каталоге {catalog_type}: {product.article} - {product.name[:50]}")
                     
                     # Если не нашли в нужном типе каталога, ищем в любом каталоге
                     existing_product = None  # Инициализируем переменную
@@ -2178,8 +2180,12 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                             Q(external_id=product_base_id) |
                             Q(external_id__startswith=product_base_id + '#')
                         ).first()
+                        if product and idx < 10:
+                            logger.info(f"Товар {product_id} найден по external_id в каталоге {product.catalog_type}: {product.article} - {product.name[:50]}")
                     if not product:
                         product = Product.objects.filter(article=product_id).first()
+                        if product and idx < 10:
+                            logger.info(f"Товар {product_id} найден по артикулу в каталоге {product.catalog_type}: {product.article} - {product.name[:50]}")
                     
                     # Сохраняем найденный товар (если он есть) для возможного создания копии
                     if product:
@@ -2531,24 +2537,33 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                 total_quantity_from_elems = None
                 found_quantity_in_xml = False
                 for qty_elem in quantity_elems:
-                    if qty_elem is not None and qty_elem.text:
+                    if qty_elem is not None and qty_elem.text is not None:
+                        # ВАЖНО: Проверяем даже пустую строку или "0" - это валидное значение
+                        qty_text = qty_elem.text.strip()
                         try:
-                            qty_value = int(float(qty_elem.text.strip().replace(',', '.')))
+                            qty_value = int(float(qty_text.replace(',', '.')))
                             if total_quantity_from_elems is None:
                                 total_quantity_from_elems = 0
                             total_quantity_from_elems += qty_value
                             found_quantity_in_xml = True
-                            if idx < 5:
-                                logger.info(f"Найдено количество в элементе <Количество> для товара {product_id}: {qty_value}")
+                            if idx < 10 or qty_value == 0:  # Логируем больше товаров и обязательно товары с количеством = 0
+                                logger.info(f"Найдено количество в элементе <Количество> для товара {product_id}: {qty_value} (текст: '{qty_text}')")
                         except (ValueError, AttributeError) as e:
-                            if idx < 5:
-                                logger.warning(f"Не удалось распарсить остаток из <Количество> для товара {product_id}: {qty_elem.text}, ошибка: {e}")
+                            if idx < 10:
+                                logger.warning(f"Не удалось распарсить остаток из <Количество> для товара {product_id}: '{qty_elem.text}', ошибка: {e}")
+                    elif qty_elem is not None and qty_elem.text == '':
+                        # Пустая строка - это тоже 0
+                        if total_quantity_from_elems is None:
+                            total_quantity_from_elems = 0
+                        found_quantity_in_xml = True
+                        if idx < 10:
+                            logger.info(f"Найдено пустое количество в элементе <Количество> для товара {product_id} - считаем как 0")
                 
                 if found_quantity_in_xml:
                     # Количество найдено в XML (даже если = 0) - используем его
                     quantity = total_quantity_from_elems if total_quantity_from_elems is not None else 0
-                    if idx < 5:
-                        logger.info(f"✓ Общее количество из элементов <Количество> для товара {product_id}: {quantity}")
+                    if idx < 10 or quantity == 0:  # Логируем больше товаров и обязательно товары с количеством = 0
+                        logger.info(f"✓ Общее количество из элементов <Количество> для товара {product_id}: {quantity} (было: {product.quantity if product else 'N/A'})")
                 
                 # Вариант 2: Если не нашли в элементе, ищем в атрибуте <Склад КоличествоНаСкладе="..."/>
                 # ВАЖНО: Может быть несколько складов, нужно суммировать количество со всех складов
@@ -2598,6 +2613,7 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                 # ВАЖНО: Количество одинаково для обоих каталогов (retail и wholesale)
                 # Разница только в ценах (price для retail, wholesale_price для wholesale)
                 if quantity is not None:
+                    old_quantity = product.quantity
                     product.quantity = quantity
                     # ВАЖНО: Синхронизируем количество с другим каталогом (retail <-> wholesale)
                     # Количество одинаково для обоих каталогов, разница только в ценах
@@ -2623,12 +2639,13 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                                 other_product.availability = 'out_of_stock'
                                 other_product.is_active = False
                             other_product.save(update_fields=['quantity', 'availability', 'is_active'])
-                            if idx < 5:
-                                logger.info(f"✓ Синхронизировано количество для товара {product_id} в каталоге {other_catalog_type}: {quantity}")
+                            if idx < 10 or quantity == 0:
+                                logger.info(f"✓ Синхронизировано количество для товара {product_id} в каталоге {other_catalog_type}: {quantity} (было: {other_product.quantity if hasattr(other_product, '_state') else 'N/A'})")
                     
                     # ВАЖНО: Определяем активность на основе количества
                     # Если количество > 0, товар активен и в наличии
                     # Если количество = 0, товар скрыт (неактивен) - независимо от цены
+                    old_is_active = product.is_active
                     if quantity > 0:
                         product.availability = 'in_stock'
                         product.is_active = True  # Товар с количеством > 0 - всегда активен
@@ -2636,18 +2653,18 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                         # Если количество = 0, скрываем товар (независимо от цены)
                         product.availability = 'out_of_stock'
                         product.is_active = False  # Товар с количеством = 0 - скрываем
-                        if idx < 5:
-                            logger.info(f"⚠ Товар {product_id} скрыт (количество=0)")
+                        if idx < 10 or old_quantity != 0:  # Логируем если количество изменилось с ненулевого на 0
+                            logger.info(f"⚠ Товар {product_id} (артикул: {product.article}) скрыт (количество: {old_quantity} → {quantity})")
                     
                     # ВАЖНО: Сохраняем товар после обновления активности
                     product.save(update_fields=['quantity', 'availability', 'is_active'])
                     
-                    if idx < 5:
+                    if idx < 10 or quantity == 0 or old_is_active != product.is_active:
                         if catalog_type == 'wholesale':
                             current_price = product.wholesale_price
                         else:
                             current_price = product.price
-                        logger.info(f"✓ Обновлен остаток для товара {product_id}: {quantity}, наличие: {product.availability}, активен: {product.is_active}, цена: {current_price}")
+                        logger.info(f"✓ Обновлен остаток для товара {product_id} (артикул: {product.article}): {old_quantity} → {quantity}, наличие: {product.availability}, активен: {old_is_active} → {product.is_active}, цена: {current_price}")
                 else:
                     # ВАЖНО: Если количество не найдено в XML, НЕ обновляем существующее количество
                     # Это предотвращает случайное обнуление количества при повторной обработке
