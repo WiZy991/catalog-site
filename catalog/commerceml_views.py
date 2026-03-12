@@ -1278,10 +1278,26 @@ def process_commerceml_file(file_path, filename, request=None):
             marker_file_path = file_path  # По умолчанию для оригинального файла
             
             if file_path and os.path.exists(file_path):
+                # ВАЖНО: Маркер создается как {file_path}.processed
+                # Если файл называется "offers0_1" (без .xml), маркер будет "offers0_1.processed"
+                # Если файл называется "offers0_1.xml", маркер будет "offers0_1.xml.processed"
                 processed_marker = f"{marker_file_path}.processed"
+                
+                # ВАЖНО: Если файл без расширения .xml, но есть вариант с .xml, создаем маркер и для него
+                # Это нужно для совместимости со старыми маркерами
+                marker_file_path_with_xml = None
+                processed_marker_with_xml = None
+                if not marker_file_path.endswith('.xml'):
+                    marker_file_path_with_xml = f"{marker_file_path}.xml"
+                    if os.path.exists(marker_file_path_with_xml):
+                        # Если существует файл с .xml, создаем маркер и для него
+                        processed_marker_with_xml = f"{marker_file_path_with_xml}.processed"
+                
                 try:
                     file_mtime = os.path.getmtime(marker_file_path)
                     file_mtime_iso = datetime.fromtimestamp(file_mtime).isoformat()
+                    
+                    # Создаем основной маркер
                     with open(processed_marker, 'w') as f:
                         f.write(f'processed\n')
                         f.write(f'file_mtime: {file_mtime_iso}\n')  # Время изменения файла
@@ -1290,8 +1306,21 @@ def process_commerceml_file(file_path, filename, request=None):
                         f.write(f'created: {total_created}\n')
                         f.write(f'updated: {total_updated}\n')
                         f.write(f'processed_by: {"web_interface" if request else "script"}\n')  # Кто обработал
-                    logger.info(f"✓ Создан маркер обработанного файла: {processed_marker}")
+                    logger.info(f"✓ Создан/обновлен маркер обработанного файла: {processed_marker}")
                     logger.info(f"  Файл: {marker_file_path}, размер маркера: {os.path.getsize(processed_marker)} байт")
+                    logger.info(f"  Время файла: {file_mtime_iso}, обработано товаров: {total_processed}")
+                    
+                    # Если есть вариант с .xml, создаем маркер и для него
+                    if processed_marker_with_xml:
+                        with open(processed_marker_with_xml, 'w') as f:
+                            f.write(f'processed\n')
+                            f.write(f'file_mtime: {file_mtime_iso}\n')
+                            f.write(f'marker_time: {timezone.now().isoformat()}\n')
+                            f.write(f'processed_count: {total_processed}\n')
+                            f.write(f'created: {total_created}\n')
+                            f.write(f'updated: {total_updated}\n')
+                            f.write(f'processed_by: {"web_interface" if request else "script"}\n')
+                        logger.info(f"✓ Создан/обновлен маркер для варианта с .xml: {processed_marker_with_xml}")
                 except Exception as marker_error:
                     logger.error(f"✗ Не удалось создать маркер обработанного файла: {marker_error}", exc_info=True)
             else:

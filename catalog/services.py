@@ -347,6 +347,22 @@ def detect_subcategory_info(text):
             name_kw = (subcat.name or '').strip().lower()
             if name_kw:
                 candidates.append((len(name_kw), name_kw, parent.name, subcat.name))
+            
+            # ВАЖНО: Также проверяем нормализованные варианты имени подкатегории
+            # (единственное/множественное число) для лучшего поиска
+            if name_kw:
+                # Пробуем найти подкатегорию по имени в разных формах
+                # Например, если подкатегория "Радиатор", ищем "радиатор", "радиаторы", "радиатора" и т.д.
+                name_variants = [
+                    name_kw,
+                    name_kw + 'ы',  # множественное число
+                    name_kw + 'и',  # множественное число
+                    name_kw[:-1] if name_kw.endswith('ы') else None,  # единственное число
+                    name_kw[:-1] if name_kw.endswith('и') else None,  # единственное число
+                ]
+                for variant in name_variants:
+                    if variant and len(variant) > 2:
+                        candidates.append((len(variant), variant, parent.name, subcat.name))
 
         candidates.sort(key=lambda x: x[0], reverse=True)
         for _len, kw, parent_name, subcat_name in candidates:
