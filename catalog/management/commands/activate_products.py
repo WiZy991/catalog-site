@@ -1,17 +1,17 @@
 """
 Команда для активации товаров, которые должны быть активны, но не активированы.
 Активирует товары в зависимости от типа каталога:
-- Розничный каталог: товары с остатком > 0 ИЛИ ценой > 0
-- Оптовый каталог: товары с остатком > 0
+- Розничный каталог: товары ТОЛЬКО с остатком > 0
+- Оптовый каталог: товары ТОЛЬКО с остатком > 0
+Товары без остатка деактивируются независимо от цены.
 """
 
 from django.core.management.base import BaseCommand
-from django.db.models import Q
 from catalog.models import Product
 
 
 class Command(BaseCommand):
-    help = 'Активирует товары, которые должны быть активны по остатку или цене'
+    help = 'Активирует товары с остатком > 0 и деактивирует товары без остатка'
 
     def handle(self, *args, **options):
         # Статистика ДО активации
@@ -78,35 +78,6 @@ class Command(BaseCommand):
         self.stdout.write(
             self.style.SUCCESS(f'Активировано товаров в оптовом каталоге: {wholesale_count}')
         )
-        
-        # Деактивируем товары без остатка (даже если есть цена)
-        retail_to_deactivate = Product.objects.filter(
-            catalog_type='retail',
-            is_active=True,
-            quantity=0
-        )
-        retail_deactivated = retail_to_deactivate.update(
-            is_active=False,
-            availability='out_of_stock'
-        )
-        if retail_deactivated > 0:
-            self.stdout.write(
-                self.style.WARNING(f'Деактивировано товаров в розничном каталоге без остатка: {retail_deactivated}')
-            )
-        
-        wholesale_to_deactivate = Product.objects.filter(
-            catalog_type='wholesale',
-            is_active=True,
-            quantity=0
-        )
-        wholesale_deactivated = wholesale_to_deactivate.update(
-            is_active=False,
-            availability='out_of_stock'
-        )
-        if wholesale_deactivated > 0:
-            self.stdout.write(
-                self.style.WARNING(f'Деактивировано товаров в оптовом каталоге без остатка: {wholesale_deactivated}')
-            )
         
         # Дополнительная статистика
         retail_total = Product.objects.filter(catalog_type='retail').count()
