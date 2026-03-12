@@ -2159,6 +2159,93 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                     # Для устойчивого матчинга используем базовый uuid.
                     product_base_id = product_id.split('#', 1)[0].strip() if product_id else product_id
                     
+                    # ВАЖНО: Извлекаем артикул из характеристик товара в offers.xml
+                    # Ищем элемент ХарактеристикиТовара или ЗначенияСвойства
+                    article_from_xml = None
+                    characteristics_elem = None
+                    if namespace:
+                        characteristics_elem = offer_elem.find(f'.//{{{namespace}}}ХарактеристикиТовара')
+                    if characteristics_elem is None:
+                        characteristics_elem = offer_elem.find('.//ХарактеристикиТовара')
+                    if characteristics_elem is None and 'catalog' in namespaces:
+                        try:
+                            characteristics_elem = offer_elem.find('.//catalog:ХарактеристикиТовара', namespaces)
+                        except (KeyError, ValueError):
+                            pass
+                    
+                    if characteristics_elem is not None:
+                        # Ищем Артикул1 в характеристиках
+                        for char_elem in characteristics_elem.findall('.//*'):
+                            char_name = None
+                            char_value = None
+                            
+                            # Ищем название характеристики
+                            name_elem = None
+                            if namespace:
+                                name_elem = char_elem.find(f'{{{namespace}}}Наименование')
+                            if name_elem is None:
+                                name_elem = char_elem.find('Наименование')
+                            if name_elem is not None and name_elem.text:
+                                char_name = name_elem.text.strip().lower()
+                            
+                            # Ищем значение характеристики
+                            value_elem = None
+                            if namespace:
+                                value_elem = char_elem.find(f'{{{namespace}}}Значение')
+                            if value_elem is None:
+                                value_elem = char_elem.find('Значение')
+                            if value_elem is not None and value_elem.text:
+                                char_value = value_elem.text.strip()
+                            
+                            # Проверяем, является ли это Артикул1
+                            if char_name and char_value:
+                                if char_name in ['артикул1', 'артикул 1', 'article1', 'article 1']:
+                                    article_from_xml = char_value
+                                    if idx < 10:
+                                        logger.info(f"Найден артикул в XML для товара {product_id}: {article_from_xml}")
+                                    break
+                    
+                    # Если не нашли в характеристиках, пробуем в ЗначенияСвойства
+                    if not article_from_xml:
+                        properties_elem = None
+                        if namespace:
+                            properties_elem = offer_elem.find(f'.//{{{namespace}}}ЗначенияСвойства')
+                        if properties_elem is None:
+                            properties_elem = offer_elem.find('.//ЗначенияСвойства')
+                        if properties_elem is not None:
+                            # Ищем свойство с Ид = Артикул1
+                            # Обычно Ид свойства для Артикул1: bbd40f55-aa4e-11ea-ba83-e0d55e9e70f8
+                            for prop_elem in properties_elem.findall('.//*'):
+                                prop_id = None
+                                prop_value = None
+                                
+                                # Ищем Ид свойства
+                                id_elem = None
+                                if namespace:
+                                    id_elem = prop_elem.find(f'{{{namespace}}}Ид')
+                                if id_elem is None:
+                                    id_elem = prop_elem.find('Ид')
+                                if id_elem is not None and id_elem.text:
+                                    prop_id = id_elem.text.strip()
+                                
+                                # Ищем значение свойства
+                                value_elem = None
+                                if namespace:
+                                    value_elem = prop_elem.find(f'{{{namespace}}}Значение')
+                                if value_elem is None:
+                                    value_elem = prop_elem.find('Значение')
+                                if value_elem is not None and value_elem.text:
+                                    prop_value = value_elem.text.strip()
+                                
+                                # Проверяем, является ли это Артикул1 (по Ид или по значению)
+                                if prop_id == 'bbd40f55-aa4e-11ea-ba83-e0d55e9e70f8' or (prop_value and prop_value and len(prop_value) > 3):
+                                    # Если это похоже на артикул (содержит цифры и дефисы), используем его
+                                    if prop_value and ('-' in prop_value or prop_value.replace('-', '').replace('.', '').isdigit()):
+                                        article_from_xml = prop_value
+                                        if idx < 10:
+                                            logger.info(f"Найден артикул в ЗначенияСвойства для товара {product_id}: {article_from_xml}")
+                                        break
+                    
                     # Ищем товар по external_id сначала в нужном типе каталога, потом в любом
                     product = Product.objects.filter(
                         Q(external_id=product_id) |
@@ -2167,10 +2254,16 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                         catalog_type=catalog_type
                     ).first()
                     if not product:
-                        # Пробуем по артикулу в нужном типе каталога
+                        # Пробуем по артикулу из Ид (если Ид это артикул)
                         product = Product.objects.filter(article=product_id, catalog_type=catalog_type).first()
                         if product and idx < 10:
-                            logger.info(f"Товар {product_id} найден по артикулу в каталоге {catalog_type}: {product.article} - {product.name[:50]}")
+                            logger.info(f"Товар {product_id} найден по артикулу (из Ид) в каталоге {catalog_type}: {product.article} - {product.name[:50]}")
+                    
+                    # ВАЖНО: Если не нашли по external_id, пробуем по артикулу из XML
+                    if not product and article_from_xml:
+                        product = Product.objects.filter(article=article_from_xml, catalog_type=catalog_type).first()
+                        if product and idx < 10:
+                            logger.info(f"Товар {product_id} найден по артикулу из XML ({article_from_xml}) в каталоге {catalog_type}: {product.article} - {product.name[:50]}")
                     
                     # Если не нашли в нужном типе каталога, ищем в любом каталоге
                     existing_product = None  # Инициализируем переменную
@@ -2183,9 +2276,15 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                         if product and idx < 10:
                             logger.info(f"Товар {product_id} найден по external_id в каталоге {product.catalog_type}: {product.article} - {product.name[:50]}")
                     if not product:
+                        # Пробуем по артикулу из Ид
                         product = Product.objects.filter(article=product_id).first()
                         if product and idx < 10:
-                            logger.info(f"Товар {product_id} найден по артикулу в каталоге {product.catalog_type}: {product.article} - {product.name[:50]}")
+                            logger.info(f"Товар {product_id} найден по артикулу (из Ид) в каталоге {product.catalog_type}: {product.article} - {product.name[:50]}")
+                    # ВАЖНО: Если не нашли по external_id, пробуем по артикулу из XML
+                    if not product and article_from_xml:
+                        product = Product.objects.filter(article=article_from_xml).first()
+                        if product and idx < 10:
+                            logger.info(f"Товар {product_id} найден по артикулу из XML ({article_from_xml}) в каталоге {product.catalog_type}: {product.article} - {product.name[:50]}")
                     
                     # Сохраняем найденный товар (если он есть) для возможного создания копии
                     if product:
@@ -2199,10 +2298,19 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                         catalog_type=catalog_type
                     ).first()
                     if not product:
+                        # Пробуем по артикулу из Ид
                         product = Product.objects.filter(
                             article=product_id,
                             catalog_type=catalog_type
                         ).first()
+                    # ВАЖНО: Если не нашли по external_id или артикулу из Ид, пробуем по артикулу из XML
+                    if not product and article_from_xml:
+                        product = Product.objects.filter(
+                            article=article_from_xml,
+                            catalog_type=catalog_type
+                        ).first()
+                        if product and idx < 10:
+                            logger.info(f"Товар найден по артикулу из XML ({article_from_xml}) в каталоге {catalog_type}: {product.article} - {product.name[:50]}")
                     
                     # Если товар не найден в нужном каталоге, но найден в другом - создаем копию
                     if not product and existing_product:
