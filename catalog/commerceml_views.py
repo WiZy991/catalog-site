@@ -2164,7 +2164,13 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                     product_base_id = product_id.split('#', 1)[0].strip() if product_id else product_id
                     
                     # ВАЖНО: Логируем обработку каждого товара для диагностики (первые 100 и товары с артикулом 8-97086-338-2 или base_id 86491d95)
-                    if idx < 100 or '8-97086-338-2' in str(product_id) or '86491d95-6cf4-44be-969c-e7f53c1bdb64' in str(product_id) or '86491d95-6cf4-44be-969c-e7f53c1bdb64' in str(product_base_id):
+                    should_log = (
+                        idx < 100 or 
+                        '8-97086-338-2' in str(product_id) or 
+                        '86491d95-6cf4-44be-969c-e7f53c1bdb64' in str(product_id) or 
+                        '86491d95-6cf4-44be-969c-e7f53c1bdb64' in str(product_base_id)
+                    )
+                    if should_log:
                         logger.info(f"🔄 Обработка предложения #{idx+1} в offers.xml: Ид={product_id}, base_id={product_base_id}")
                     
                     # ВАЖНО: Извлекаем артикул из характеристик товара в offers.xml
@@ -2322,11 +2328,26 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                             logger.info(f"✓ Товар найден по артикулу из XML ({article_from_xml}) в каталоге {catalog_type}: {product.article} - {product.name[:50]}")
                     
                     # ВАЖНО: Логируем, найден ли товар для диагностики (особенно для товара 8-97086-338-2)
-                    if '86491d95-6cf4-44be-969c-e7f53c1bdb64' in str(product_id) or '86491d95-6cf4-44be-969c-e7f53c1bdb64' in str(product_base_id) or (product and '8-97086-338-2' in str(product.article)):
+                    should_log_product = (
+                        '86491d95-6cf4-44be-969c-e7f53c1bdb64' in str(product_id) or 
+                        '86491d95-6cf4-44be-969c-e7f53c1bdb64' in str(product_base_id) or 
+                        (product and '8-97086-338-2' in str(product.article)) or
+                        article_from_xml == '8-97086-338-2' or
+                        product_id == '8-97086-338-2'
+                    )
+                    if should_log_product:
                         if product:
-                            logger.info(f"✓ Товар найден в offers.xml для каталога {catalog_type}: Ид={product_id}, артикул={product.article}, текущий остаток={product.quantity}")
+                            logger.info(f"✓ Товар найден в offers.xml для каталога {catalog_type}: Ид={product_id}, base_id={product_base_id}, артикул={product.article}, текущий остаток={product.quantity}, артикул из XML={article_from_xml}")
                         else:
-                            logger.warning(f"⚠ Товар НЕ найден в offers.xml для каталога {catalog_type}: Ид={product_id}, base_id={product_base_id}, артикул из XML={article_from_xml}")
+                            logger.warning(f"⚠ Товар НЕ найден в offers.xml для каталога {catalog_type}: Ид={product_id}, base_id={product_base_id}, артикул из XML={article_from_xml}. Пробуем найти по артикулу...")
+                            # Пробуем найти по артикулу из XML
+                            if article_from_xml:
+                                found_by_article = Product.objects.filter(article=article_from_xml, catalog_type=catalog_type).first()
+                                if found_by_article:
+                                    logger.info(f"  → Найден товар по артикулу из XML ({article_from_xml}) в каталоге {catalog_type}: {found_by_article.article} - {found_by_article.name[:50]}")
+                                    product = found_by_article
+                                else:
+                                    logger.warning(f"  → Товар не найден даже по артикулу из XML ({article_from_xml}) в каталоге {catalog_type}")
                     
                     # Если товар не найден в нужном каталоге, но найден в другом - создаем копию
                     if not product and existing_product:
@@ -2488,6 +2509,10 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                     if idx < 10:
                         logger.error(f"✗ Товар {product_id} не найден, пропускаем обновление количества")
                     continue
+                
+                # ВАЖНО: Если товар найден, но количество не было извлечено из XML,
+                # это значит, что в offers.xml нет элемента <Количество> для этого товара
+                # В этом случае НЕ обновляем количество, чтобы не потерять существующие данные
                 
                 # Обновляем цену из предложений (приоритет - цены из offers.xml)
                 # В offers.xml может быть несколько типов цен:
@@ -2928,57 +2953,33 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                             for w_elem in all_warehouse_elems:
                                 logger.debug(f"    <Склад> атрибуты: {w_elem.attrib}")
                 
-                # ВАЖНО: Переопределяем категорию по названию товара при каждом обмене
-                # Это гарантирует правильное распределение по категориям, даже если при предыдущем обмене
-                # все товары попали в одну категорию
-                from .services import get_category_for_product
-                
-                # Для оптовых товаров сначала пытаемся синхронизировать с розничным аналогом
-                if catalog_type == 'wholesale':
-                    retail_counterpart = None
-                    if product.external_id:
-                        retail_counterpart = Product.objects.filter(
-                            external_id=product.external_id,
-                            catalog_type='retail'
-                        ).first()
-                    if not retail_counterpart and product.article:
-                        retail_counterpart = Product.objects.filter(
-                            article=product.article,
-                            catalog_type='retail'
-                        ).first()
-                    if retail_counterpart and retail_counterpart.category_id != product.category_id:
-                        product.category = retail_counterpart.category
-                        if idx < 10:
-                            logger.info(f"  ↳ Синхронизирована категория оптового товара {product_id}: {retail_counterpart.category}")
-                    elif not retail_counterpart:
-                        # Если розничного аналога нет, определяем категорию по названию
-                        new_category = get_category_for_product(product.name)
-                        if new_category:
-                            # ВАЖНО: Всегда обновляем категорию, даже если она уже установлена
-                            old_category = product.category
-                            if not old_category or old_category.id != new_category.id:
-                                product.category = new_category
-                                if idx < 10:
-                                    logger.info(f"  ↳ Категория оптового товара {product_id} определена по названию: '{old_category.name if old_category else 'НЕТ'}' -> '{new_category.name}'")
-                        else:
-                            # Если категория не определена, логируем предупреждение
-                            if idx < 10:
-                                logger.warning(f"  ⚠ Не удалось определить категорию для оптового товара {product_id}: {product.name[:50]}")
-                else:
-                    # Для розничных товаров всегда определяем категорию по названию
+                # ВАЖНО: НЕ переопределяем категорию при каждом обмене из offers.xml!
+                # Категория должна устанавливаться только из import.xml
+                # Переопределение категории приводит к тому, что товары попадают в неактивные категории
+                # и потом скрываются
+                # Категория обновляется ТОЛЬКО если текущая категория неактивна
+                if product.category and not product.category.is_active:
+                    from .services import get_category_for_product
+                    # Только если категория неактивна, ищем активную
                     new_category = get_category_for_product(product.name)
-                    if new_category:
-                        # ВАЖНО: Всегда обновляем категорию, даже если она уже установлена
-                        # Это гарантирует правильное распределение при каждом обмене
+                    if new_category and new_category.is_active:
                         old_category = product.category
-                        if not old_category or old_category.id != new_category.id:
-                            product.category = new_category
-                            if idx < 10:
-                                logger.info(f"  ↳ Категория розничного товара {product_id} определена по названию: '{old_category.name if old_category else 'НЕТ'}' -> '{new_category.name}'")
-                    else:
-                        # Если категория не определена, логируем предупреждение
+                        product.category = new_category
+                        # Сохраняем категорию сразу
+                        product.save(update_fields=['category'])
                         if idx < 10:
-                            logger.warning(f"  ⚠ Не удалось определить категорию для товара {product_id}: {product.name[:50]}")
+                            logger.warning(f"  ⚠ Товар {product_id} был в неактивной категории '{old_category.name}', перемещен в активную '{new_category.name}'")
+                    elif not new_category or not new_category.is_active:
+                        # Ищем активную родительскую категорию
+                        current_cat = product.category
+                        while current_cat.parent:
+                            if current_cat.parent.is_active:
+                                product.category = current_cat.parent
+                                product.save(update_fields=['category'])
+                                if idx < 10:
+                                    logger.warning(f"  ⚠ Товар {product_id} перемещен в активную родительскую категорию '{product.category.name}'")
+                                break
+                            current_cat = current_cat.parent
                 
                 product.save()
                 
