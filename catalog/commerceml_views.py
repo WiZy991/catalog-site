@@ -2773,8 +2773,17 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                     # Количество найдено в XML (даже если = 0) - используем его
                     quantity = total_quantity_from_elems if total_quantity_from_elems is not None else 0
                     # ВАЖНО: Логируем ВСЕ товары с количеством = 0 для диагностики
-                    if idx < 10 or quantity == 0 or (product and '8-97086-338-2' in str(product.article)):
-                        logger.info(f"✓ Общее количество из элементов <Количество> для товара {product_id} (артикул: {product.article if product else 'N/A'}): {quantity} (было: {product.quantity if product else 'N/A'})")
+                    # ВАЖНО: quantity = 0 - это валидное значение! Товар должен быть скрыт.
+                    should_log_qty = (
+                        idx < 10 or 
+                        quantity == 0 or 
+                        (product and '8-97086-338-2' in str(product.article)) or
+                        article_from_xml == '8-97086-338-2' or
+                        '86491d95-6cf4-44be-969c-e7f53c1bdb64' in str(product_id)
+                    )
+                    if should_log_qty:
+                        logger.info(f"✓ Общее количество из элементов <Количество> для товара {product_id} (артикул: {product.article if product else 'N/A'}, артикул из XML: {article_from_xml}): {quantity} (было: {product.quantity if product else 'N/A'}), found_quantity_in_xml={found_quantity_in_xml}")
+                    # ВАЖНО: found_quantity_in_xml уже установлен в True выше, не нужно устанавливать снова
                 
                 # Вариант 2: Если не нашли в элементе, ищем в атрибуте <Склад КоличествоНаСкладе="..."/>
                 # ВАЖНО: Может быть несколько складов, нужно суммировать количество со всех складов
@@ -2819,16 +2828,34 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                         quantity = total_warehouse_quantity if total_warehouse_quantity is not None else 0
                         found_quantity_in_xml = True  # Отмечаем, что количество найдено
                         # ВАЖНО: Логируем ВСЕ товары с количеством = 0 для диагностики
-                        if idx < 10 or quantity == 0 or (product and '8-97086-338-2' in str(product.article)):
-                            logger.info(f"✓ Общее количество со всех складов для товара {product_id} (артикул: {product.article if product else 'N/A'}): {quantity} (было: {product.quantity if product else 'N/A'})")
+                        should_log_warehouse = (
+                            idx < 10 or 
+                            quantity == 0 or 
+                            (product and '8-97086-338-2' in str(product.article)) or
+                            article_from_xml == '8-97086-338-2' or
+                            '86491d95-6cf4-44be-969c-e7f53c1bdb64' in str(product_id)
+                        )
+                        if should_log_warehouse:
+                            logger.info(f"✓ Общее количество со всех складов для товара {product_id} (артикул: {product.article if product else 'N/A'}, артикул из XML: {article_from_xml}): {quantity} (было: {product.quantity if product else 'N/A'}), found_quantity_in_xml={found_quantity_in_xml}")
                 
                 # ВАЖНО: Обновляем количество и наличие ТОЛЬКО если товар найден
                 # Количество одинаково для обоих каталогов (retail и wholesale)
                 # Разница только в ценах (price для retail, wholesale_price для wholesale)
                 # ВАЖНО: Количество обновляется ВСЕГДА, если оно найдено в XML (даже если = 0)
                 # found_quantity_in_xml устанавливается при нахождении в <Количество> или <Склад>
-                if quantity is not None:
+                # ВАЖНО: quantity может быть 0 (это валидное значение!), поэтому проверяем found_quantity_in_xml
+                # ВАЖНО: Если found_quantity_in_xml = True, значит количество найдено в XML (даже если = 0)
+                if found_quantity_in_xml:
+                    # Если quantity is None, но found_quantity_in_xml = True, значит количество = 0
+                    if quantity is None:
+                        quantity = 0
+                    
+                    # ВАЖНО: Логируем ВСЕ обновления количества для диагностики
                     old_quantity = product.quantity
+                    # ВАЖНО: Логируем ВСЕ обновления количества (особенно для товаров с количеством = 0)
+                    if idx < 10 or quantity == 0 or old_quantity != quantity or (product and '8-97086-338-2' in str(product.article)):
+                        logger.info(f"🔍 [ОБНОВЛЕНИЕ КОЛИЧЕСТВА] Товар {product_id} (артикул: {product.article if product else 'N/A'}): found_quantity_in_xml={found_quantity_in_xml}, quantity={quantity}, old_quantity={old_quantity}")
+                    
                     # ВАЖНО: Всегда обновляем количество, даже если оно = 0
                     # Это гарантирует синхронизацию остатков с 1С
                     product.quantity = quantity
@@ -2855,9 +2882,19 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                                 other_product.availability = 'in_stock'
                                 other_product.is_active = True
                             else:
-                                # Если quantity = 0, скрываем товар (независимо от цены)
+                                # ВАЖНО: Если quantity = 0, АВТОМАТИЧЕСКИ скрываем товар в другом каталоге (независимо от цены)
                                 other_product.availability = 'out_of_stock'
                                 other_product.is_active = False
+                                # Логируем скрытие товара в другом каталоге
+                                should_log_other_hide = (
+                                    idx < 10 or 
+                                    quantity == 0 or
+                                    (product and '8-97086-338-2' in str(product.article)) or
+                                    article_from_xml == '8-97086-338-2' or
+                                    '86491d95-6cf4-44be-969c-e7f53c1bdb64' in str(product_id)
+                                )
+                                if should_log_other_hide:
+                                    logger.warning(f"🔒 ТОВАР АВТОМАТИЧЕСКИ СКРЫТ В ДРУГОМ КАТАЛОГЕ: {product_id} (артикул: {other_product.article}) в каталоге {other_catalog_type} - количество: {quantity}")
                             other_product.save(update_fields=['quantity', 'availability', 'is_active'])
                             if idx < 10 or quantity == 0:
                                 logger.info(f"✓ Синхронизировано количество для товара {product_id} в каталоге {other_catalog_type}: {quantity} (было: {other_product.quantity if hasattr(other_product, '_state') else 'N/A'})")
@@ -2870,11 +2907,19 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                         product.availability = 'in_stock'
                         product.is_active = True  # Товар с количеством > 0 - всегда активен
                     else:
-                        # Если количество = 0, скрываем товар (независимо от цены)
+                        # ВАЖНО: Если количество = 0, АВТОМАТИЧЕСКИ скрываем товар (независимо от цены)
                         product.availability = 'out_of_stock'
                         product.is_active = False  # Товар с количеством = 0 - скрываем
-                        if idx < 10 or old_quantity != 0:  # Логируем если количество изменилось с ненулевого на 0
-                            logger.info(f"⚠ Товар {product_id} (артикул: {product.article}) скрыт (количество: {old_quantity} → {quantity})")
+                        # Логируем ВСЕ товары, которые скрываются из-за количества = 0
+                        should_log_hide = (
+                            idx < 10 or 
+                            old_quantity != 0 or  # Количество изменилось с ненулевого на 0
+                            (product and '8-97086-338-2' in str(product.article)) or
+                            article_from_xml == '8-97086-338-2' or
+                            '86491d95-6cf4-44be-969c-e7f53c1bdb64' in str(product_id)
+                        )
+                        if should_log_hide:
+                            logger.warning(f"🔒 ТОВАР АВТОМАТИЧЕСКИ СКРЫТ: {product_id} (артикул: {product.article}, название: {product.name[:50]}) - количество: {old_quantity} → {quantity}, is_active: {old_is_active} → {product.is_active}")
                     
                     # ВАЖНО: Сохраняем товар после обновления активности
                     product.save(update_fields=['quantity', 'availability', 'is_active'])
