@@ -2054,6 +2054,9 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
     all_products_count = Product.objects.count()
     logger.info(f"Всего товаров в базе: {all_products_count}")
     
+    # ВАЖНО: Логируем начало обработки offers.xml для диагностики
+    logger.info(f"=== НАЧАЛО ОБРАБОТКИ OFFERS.XML ДЛЯ КАТАЛОГА {catalog_type.upper()} ===")
+    
     if not offers:
         logger.warning("Предложения не найдены в файле offers.xml")
         return {'status': 'success', 'message': 'Предложения не найдены в файле'}
@@ -2154,6 +2157,10 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                         continue
                     
                     product_id = product_id_elem.text.strip()
+                    
+                    # ВАЖНО: Логируем обработку каждого товара для диагностики (первые 100 и товары с артикулом 8-97086-338-2)
+                    if idx < 100 or '8-97086-338-2' in str(product_id):
+                        logger.info(f"Обработка предложения #{idx+1}: Ид={product_id}")
                     # ВАЖНО: В CommerceML 2.0 Ид может быть составным: "uuid#характеристика".
                     # В базе external_id у товаров может храниться как базовый uuid или как составной.
                     # Для устойчивого матчинга используем базовый uuid.
