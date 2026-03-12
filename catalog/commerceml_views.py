@@ -2791,8 +2791,9 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                     # ВАЖНО: Всегда обновляем количество, даже если оно = 0
                     # Это гарантирует синхронизацию остатков с 1С
                     product.quantity = quantity
-                    if idx < 10 or quantity == 0 or old_quantity != quantity:
-                        logger.info(f"🔄 Обновление количества для товара {product_id} (артикул: {product.article}): {old_quantity} → {quantity}")
+                    # ВАЖНО: Логируем ВСЕ товары с количеством = 0 и изменения количества
+                    if quantity == 0 or old_quantity != quantity or '8-97086-338-2' in str(product.article):
+                        logger.info(f"🔄 Обновление количества для товара {product_id} (артикул: {product.article}, название: {product.name[:50]}): {old_quantity} → {quantity}")
                     # ВАЖНО: Синхронизируем количество с другим каталогом (retail <-> wholesale)
                     # Количество одинаково для обоих каталогов, разница только в ценах
                     if product.external_id:
@@ -2837,12 +2838,13 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                     # ВАЖНО: Сохраняем товар после обновления активности
                     product.save(update_fields=['quantity', 'availability', 'is_active'])
                     
-                    if idx < 10 or quantity == 0 or old_is_active != product.is_active:
+                    # ВАЖНО: Логируем ВСЕ товары с количеством = 0 и изменения количества
+                    if quantity == 0 or old_quantity != quantity or old_is_active != product.is_active or '8-97086-338-2' in str(product.article):
                         if catalog_type == 'wholesale':
                             current_price = product.wholesale_price
                         else:
                             current_price = product.price
-                        logger.info(f"✓ Обновлен остаток для товара {product_id} (артикул: {product.article}): {old_quantity} → {quantity}, наличие: {product.availability}, активен: {old_is_active} → {product.is_active}, цена: {current_price}")
+                        logger.info(f"✓ Обновлен остаток для товара {product_id} (артикул: {product.article}, название: {product.name[:50]}): {old_quantity} → {quantity}, наличие: {product.availability}, активен: {old_is_active} → {product.is_active}, цена: {current_price}")
                 else:
                     # ВАЖНО: Если количество не найдено в XML, НЕ обновляем существующее количество
                     # Это предотвращает случайное обнуление количества при повторной обработке
