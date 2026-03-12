@@ -70,6 +70,26 @@ class Command(BaseCommand):
         if retail_with_stock < 2504:
             missing = 2504 - retail_with_stock
             self.stdout.write(self.style.WARNING(f'⚠ Не хватает товаров: {missing}'))
+            
+            # Проверяем, сколько товаров с остатком = 0, но которые должны быть активны
+            retail_zero_but_should_be_active = Product.objects.filter(
+                catalog_type='retail',
+                quantity=0,
+                is_active=False
+            ).count()
+            self.stdout.write(f'  - Товаров с остатком = 0 (скрыты): {retail_zero_but_should_be_active}')
+            
+            # Проверяем, сколько товаров всего в розничном каталоге
+            retail_total = Product.objects.filter(catalog_type='retail').count()
+            self.stdout.write(f'  - Всего товаров в розничном каталоге: {retail_total}')
+            
+            # Проверяем, сколько товаров должно быть создано из import.xml
+            # (это может быть больше, чем активных, если некоторые с остатком = 0)
+            self.stdout.write('')
+            self.stdout.write('💡 Возможные причины:')
+            self.stdout.write('  1. Товары не созданы из import.xml')
+            self.stdout.write('  2. Товары не обрабатываются в offers.xml')
+            self.stdout.write('  3. Товары скрыты из-за остатка = 0 (это нормально)')
         elif retail_with_stock > 2504:
             extra = retail_with_stock - 2504
             self.stdout.write(self.style.WARNING(f'⚠ Больше чем ожидается: +{extra}'))

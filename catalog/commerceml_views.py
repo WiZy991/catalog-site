@@ -2704,12 +2704,14 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                                     except (ValueError, AttributeError, TypeError):
                                         pass
                 
-                # Обновляем остаток
+                # ВАЖНО: Обновляем остаток из offers.xml
                 # Количество может быть в:
-                # 1. <Количество>268</Количество>
-                # 2. <Склад КоличествоНаСкладе="268"/>
+                # 1. <Количество>268</Количество> или <Количество>0</Количество>
+                # 2. <Склад КоличествоНаСкладе="268"/> или <Склад КоличествоНаСкладе="0"/>
+                # ВАЖНО: Количество = 0 - это валидное значение! Товар должен быть скрыт.
                 quantity = None
                 quantity_elem = None
+                found_quantity_in_xml = False  # Флаг, что количество найдено в XML
                 
                 # Вариант 1: Ищем элемент <Количество> (используем findall для поиска всех вложенных элементов)
                 # ВАЖНО: Может быть несколько элементов <Количество>, суммируем их
@@ -2770,8 +2772,9 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                 if found_quantity_in_xml:
                     # Количество найдено в XML (даже если = 0) - используем его
                     quantity = total_quantity_from_elems if total_quantity_from_elems is not None else 0
-                    if idx < 10 or quantity == 0:  # Логируем больше товаров и обязательно товары с количеством = 0
-                        logger.info(f"✓ Общее количество из элементов <Количество> для товара {product_id}: {quantity} (было: {product.quantity if product else 'N/A'})")
+                    # ВАЖНО: Логируем ВСЕ товары с количеством = 0 для диагностики
+                    if idx < 10 or quantity == 0 or (product and '8-97086-338-2' in str(product.article)):
+                        logger.info(f"✓ Общее количество из элементов <Количество> для товара {product_id} (артикул: {product.article if product else 'N/A'}): {quantity} (было: {product.quantity if product else 'N/A'})")
                 
                 # Вариант 2: Если не нашли в элементе, ищем в атрибуте <Склад КоличествоНаСкладе="..."/>
                 # ВАЖНО: Может быть несколько складов, нужно суммировать количество со всех складов
@@ -2814,12 +2817,16 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                     if found_warehouse_quantity:
                         # Количество найдено в XML (даже если = 0) - используем его
                         quantity = total_warehouse_quantity if total_warehouse_quantity is not None else 0
-                        if idx < 5:
-                            logger.info(f"✓ Общее количество со всех складов для товара {product_id}: {quantity}")
+                        found_quantity_in_xml = True  # Отмечаем, что количество найдено
+                        # ВАЖНО: Логируем ВСЕ товары с количеством = 0 для диагностики
+                        if idx < 10 or quantity == 0 or (product and '8-97086-338-2' in str(product.article)):
+                            logger.info(f"✓ Общее количество со всех складов для товара {product_id} (артикул: {product.article if product else 'N/A'}): {quantity} (было: {product.quantity if product else 'N/A'})")
                 
-                # Обновляем количество и наличие
-                # ВАЖНО: Количество одинаково для обоих каталогов (retail и wholesale)
+                # ВАЖНО: Обновляем количество и наличие ТОЛЬКО если товар найден
+                # Количество одинаково для обоих каталогов (retail и wholesale)
                 # Разница только в ценах (price для retail, wholesale_price для wholesale)
+                # ВАЖНО: Количество обновляется ВСЕГДА, если оно найдено в XML (даже если = 0)
+                # found_quantity_in_xml устанавливается при нахождении в <Количество> или <Склад>
                 if quantity is not None:
                     old_quantity = product.quantity
                     # ВАЖНО: Всегда обновляем количество, даже если оно = 0
