@@ -2260,6 +2260,15 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                                             logger.info(f"Найден артикул в ЗначенияСвойства для товара {product_id}: {article_from_xml}")
                                         break
                     
+                    # ВАЖНО: Логируем поиск товара для диагностики (особенно для товара 8-97086-338-2)
+                    should_log_search = (
+                        '86491d95-6cf4-44be-969c-e7f53c1bdb64' in str(product_id) or 
+                        '86491d95-6cf4-44be-969c-e7f53c1bdb64' in str(product_base_id) or
+                        article_from_xml == '8-97086-338-2' or
+                        product_id == '8-97086-338-2' or
+                        idx < 10
+                    )
+                    
                     # Ищем товар по external_id сначала в нужном типе каталога, потом в любом
                     product = Product.objects.filter(
                         Q(external_id=product_id) |
@@ -2267,17 +2276,29 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                         Q(external_id__startswith=product_base_id + '#'),
                         catalog_type=catalog_type
                     ).first()
+                    if should_log_search:
+                        if product:
+                            logger.info(f"🔍 [ПОИСК ТОВАРА] Товар найден по external_id в каталоге {catalog_type}: Ид={product_id}, base_id={product_base_id}, артикул={product.article}")
+                        else:
+                            logger.warning(f"🔍 [ПОИСК ТОВАРА] Товар НЕ найден по external_id в каталоге {catalog_type}: Ид={product_id}, base_id={product_base_id}, артикул из XML={article_from_xml}")
+                    
                     if not product:
                         # Пробуем по артикулу из Ид (если Ид это артикул)
                         product = Product.objects.filter(article=product_id, catalog_type=catalog_type).first()
-                        if product and idx < 10:
-                            logger.info(f"Товар {product_id} найден по артикулу (из Ид) в каталоге {catalog_type}: {product.article} - {product.name[:50]}")
+                        if product:
+                            if should_log_search:
+                                logger.info(f"🔍 [ПОИСК ТОВАРА] Товар найден по артикулу (из Ид) в каталоге {catalog_type}: {product.article} - {product.name[:50]}")
+                        elif should_log_search:
+                            logger.warning(f"🔍 [ПОИСК ТОВАРА] Товар НЕ найден по артикулу (из Ид) в каталоге {catalog_type}: Ид={product_id}")
                     
                     # ВАЖНО: Если не нашли по external_id, пробуем по артикулу из XML
                     if not product and article_from_xml:
                         product = Product.objects.filter(article=article_from_xml, catalog_type=catalog_type).first()
-                        if product and idx < 10:
-                            logger.info(f"Товар {product_id} найден по артикулу из XML ({article_from_xml}) в каталоге {catalog_type}: {product.article} - {product.name[:50]}")
+                        if product:
+                            if should_log_search:
+                                logger.info(f"🔍 [ПОИСК ТОВАРА] Товар найден по артикулу из XML ({article_from_xml}) в каталоге {catalog_type}: {product.article} - {product.name[:50]}")
+                        elif should_log_search:
+                            logger.warning(f"🔍 [ПОИСК ТОВАРА] Товар НЕ найден по артикулу из XML ({article_from_xml}) в каталоге {catalog_type}")
                     
                     # Если не нашли в нужном типе каталога, ищем в любом каталоге
                     existing_product = None  # Инициализируем переменную
@@ -2845,6 +2866,20 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                 # found_quantity_in_xml устанавливается при нахождении в <Количество> или <Склад>
                 # ВАЖНО: quantity может быть 0 (это валидное значение!), поэтому проверяем found_quantity_in_xml
                 # ВАЖНО: Если found_quantity_in_xml = True, значит количество найдено в XML (даже если = 0)
+                
+                # ВАЖНО: Логируем состояние для диагностики (особенно для товара 8-97086-338-2)
+                should_log_quantity_check = (
+                    product is not None and (
+                        '86491d95-6cf4-44be-969c-e7f53c1bdb64' in str(product_id) or 
+                        '86491d95-6cf4-44be-969c-e7f53c1bdb64' in str(product_base_id) or
+                        '8-97086-338-2' in str(product.article) or
+                        article_from_xml == '8-97086-338-2'
+                    )
+                )
+                
+                if should_log_quantity_check:
+                    logger.info(f"🔍 [ПРОВЕРКА КОЛИЧЕСТВА] Товар найден: {product.article}, found_quantity_in_xml={found_quantity_in_xml}, quantity={quantity}, текущий остаток={product.quantity if product else 'N/A'}")
+                
                 if found_quantity_in_xml:
                     # Если quantity is None, но found_quantity_in_xml = True, значит количество = 0
                     if quantity is None:
