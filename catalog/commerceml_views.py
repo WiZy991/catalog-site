@@ -1214,33 +1214,40 @@ def process_commerceml_file(file_path, filename, request=None):
                     # Ищем товары, которые:
                     # 1. Имеют external_id (были импортированы из 1С)
                     # 2. Принадлежат к текущему типу каталога (retail или wholesale)
-                    # 3. Были активны (чтобы не трогать уже скрытые)
-                    # 4. Их external_id нет в списке обработанных
+                    # 3. Их external_id нет в списке обработанных
+                    # 4. ВАЖНО: Скрываем ТОЛЬКО те, у которых price = 0 И quantity = 0
+                    from django.db.models import Q
+                    
+                    if current_catalog_type == 'wholesale':
+                        price_field = 'wholesale_price'
+                    else:
+                        price_field = 'price'
+                    
+                    # Скрываем только товары с price = 0 И quantity = 0
                     products_to_hide = Product.objects.filter(
-                        catalog_type=current_catalog_type,  # Только товары из текущего типа каталога
-                        is_active=True,
+                        catalog_type=current_catalog_type,
                         external_id__isnull=False,
-                        external_id__gt=''  # Не пустой
+                        external_id__gt='',
+                        quantity=0,
+                        **{price_field: 0}
                     ).exclude(external_id__in=processed_external_ids)
                     
                     deleted_count = products_to_hide.count()
                     if deleted_count > 0:
-                        logger.info(f"Найдено {deleted_count} товаров в каталоге {current_catalog_type}, которые не пришли в обмене - скрываем их (удалены в 1С)")
+                        logger.info(f"Найдено {deleted_count} товаров в каталоге {current_catalog_type}, которые не пришли в обмене И имеют price=0 И quantity=0 - скрываем их")
                         # Логируем первые 5 для отладки
                         for product in products_to_hide[:5]:
-                            logger.info(f"  Скрываем: {product.name[:50]} (external_id={product.external_id}, article={product.article})")
+                            price_val = getattr(product, price_field, 0) or 0
+                            logger.info(f"  Скрываем: {product.name[:50]} (external_id={product.external_id}, article={product.article}, price={price_val}, quantity={product.quantity})")
                         
-                        # ВАЖНО: НЕ обнуляем quantity при скрытии товаров!
-                        # Количество должно сохраняться, чтобы при следующем обмене товары могли восстановиться
-                        # Скрываем товары (не удаляем физически, чтобы сохранить историю)
+                        # ВАЖНО: Скрываем только товары с price = 0 И quantity = 0
                         products_to_hide.update(is_active=False, availability='out_of_stock')
-                        # НЕ обнуляем quantity - оставляем существующее значение
-                        logger.info(f"✓ Скрыто товаров в каталоге {current_catalog_type}: {deleted_count} (количество сохранено)")
+                        logger.info(f"✓ Скрыто товаров в каталоге {current_catalog_type}: {deleted_count} (только с price=0 И quantity=0)")
                         total_deleted += deleted_count
                         # Обновляем результаты для текущего каталога
                         results[current_catalog_type]['deleted'] = deleted_count
                     else:
-                        logger.info(f"Все товары из 1С присутствуют в обмене для каталога {current_catalog_type}, скрывать нечего")
+                        logger.info(f"Все товары из 1С присутствуют в обмене для каталога {current_catalog_type}, или у отсутствующих есть цена/количество - скрывать нечего")
                 elif processed_count == 0:
                     logger.warning(f"⚠ В обмене нет товаров для каталога {current_catalog_type} (processed_count=0) - НЕ скрываем товары (предотвращает случайное скрытие всех товаров)")
                 elif error_rate >= 0.5:
@@ -2941,40 +2948,53 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                             # Но если quantity не найдено в XML (None), НЕ обновляем существующее количество
                             other_product.quantity = quantity
                             # Также обновляем availability для другого каталога
-                            # ВАЖНО: Если quantity = 0, товар скрывается независимо от цены
-                            if quantity > 0:
-                                other_product.availability = 'in_stock'
+                            # ВАЖНО: Товар скрывается ТОЛЬКО если quantity = 0 И price = 0
+                            # Получаем цену товара в другом каталоге
+                            if other_catalog_type == 'wholesale':
+                                other_price = other_product.wholesale_price or 0
+                            else:
+                                other_price = other_product.price or 0
+                            
+                            if quantity > 0 or other_price > 0:
+                                other_product.availability = 'in_stock' if quantity > 0 else 'order'
                                 other_product.is_active = True
                             else:
-                                # ВАЖНО: Если quantity = 0, АВТОМАТИЧЕСКИ скрываем товар в другом каталоге (независимо от цены)
+                                # ВАЖНО: Скрываем товар ТОЛЬКО если quantity = 0 И price = 0
                                 other_product.availability = 'out_of_stock'
                                 other_product.is_active = False
                                 # Логируем скрытие товара в другом каталоге
                                 should_log_other_hide = (
                                     idx < 10 or 
-                                    quantity == 0 or
                                     (product and '8-97086-338-2' in str(product.article)) or
                                     article_from_xml == '8-97086-338-2' or
                                     '86491d95-6cf4-44be-969c-e7f53c1bdb64' in str(product_id)
                                 )
                                 if should_log_other_hide:
-                                    logger.warning(f"🔒 ТОВАР АВТОМАТИЧЕСКИ СКРЫТ В ДРУГОМ КАТАЛОГЕ: {product_id} (артикул: {other_product.article}) в каталоге {other_catalog_type} - количество: {quantity}")
+                                    logger.warning(f"🔒 ТОВАР СКРЫТ В ДРУГОМ КАТАЛОГЕ (количество=0 И цена=0): {product_id} (артикул: {other_product.article}) в каталоге {other_catalog_type} - количество: {quantity}, цена: {other_price}")
                             other_product.save(update_fields=['quantity', 'availability', 'is_active'])
                             if idx < 10 or quantity == 0:
                                 logger.info(f"✓ Синхронизировано количество для товара {product_id} в каталоге {other_catalog_type}: {quantity} (было: {other_product.quantity if hasattr(other_product, '_state') else 'N/A'})")
                     
-                    # ВАЖНО: Определяем активность на основе количества
-                    # Если количество > 0, товар активен и в наличии
-                    # Если количество = 0, товар скрыт (неактивен) - независимо от цены
+                    # ВАЖНО: Определяем активность на основе количества И цены
+                    # Товар активен если: quantity > 0 ИЛИ price > 0
+                    # Товар скрыт ТОЛЬКО если: quantity = 0 И price = 0
                     old_is_active = product.is_active
-                    if quantity > 0:
-                        product.availability = 'in_stock'
-                        product.is_active = True  # Товар с количеством > 0 - всегда активен
+                    
+                    # Получаем текущую цену товара
+                    if catalog_type == 'wholesale':
+                        current_price = product.wholesale_price or 0
                     else:
-                        # ВАЖНО: Если количество = 0, АВТОМАТИЧЕСКИ скрываем товар (независимо от цены)
+                        current_price = product.price or 0
+                    
+                    # Товар активен если есть количество ИЛИ есть цена
+                    if quantity > 0 or current_price > 0:
+                        product.availability = 'in_stock' if quantity > 0 else 'order'
+                        product.is_active = True  # Товар активен если есть количество или цена
+                    else:
+                        # ВАЖНО: Скрываем товар ТОЛЬКО если quantity = 0 И price = 0
                         product.availability = 'out_of_stock'
-                        product.is_active = False  # Товар с количеством = 0 - скрываем
-                        # Логируем ВСЕ товары, которые скрываются из-за количества = 0
+                        product.is_active = False
+                        # Логируем товары, которые скрываются
                         should_log_hide = (
                             idx < 10 or 
                             old_quantity != 0 or  # Количество изменилось с ненулевого на 0
@@ -2983,7 +3003,7 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                             '86491d95-6cf4-44be-969c-e7f53c1bdb64' in str(product_id)
                         )
                         if should_log_hide:
-                            logger.warning(f"🔒 ТОВАР АВТОМАТИЧЕСКИ СКРЫТ: {product_id} (артикул: {product.article}, название: {product.name[:50]}) - количество: {old_quantity} → {quantity}, is_active: {old_is_active} → {product.is_active}")
+                            logger.warning(f"🔒 ТОВАР СКРЫТ (количество=0 И цена=0): {product_id} (артикул: {product.article}, название: {product.name[:50]}) - количество: {old_quantity} → {quantity}, цена: {current_price}, is_active: {old_is_active} → {product.is_active}")
                     
                     # ВАЖНО: Сохраняем товар после обновления активности
                     product.save(update_fields=['quantity', 'availability', 'is_active'])
@@ -3007,26 +3027,33 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                     # Количество одинаково для обоих каталогов
                     existing_quantity = product.quantity or 0
                     
-                    # ВАЖНО: Определяем активность на основе количества
-                    # Если количество > 0, товар активен и в наличии
-                    # Если количество = 0, товар скрыт (неактивен) - независимо от цены
+                    # ВАЖНО: Определяем активность на основе количества И цены
+                    # Товар активен если: quantity > 0 ИЛИ price > 0
+                    # Товар скрыт ТОЛЬКО если: quantity = 0 И price = 0
                     # Если количество не найдено в XML, используем существующее количество
-                    if existing_quantity > 0:
-                        product.availability = 'in_stock'
-                        product.is_active = True  # Товар с количеством > 0 - всегда активен
+                    
+                    # Получаем текущую цену товара
+                    if catalog_type == 'wholesale':
+                        current_price = product.wholesale_price or 0
                     else:
-                        # Если количество = 0, скрываем товар (независимо от цены)
+                        current_price = product.price or 0
+                    
+                    if existing_quantity > 0 or current_price > 0:
+                        product.availability = 'in_stock' if existing_quantity > 0 else 'order'
+                        product.is_active = True  # Товар активен если есть количество или цена
+                    else:
+                        # Скрываем товар ТОЛЬКО если quantity = 0 И price = 0
                         product.availability = 'out_of_stock'
-                        product.is_active = False  # Товар с количеством = 0 - скрываем
+                        product.is_active = False
                         if idx < 5:
-                            logger.warning(f"⚠ Товар {product_id} скрыт (количество=0, количество не найдено в XML)")
+                            logger.warning(f"⚠ Товар {product_id} скрыт (количество=0 И цена=0, количество не найдено в XML)")
                     
                     # ВАЖНО: Сохраняем товар после обновления активности
                     product.save(update_fields=['availability', 'is_active'])
                     
                     # ВАЖНО: Синхронизируем availability с другим каталогом (retail <-> wholesale)
                     # Availability должно быть одинаковым для обоих каталогов, если количество одинаково
-                    if product.external_id and existing_quantity > 0:
+                    if product.external_id:
                         # Находим товар в другом каталоге с тем же external_id
                         other_catalog_type = 'wholesale' if catalog_type == 'retail' else 'retail'
                         other_product = Product.objects.filter(
@@ -3034,11 +3061,21 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                             catalog_type=other_catalog_type
                         ).first()
                         if other_product:
-                            # Синхронизируем availability, если количество одинаково
-                            if other_product.quantity == existing_quantity:
-                                other_product.availability = product.availability
-                                other_product.is_active = product.is_active
-                                other_product.save(update_fields=['availability', 'is_active'])
+                            # Получаем цену товара в другом каталоге
+                            if other_catalog_type == 'wholesale':
+                                other_price = other_product.wholesale_price or 0
+                            else:
+                                other_price = other_product.price or 0
+                            
+                            # Синхронизируем availability и is_active на основе количества и цены
+                            if existing_quantity > 0 or other_price > 0:
+                                other_product.availability = 'in_stock' if existing_quantity > 0 else 'order'
+                                other_product.is_active = True
+                            else:
+                                other_product.availability = 'out_of_stock'
+                                other_product.is_active = False
+                            
+                            other_product.save(update_fields=['availability', 'is_active'])
                                 if idx < 5:
                                     logger.info(f"✓ Синхронизировано availability для товара {product_id} в каталоге {other_catalog_type}: {product.availability}")
                     
@@ -3442,19 +3479,30 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
                 quantity = 0
         
         # Определяем наличие и активность
-        # ВАЖНО: Товары из import.xml создаются активными ТОЛЬКО если есть остаток > 0
+        # ВАЖНО: Товары из import.xml создаются активными если есть остаток > 0 ИЛИ цена > 0
         # Цены и количество придут из offers.xml и обновят статус товара
-        # Товары без остатка будут скрыты, даже если есть цена
-        if catalog_type == 'wholesale':
-            # В оптовом каталоге товар активен ТОЛЬКО если есть остаток > 0
-            availability = 'in_stock' if quantity > 0 else 'out_of_stock'
-            # ВАЖНО: Товар активен ТОЛЬКО если есть остаток > 0
-            is_active = quantity > 0
+        # Товары скрываются ТОЛЬКО если остаток = 0 И цена = 0
+        
+        # Получаем цену из данных (если есть)
+        price = 0
+        if 'price' in product_data:
+            try:
+                price_str = str(product_data['price']).strip().replace(',', '.').replace(' ', '').replace('\xa0', '')
+                if price_str and price_str.lower() not in ['none', 'null', '']:
+                    price = float(price_str)
+                    if price < 0:
+                        price = 0
+            except (ValueError, TypeError):
+                price = 0
+        
+        # Товар активен если есть остаток > 0 ИЛИ цена > 0
+        # Товар скрыт ТОЛЬКО если остаток = 0 И цена = 0
+        if quantity > 0 or price > 0:
+            availability = 'in_stock' if quantity > 0 else 'order'
+            is_active = True
         else:
-            # В розничном каталоге товар активен ТОЛЬКО если есть остаток > 0
-            availability = 'in_stock' if quantity > 0 else 'out_of_stock'
-            # ВАЖНО: Товар активен ТОЛЬКО если есть остаток > 0
-            is_active = quantity > 0
+            availability = 'out_of_stock'
+            is_active = False
         
         # Ищем товар по external_id или по артикулу в нужном типе каталога
         # ВАЖНО: 1С может давать новое Ид одному и тому же товару, поэтому поиск по артикулу имеет приоритет
