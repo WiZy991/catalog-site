@@ -100,8 +100,9 @@ class CategoryView(ListView):
             category__in=descendants,
             is_active=True,
             catalog_type='retail',  # Только товары из основного каталога
-            quantity__gt=0,  # Только товары с количеством больше 0
-            availability='in_stock'  # Только товары в наличии
+            quantity__gt=0  # Только товары с количеством больше 0
+        ).filter(
+            Q(availability='in_stock') | Q(availability='order')  # Товары в наличии или под заказ
         ).select_related('category').prefetch_related('images')
         
         # Применяем фильтры
@@ -179,8 +180,9 @@ class CatalogItemView(ListView):
                             slug=slug,
                             category__in=descendants,
                             is_active=True,
-                            quantity__gt=0,  # Только товары с количеством больше 0
-                            availability='in_stock'  # Только товары в наличии
+                            quantity__gt=0  # Только товары с количеством больше 0
+                        ).filter(
+                            Q(availability='in_stock') | Q(availability='order')  # Товары в наличии или под заказ
                         ).first()
                         
                         if product:
@@ -213,8 +215,9 @@ class CatalogItemView(ListView):
                 category__in=descendants,
                 is_active=True,
                 catalog_type='retail',  # Только товары из основного каталога
-                quantity__gt=0,  # Только товары с количеством больше 0
-                availability='in_stock'  # Только товары в наличии
+                quantity__gt=0  # Только товары с количеством больше 0
+            ).filter(
+                Q(availability='in_stock') | Q(availability='order')  # Товары в наличии или под заказ
             ).select_related('category').prefetch_related('images')
             
             # Применяем фильтры
@@ -344,8 +347,9 @@ class ProductView(DetailView):
         return Product.objects.filter(
             is_active=True,
             catalog_type='retail',  # Только товары из основного каталога
-            quantity__gt=0,  # Только товары с количеством больше 0
-            availability='in_stock'  # Только товары в наличии
+            quantity__gt=0  # Только товары с количеством больше 0
+        ).filter(
+            Q(availability='in_stock') | Q(availability='order')  # Товары в наличии или под заказ
         ).select_related('category').prefetch_related('images')
 
     def get_context_data(self, **kwargs):
@@ -528,15 +532,17 @@ def filter_products_ajax(request):
             category__in=descendants,
             is_active=True,
             catalog_type='retail',  # Только товары из основного каталога
-            quantity__gt=0,  # Только товары с количеством больше 0
-            availability='in_stock'  # Только товары в наличии
+            quantity__gt=0  # Только товары с количеством больше 0
+        ).filter(
+            Q(availability='in_stock') | Q(availability='order')  # Товары в наличии или под заказ
         )
     else:
         queryset = Product.objects.filter(
             is_active=True,
             catalog_type='retail',  # Только товары из основного каталога
-            quantity__gt=0,  # Только товары с количеством больше 0
-            availability='in_stock'  # Только товары в наличии
+            quantity__gt=0  # Только товары с количеством больше 0
+        ).filter(
+            Q(availability='in_stock') | Q(availability='order')  # Товары в наличии или под заказ
         )
     
     # Применяем фильтры
