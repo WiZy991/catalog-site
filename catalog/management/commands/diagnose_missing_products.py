@@ -206,20 +206,92 @@ class Command(BaseCommand):
         self.stdout.write(f"  (с категорией, в активной категории, availability='in_stock' или 'order')")
         self.stdout.write()
         
+        # Проверяем, сколько товаров из 1С есть в оптовом каталоге, но нет в розничном
+        # Это может объяснить разницу
+        wholesale_with_external_id = Product.objects.filter(
+            catalog_type='wholesale',
+            quantity__gt=0,
+            is_active=True,
+            external_id__isnull=False,
+            external_id__gt=''
+        )
+        
+        retail_with_external_id = Product.objects.filter(
+            catalog_type='retail',
+            quantity__gt=0,
+            is_active=True,
+            external_id__isnull=False,
+            external_id__gt=''
+        )
+        
+        # Находим external_id, которые есть в оптовом, но нет в розничном
+        wholesale_external_ids = set(wholesale_with_external_id.values_list('external_id', flat=True))
+        retail_external_ids = set(retail_with_external_id.values_list('external_id', flat=True))
+        
+        missing_in_retail = wholesale_external_ids - retail_external_ids
+        if missing_in_retail:
+            self.stdout.write(f"⚠ Товаров из 1С с остатками > 0 есть в ОПТОВОМ каталоге, но НЕТ в РОЗНИЧНОМ: {len(missing_in_retail)}")
+            self.stdout.write(f"  Это может объяснить разницу в количестве товаров")
+            # Показываем примеры
+            examples = wholesale_with_external_id.filter(external_id__in=list(missing_in_retail)[:5])
+            for p in examples:
+                self.stdout.write(f"    * {p.name[:50]} (артикул: {p.article}, external_id: {p.external_id}, количество: {p.quantity})")
+            self.stdout.write()
+        
         # Рекомендации
         self.stdout.write("=" * 80)
         self.stdout.write("РЕКОМЕНДАЦИИ")
         self.stdout.write("=" * 80)
         self.stdout.write()
         
+        if retail_no_category > 0:
+            self.stdout.write("1. Для исправления товаров без категории:")
+            self.stdout.write("   python manage.py fix_missing_categories --catalog-type retail")
+            self.stdout.write()
+        
+        if retail_in_inactive_category > 0:
+            self.stdout.write("2. Для исправления товаров в неактивных категориях:")
+            self.stdout.write("   python manage.py fix_missing_categories --catalog-type retail")
+            self.stdout.write()
+        
+        if retail_out_of_stock > 0:
+            self.stdout.write("3. Для исправления availability товаров с остатками:")
+            self.stdout.write("   python manage.py restore_products_by_price --catalog-type retail")
+            self.stdout.write()
+        
+        if missing_in_retail:
+            self.stdout.write("4. Для создания товаров в розничном каталоге из оптового:")
+            self.stdout.write("   python manage.py sync_retail_from_wholesale")
+            self.stdout.write()
+        
         if inactive_count > 0:
-            self.stdout.write("Для активации неактивных товаров с остатками > 0:")
-            self.stdout.write("  python manage.py restore_products_by_price")
+            self.stdout.write("5. Для активации неактивных товаров с остатками > 0:")
+            self.stdout.write("   python manage.py restore_products_by_price")
             self.stdout.write()
         
-        if no_category > 0 or in_inactive_category > 0:
-            self.stdout.write("Для исправления товаров без категории или в неактивных категориях:")
-            self.stdout.write("  python manage.py fix_missing_categories")
-            self.stdout.write()
+        # Итоговая статистика
+        self.stdout.write("ИТОГО:")
+        self.stdout.write(f"  - Ожидается товаров: {expected_count}")
+        self.stdout.write(f"  - Показывается на сайте: {retail_should_show}")
+        self.stdout.write(f"  - Разница: {expected_count - retail_should_show}")
+        self.stdout.write()
         
+        if expected_count - retail_should_show > 0:
+            self.stdout.write(self.style.WARNING(
+                f"⚠ Не хватает {expected_count - retail_should_show} товаров на сайте"
+            ))
+            self.stdout.write("  Возможные причины:")
+            if retail_no_category > 0:
+                self.stdout.write(f"    - {retail_no_category} товаров без категории")
+            if retail_in_inactive_category > 0:
+                self.stdout.write(f"    - {retail_in_inactive_category} товаров в неактивных категориях")
+            if retail_out_of_stock > 0:
+                self.stdout.write(f"    - {retail_out_of_stock} товаров с неправильным availability")
+            if missing_in_retail:
+                self.stdout.write(f"    - {len(missing_in_retail)} товаров есть только в оптовом каталоге")
+            remaining = expected_count - retail_should_show - retail_no_category - retail_in_inactive_category - retail_out_of_stock - len(missing_in_retail) if missing_in_retail else 0
+            if remaining > 0:
+                self.stdout.write(f"    - {remaining} товаров по другим причинам (возможно, не были импортированы из 1С)")
+        
+        self.stdout.write()
         self.stdout.write("=" * 80)
