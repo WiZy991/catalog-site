@@ -2667,6 +2667,12 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                                                     product.price = price
                                                     if idx < 10:
                                                         logger.info(f"✓ Обновлена розничная цена для товара {product_id}: {price} (тип цены: {price_type_id})")
+                                                # ВАЖНО: После обновления цены пересчитываем is_active
+                                                # Товар активен если: quantity > 0 ИЛИ price > 0
+                                                current_qty = product.quantity or 0
+                                                if current_qty > 0 or price > 0:
+                                                    product.is_active = True
+                                                    product.availability = 'in_stock' if current_qty > 0 else 'order'
                                                 break  # Нашли нужную цену, выходим из цикла
                                     except (ValueError, AttributeError, TypeError) as e:
                                         if idx < 5:
@@ -2736,6 +2742,11 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                                                         product.price = price
                                                         if idx < 5:
                                                             logger.info(f"Обновлена розничная цена (fallback по типу) для товара {product_id}: {price}")
+                                                    # ВАЖНО: После обновления цены пересчитываем is_active
+                                                    current_qty = product.quantity or 0
+                                                    if current_qty > 0 or price > 0:
+                                                        product.is_active = True
+                                                        product.availability = 'in_stock' if current_qty > 0 else 'order'
                                                     break
                                         except (ValueError, AttributeError, TypeError):
                                             pass
@@ -2764,6 +2775,11 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                                                 product.wholesale_price = price
                                                 if idx < 5:
                                                     logger.warning(f"⚠ Обновлена оптовая цена (fallback - любая цена) для товара {product_id}: {price}")
+                                                # ВАЖНО: После обновления цены пересчитываем is_active
+                                                current_qty = product.quantity or 0
+                                                if current_qty > 0 or price > 0:
+                                                    product.is_active = True
+                                                    product.availability = 'in_stock' if current_qty > 0 else 'order'
                                                 break
                                     except (ValueError, AttributeError, TypeError):
                                         pass
@@ -3768,18 +3784,34 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
             # Обновляем цену только если она указана (не 0)
             # Это позволяет сохранить цену из offers.xml, если она уже была установлена
             # Для оптового каталога обновляем wholesale_price, для розничного - price
+            price_updated = False
             if price > 0:
                 if catalog_type == 'wholesale':
                     product.wholesale_price = price
                 else:
                     product.price = price
+                price_updated = True
             
-            # ВАЖНО: При обновлении из import.xml НЕ меняем quantity/availability/is_active.
-            # Иначе витрина "мигает": товары временно пропадают до прихода offers.xml.
+            # ВАЖНО: При обновлении из import.xml НЕ меняем quantity/availability.
             # Остатки/наличие обновляются ТОЛЬКО из offers.xml.
-            # НЕ меняем is_active при обновлении из import.xml - оставляем существующее значение
-            # Если товар был активен, он останется активным
-            # Если товар был неактивен, он останется неактивным (возможно, был скрыт вручную)
+            # НО: Если обновилась цена, нужно пересчитать is_active на основе цены и количества
+            # Товар активен если: quantity > 0 ИЛИ price > 0
+            # Товар скрыт ТОЛЬКО если: quantity = 0 И price = 0
+            if price_updated:
+                # Получаем текущее количество и цену
+                current_quantity = product.quantity or 0
+                if catalog_type == 'wholesale':
+                    current_price = product.wholesale_price or 0
+                else:
+                    current_price = product.price or 0
+                
+                # Пересчитываем is_active на основе количества и цены
+                if current_quantity > 0 or current_price > 0:
+                    product.availability = 'in_stock' if current_quantity > 0 else 'order'
+                    product.is_active = True
+                else:
+                    product.availability = 'out_of_stock'
+                    product.is_active = False
             # ВАЖНО: Всегда обновляем категорию из данных 1С, чтобы товары правильно распределялись по категориям
             # НО: только если категория активна, чтобы товары не попадали в неактивные категории
             if category:
