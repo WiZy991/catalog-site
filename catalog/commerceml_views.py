@@ -2371,12 +2371,15 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                         existing_product = product
                     
                     # Проверяем, есть ли товар в нужном каталоге
-                    product = Product.objects.filter(
-                        Q(external_id=product_id) |
-                        Q(external_id=product_base_id) |
-                        Q(external_id__startswith=product_base_id + '#'),
-                        catalog_type=catalog_type
-                    ).first()
+                    # ВАЖНО: Если товар уже найден выше, используем его
+                    if not product or product.catalog_type != catalog_type:
+                        product = Product.objects.filter(
+                            Q(external_id=product_id) |
+                            Q(external_id=product_base_id) |
+                            Q(external_id__startswith=product_base_id + '#')
+                        ).filter(
+                            catalog_type=catalog_type
+                        ).first()
                     if not product:
                         # Пробуем по артикулу из Ид
                         product = Product.objects.filter(
@@ -2667,6 +2670,7 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                                                         logger.info(f"✓ Обновлена оптовая цена для товара {product_id}: {price} (тип цены: {price_type_id})")
                                                 else:
                                                     product.price = price
+                                                    product._price_updated = True  # Флаг для сохранения
                                                     if idx < 10:
                                                         logger.info(f"✓ Обновлена розничная цена для товара {product_id}: {price} (тип цены: {price_type_id})")
                                                 # ВАЖНО: После обновления цены пересчитываем is_active
@@ -3031,7 +3035,13 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                             logger.warning(f"🔒 ТОВАР СКРЫТ (количество=0 И цена=0): {product_id} (артикул: {product.article}, название: {product.name[:50]}) - количество: {old_quantity} → {quantity}, цена: {current_price}, is_active: {old_is_active} → {product.is_active}")
                     
                     # ВАЖНО: Сохраняем товар после обновления активности
-                    product.save(update_fields=['quantity', 'availability', 'is_active'])
+                    # ВАЖНО: Всегда включаем цену в update_fields, так как она могла быть обновлена выше
+                    update_fields = ['quantity', 'availability', 'is_active']
+                    if catalog_type == 'wholesale':
+                        update_fields.append('wholesale_price')
+                    else:
+                        update_fields.append('price')
+                    product.save(update_fields=update_fields)
                     
                     # ВАЖНО: Логируем ВСЕ товары с количеством = 0 и изменения количества
                     if quantity == 0 or old_quantity != quantity or old_is_active != product.is_active or '8-97086-338-2' in str(product.article):
