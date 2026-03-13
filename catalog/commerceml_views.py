@@ -14,6 +14,7 @@ from django.http import HttpResponse, HttpResponseBadRequest
 from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_exempt
 from django.db import transaction, OperationalError
+from django.db.models import Q
 from django.conf import settings
 from django.utils import timezone
 from django.core.files.storage import default_storage
@@ -2316,7 +2317,8 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                     product = Product.objects.filter(
                         Q(external_id=product_id) |
                         Q(external_id=product_base_id) |
-                        Q(external_id__startswith=product_base_id + '#'),
+                        Q(external_id__startswith=product_base_id + '#')
+                    ).filter(
                         catalog_type=catalog_type
                     ).first()
                     if should_log_search:

@@ -75,11 +75,16 @@ class Command(BaseCommand):
             self.stdout.write(f"Обработано товаров: {result.get('processed', 0)}")
             self.stdout.write(f"Обновлено товаров: {result.get('updated', 0)}")
             
-            if result.get('errors'):
+            errors = result.get('errors', [])
+            if errors:
                 self.stdout.write()
                 self.stdout.write(self.style.ERROR("Ошибки:"))
-                for error in result.get('errors', [])[:10]:
-                    self.stdout.write(f"  - {error}")
+                # Проверяем, что errors - это список
+                if isinstance(errors, list):
+                    for error in errors[:10]:
+                        self.stdout.write(f"  - {error}")
+                else:
+                    self.stdout.write(f"  - {errors}")
             
             self.stdout.write()
             self.stdout.write("Проверьте результат:")
