@@ -3083,8 +3083,8 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                                 other_product.is_active = False
                             
                             other_product.save(update_fields=['availability', 'is_active'])
-                                if idx < 5:
-                                    logger.info(f"✓ Синхронизировано availability для товара {product_id} в каталоге {other_catalog_type}: {product.availability}")
+                            if idx < 5:
+                                logger.info(f"✓ Синхронизировано availability для товара {product_id} в каталоге {other_catalog_type}: {product.availability}")
                     
                     if idx < 10:
                         if catalog_type == 'wholesale':
