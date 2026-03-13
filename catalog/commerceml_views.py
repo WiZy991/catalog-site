@@ -1218,26 +1218,33 @@ def process_commerceml_file(file_path, filename, request=None):
                     # 4. ВАЖНО: Скрываем ТОЛЬКО те, у которых price = 0 И quantity = 0
                     from django.db.models import Q
                     
-                    if current_catalog_type == 'wholesale':
-                        price_field = 'wholesale_price'
-                    else:
-                        price_field = 'price'
-                    
                     # Скрываем только товары с price = 0 И quantity = 0
-                    products_to_hide = Product.objects.filter(
-                        catalog_type=current_catalog_type,
-                        external_id__isnull=False,
-                        external_id__gt='',
-                        quantity=0,
-                        **{price_field: 0}
-                    ).exclude(external_id__in=processed_external_ids)
+                    if current_catalog_type == 'wholesale':
+                        products_to_hide = Product.objects.filter(
+                            catalog_type=current_catalog_type,
+                            external_id__isnull=False,
+                            external_id__gt='',
+                            quantity=0,
+                            wholesale_price=0
+                        ).exclude(external_id__in=processed_external_ids)
+                    else:
+                        products_to_hide = Product.objects.filter(
+                            catalog_type=current_catalog_type,
+                            external_id__isnull=False,
+                            external_id__gt='',
+                            quantity=0,
+                            price=0
+                        ).exclude(external_id__in=processed_external_ids)
                     
                     deleted_count = products_to_hide.count()
                     if deleted_count > 0:
                         logger.info(f"Найдено {deleted_count} товаров в каталоге {current_catalog_type}, которые не пришли в обмене И имеют price=0 И quantity=0 - скрываем их")
                         # Логируем первые 5 для отладки
                         for product in products_to_hide[:5]:
-                            price_val = getattr(product, price_field, 0) or 0
+                            if current_catalog_type == 'wholesale':
+                                price_val = product.wholesale_price or 0
+                            else:
+                                price_val = product.price or 0
                             logger.info(f"  Скрываем: {product.name[:50]} (external_id={product.external_id}, article={product.article}, price={price_val}, quantity={product.quantity})")
                         
                         # ВАЖНО: Скрываем только товары с price = 0 И quantity = 0
