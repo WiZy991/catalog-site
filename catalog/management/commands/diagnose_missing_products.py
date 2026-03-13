@@ -74,6 +74,10 @@ class Command(BaseCommand):
         self.stdout.write(f"РАЗНИЦА: {expected_count} (ожидается) - {retail_active} (активных в розничном) = {difference}")
         self.stdout.write()
         
+        # Инициализируем переменные для проверки категорий
+        no_category = 0
+        in_inactive_category = 0
+        
         # Товары с остатками > 0, но неактивные (должны быть активны)
         if inactive_count > 0:
             self.stdout.write(self.style.WARNING(f"⚠ Найдено {inactive_count} неактивных товаров с остатками > 0:"))
@@ -132,25 +136,75 @@ class Command(BaseCommand):
                     self.stdout.write(f"    * {p.name[:50]} (артикул: {p.article}, количество: {p.quantity}, цена: {p.price})")
                 self.stdout.write()
         
+        # Проверяем товары в розничном каталоге с остатками, но не показывающиеся на сайте
+        retail_with_stock_all = Product.objects.filter(
+            catalog_type='retail',
+            quantity__gt=0,
+            is_active=True
+        )
+        
+        # Товары без категории
+        retail_no_category = retail_with_stock_all.filter(category__isnull=True).count()
+        if retail_no_category > 0:
+            self.stdout.write(f"⚠ В розничном каталоге товаров с остатками > 0 БЕЗ КАТЕГОРИИ: {retail_no_category}")
+            examples = retail_with_stock_all.filter(category__isnull=True)[:5]
+            for p in examples:
+                self.stdout.write(f"    * {p.name[:50]} (артикул: {p.article}, количество: {p.quantity})")
+            self.stdout.write()
+        
+        # Товары в неактивных категориях
+        retail_in_inactive_category = retail_with_stock_all.filter(category__is_active=False).count()
+        if retail_in_inactive_category > 0:
+            self.stdout.write(f"⚠ В розничном каталоге товаров с остатками > 0 В НЕАКТИВНЫХ КАТЕГОРИЯХ: {retail_in_inactive_category}")
+            examples = retail_with_stock_all.filter(category__is_active=False)[:5]
+            for p in examples:
+                cat_name = p.category.name if p.category else 'НЕТ'
+                self.stdout.write(f"    * {p.name[:50]} (артикул: {p.article}, категория: {cat_name}, количество: {p.quantity})")
+            self.stdout.write()
+        
+        # Товары с availability='out_of_stock' (должны быть 'in_stock' или 'order')
+        retail_out_of_stock = retail_with_stock_all.filter(availability='out_of_stock').count()
+        if retail_out_of_stock > 0:
+            self.stdout.write(f"⚠ В розничном каталоге товаров с остатками > 0 но availability='out_of_stock': {retail_out_of_stock}")
+            examples = retail_with_stock_all.filter(availability='out_of_stock')[:5]
+            for p in examples:
+                self.stdout.write(f"    * {p.name[:50]} (артикул: {p.article}, количество: {p.quantity}, availability: {p.availability})")
+            self.stdout.write()
+        
         # Товары без external_id (не были импортированы из 1С)
         without_external_id = Product.objects.filter(
+            catalog_type='retail',
             quantity__gt=0,
+            is_active=True,
             external_id__isnull=True
         ).count()
         if without_external_id > 0:
-            self.stdout.write(f"Товаров с остатками > 0 без external_id (не из 1С): {without_external_id}")
+            self.stdout.write(f"⚠ В розничном каталоге товаров с остатками > 0 без external_id (не из 1С): {without_external_id}")
             self.stdout.write()
         
         # Товары с external_id, но неактивные
         with_external_id_inactive = Product.objects.filter(
+            catalog_type='retail',
             quantity__gt=0,
             is_active=False,
             external_id__isnull=False,
             external_id__gt=''
         ).count()
         if with_external_id_inactive > 0:
-            self.stdout.write(f"Товаров из 1С с остатками > 0, но неактивных: {with_external_id_inactive}")
+            self.stdout.write(f"⚠ В розничном каталоге товаров из 1С с остатками > 0, но неактивных: {with_external_id_inactive}")
             self.stdout.write()
+        
+        # Товары, которые должны показываться на сайте (с категорией, в активной категории, с правильным availability)
+        retail_should_show = retail_with_stock_all.filter(
+            category__isnull=False,
+            category__is_active=True
+        ).filter(
+            Q(availability='in_stock') | Q(availability='order')
+        ).count()
+        
+        self.stdout.write(f"Товаров в розничном каталоге, которые ДОЛЖНЫ показываться на сайте: {retail_should_show}")
+        self.stdout.write(f"  (с категорией, в активной категории, availability='in_stock' или 'order')")
+        self.stdout.write()
         
         # Рекомендации
         self.stdout.write("=" * 80)
