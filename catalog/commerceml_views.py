@@ -3483,18 +3483,6 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
         # Цены и количество придут из offers.xml и обновят статус товара
         # Товары скрываются ТОЛЬКО если остаток = 0 И цена = 0
         
-        # Получаем цену из данных (если есть)
-        price = 0
-        if 'price' in product_data:
-            try:
-                price_str = str(product_data['price']).strip().replace(',', '.').replace(' ', '').replace('\xa0', '')
-                if price_str and price_str.lower() not in ['none', 'null', '']:
-                    price = float(price_str)
-                    if price < 0:
-                        price = 0
-            except (ValueError, TypeError):
-                price = 0
-        
         # Товар активен если есть остаток > 0 ИЛИ цена > 0
         # Товар скрыт ТОЛЬКО если остаток = 0 И цена = 0
         if quantity > 0 or price > 0:
