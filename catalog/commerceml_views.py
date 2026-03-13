@@ -25,6 +25,30 @@ from .serializers import validate_product, SerializerValidationError
 
 logger = logging.getLogger(__name__)
 
+
+def save_with_retry(instance, update_fields=None, max_retries=5, delay=0.2):
+    """
+    Надёжное сохранение объекта с повтором при 'database is locked' (SQLite).
+    Используется во всех местах обмена с 1С, чтобы единичные блокировки БД
+    не ломали весь процесс импорта.
+    """
+    for attempt in range(max_retries):
+        try:
+            if update_fields is not None:
+                instance.save(update_fields=update_fields)
+            else:
+                instance.save()
+            return
+        except OperationalError as e:
+            msg = str(e).lower()
+            # Для SQLite характерно сообщение 'database is locked'
+            if 'database is locked' in msg and attempt < max_retries - 1:
+                # Небольшая пауза и пробуем ещё раз
+                time.sleep(delay)
+                continue
+            # Любая другая ошибка или превышен лимит попыток — пробрасываем дальше
+            raise
+
 # Настройки
 EXCHANGE_DIR = getattr(settings, 'ONE_C_EXCHANGE_DIR', os.path.join(settings.MEDIA_ROOT, '1c_exchange'))
 FILE_LIMIT = getattr(settings, 'ONE_C_FILE_LIMIT', 104857600)  # 100 MB по умолчанию
@@ -2446,7 +2470,7 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                         else:
                             product.price = existing_product.price
                             product.wholesale_price = existing_product.wholesale_price
-                        product.save()
+                        save_with_retry(product)
                         # ВАЖНО: НЕ копируем изображения - оптовые товары используют изображения розничных аналогов
                         # через методы get_main_image() и get_all_images() в модели Product
                         if idx < 5:
@@ -2486,7 +2510,7 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                             else:
                                 product.price = any_product.price
                                 product.wholesale_price = any_product.wholesale_price
-                            product.save()
+                            save_with_retry(product)
                             # ВАЖНО: НЕ копируем изображения - оптовые товары используют изображения розничных аналогов
                             # через методы get_main_image() и get_all_images() в модели Product
                             logger.info(f"  ✓ Создан товар в каталоге {catalog_type} на основе товара из каталога {any_product.catalog_type}")
@@ -2525,7 +2549,7 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                                     else:
                                         product.price = any_product.price
                                         product.wholesale_price = any_product.wholesale_price
-                                    product.save()
+                                    save_with_retry(product)
                                     logger.info(f"  ✓ Создан товар в каталоге {catalog_type} на основе товара из каталога {any_product.catalog_type} (найден по артикулу из XML)")
                             else:
                                 any_product = Product.objects.filter(article=product_id).first()
@@ -2561,7 +2585,7 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                                     else:
                                         product.price = any_product.price
                                         product.wholesale_price = any_product.wholesale_price
-                                    product.save()
+                                    save_with_retry(product)
                                     # ВАЖНО: НЕ копируем изображения - оптовые товары используют изображения розничных аналогов
                                     # через методы get_main_image() и get_all_images() в модели Product
                                     logger.info(f"  ✓ Создан товар в каталоге {catalog_type} на основе товара из каталога {any_product.catalog_type}")
@@ -3000,7 +3024,7 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                                 )
                                 if should_log_other_hide:
                                     logger.warning(f"🔒 ТОВАР СКРЫТ В ДРУГОМ КАТАЛОГЕ (количество=0 И цена=0): {product_id} (артикул: {other_product.article}) в каталоге {other_catalog_type} - количество: {quantity}, цена: {other_price}")
-                            other_product.save(update_fields=['quantity', 'availability', 'is_active'])
+                            save_with_retry(other_product, update_fields=['quantity', 'availability', 'is_active'])
                             if idx < 10 or quantity == 0:
                                 logger.info(f"✓ Синхронизировано количество для товара {product_id} в каталоге {other_catalog_type}: {quantity} (было: {other_product.quantity if hasattr(other_product, '_state') else 'N/A'})")
                     
@@ -3041,7 +3065,7 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                         update_fields.append('wholesale_price')
                     else:
                         update_fields.append('price')
-                    product.save(update_fields=update_fields)
+                    save_with_retry(product, update_fields=update_fields)
                     
                     # ВАЖНО: Логируем ВСЕ товары с количеством = 0 и изменения количества
                     if quantity == 0 or old_quantity != quantity or old_is_active != product.is_active or '8-97086-338-2' in str(product.article):
@@ -3084,7 +3108,7 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                             logger.warning(f"⚠ Товар {product_id} скрыт (количество=0 И цена=0, количество не найдено в XML)")
                     
                     # ВАЖНО: Сохраняем товар после обновления активности
-                    product.save(update_fields=['availability', 'is_active'])
+                    save_with_retry(product, update_fields=['availability', 'is_active'])
                     
                     # ВАЖНО: Синхронизируем availability с другим каталогом (retail <-> wholesale)
                     # Availability должно быть одинаковым для обоих каталогов, если количество одинаково
@@ -3110,7 +3134,7 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                                 other_product.availability = 'out_of_stock'
                                 other_product.is_active = False
                             
-                            other_product.save(update_fields=['availability', 'is_active'])
+                            save_with_retry(other_product, update_fields=['availability', 'is_active'])
                             if idx < 5:
                                 logger.info(f"✓ Синхронизировано availability для товара {product_id} в каталоге {other_catalog_type}: {product.availability}")
                     
@@ -3156,7 +3180,7 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                             old_category = product.category
                             product.category = new_category
                             # Сохраняем категорию сразу
-                            product.save(update_fields=['category'])
+                            save_with_retry(product, update_fields=['category'])
                             # Логируем ВСЕ перемещения из неактивных категорий
                             should_log_category = (
                                 idx < 10 or 
@@ -3173,7 +3197,7 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                                 if current_cat.parent.is_active:
                                     old_category = product.category
                                     product.category = current_cat.parent
-                                    product.save(update_fields=['category'])
+                                    save_with_retry(product, update_fields=['category'])
                                     # Логируем ВСЕ перемещения в родительские категории
                                     should_log_category = (
                                         idx < 10 or 
@@ -3191,7 +3215,7 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                         # Это не должно происходить, но на всякий случай проверяем
                         logger.error(f"  ⚠ ОШИБКА: Товар {product_id} (артикул: {product.article}) находится в неактивной категории '{product.category.name}' после проверки!")
                 
-                product.save()
+                save_with_retry(product)
                 
                 # ВАЖНО: Добавляем external_id в список обработанных для логики скрытия
                 # Это предотвращает скрытие товаров из offers.xml при обработке import.xml
@@ -4305,7 +4329,7 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
 
             # ВАЖНО: При обновлении товара принудительно сохраняем все поля
             # Используем save() без update_fields, чтобы гарантировать сохранение ВСЕХ полей
-            product.save()
+            save_with_retry(product)
             
             # ВАЖНО: Инвалидируем кеш при создании И при обновлении товара
             # Это гарантирует, что изменения сразу отображаются на сайте

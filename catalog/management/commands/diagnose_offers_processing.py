@@ -140,11 +140,75 @@ class Command(BaseCommand):
                             'article': article
                         })
             
+            # Дополнительная статистика по количеству и ценам
+            offers_with_qty_gt_0 = 0
+            offers_with_qty_eq_0 = 0
+            offers_with_retail_price_gt_0 = 0
+            offers_with_wholesale_price_gt_0 = 0
+            
+            for offer_elem in offers:
+                # Количество
+                quantity = None
+                quantity_elem = None
+                if namespace:
+                    quantity_elem = offer_elem.find(f'{{{namespace}}}Количество')
+                if quantity_elem is None:
+                    quantity_elem = offer_elem.find('Количество')
+                if quantity_elem is not None and quantity_elem.text:
+                    try:
+                        quantity = int(float(quantity_elem.text.strip().replace(',', '.')))
+                    except (ValueError, AttributeError):
+                        quantity = None
+                
+                if quantity is not None:
+                    if quantity > 0:
+                        offers_with_qty_gt_0 += 1
+                    else:
+                        offers_with_qty_eq_0 += 1
+                
+                # Цены
+                prices_elem = None
+                if namespace:
+                    prices_elem = offer_elem.find(f'{{{namespace}}}Цены')
+                if prices_elem is None:
+                    prices_elem = offer_elem.find('Цены')
+                
+                if prices_elem is not None:
+                    price_elems = []
+                    if namespace:
+                        price_elems = prices_elem.findall(f'{{{namespace}}}Цена')
+                    if not price_elems:
+                        price_elems = prices_elem.findall('Цена')
+                    
+                    for price_elem in price_elems:
+                        price_value_elem = None
+                        if namespace:
+                            price_value_elem = price_elem.find(f'{{{namespace}}}ЦенаЗаЕдиницу')
+                        if price_value_elem is None:
+                            price_value_elem = price_elem.find('ЦенаЗаЕдиницу')
+                        
+                        if price_value_elem is not None and price_value_elem.text:
+                            try:
+                                price_str = price_value_elem.text.strip().replace(',', '.').replace(' ', '').replace('\xa0', '')
+                                if price_str:
+                                    price = float(price_str)
+                                    if price > 0:
+                                        offers_with_retail_price_gt_0 += 1
+                                        offers_with_wholesale_price_gt_0 += 1
+                                        break
+                            except (ValueError, AttributeError, TypeError):
+                                pass
+            
             self.stdout.write(f"Проанализировано предложений: {analyzed}")
             self.stdout.write(f"Найдено товаров в базе: {found_in_db}")
             self.stdout.write(f"  - По exact external_id: {found_by_external_id}")
             self.stdout.write(f"  - По base_id или артикулу: {found_by_article}")
             self.stdout.write(f"Не найдено товаров в базе: {not_found_in_db}")
+            self.stdout.write()
+            self.stdout.write("Статистика по количеству и ценам в offers.xml:")
+            self.stdout.write(f"  - Предложений с Количество > 0: {offers_with_qty_gt_0}")
+            self.stdout.write(f"  - Предложений с Количество = 0: {offers_with_qty_eq_0}")
+            self.stdout.write(f"  - Предложений с ценой > 0 (по данным ЦенаЗаЕдиницу): {offers_with_retail_price_gt_0}")
             self.stdout.write()
             
             if examples_not_found:

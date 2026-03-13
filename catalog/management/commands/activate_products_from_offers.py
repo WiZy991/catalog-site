@@ -205,32 +205,42 @@ class Command(BaseCommand):
                             should_activate = False
                             
                             if catalog_type == 'retail' and retail_price:
-                                if product.price != retail_price or product.quantity != quantity:
-                                    should_activate = True
-                                    if not dry_run:
-                                        product.price = retail_price
-                                        product.quantity = quantity
-                                        product.is_active = True
-                                        product.availability = 'in_stock' if quantity > 0 else 'order'
-                                        product.save(update_fields=['price', 'quantity', 'is_active', 'availability'])
-                                    activated_retail += 1
+                                # ВАЖНО: Обновляем всегда, если есть цена и количество
+                                if not dry_run:
+                                    product.price = retail_price
+                                    product.quantity = quantity
+                                    product.is_active = True
+                                    product.availability = 'in_stock' if quantity > 0 else 'order'
+                                    product.save(update_fields=['price', 'quantity', 'is_active', 'availability'])
+                                activated_retail += 1
+                                should_activate = True
                             elif catalog_type == 'wholesale' and wholesale_price:
-                                if product.wholesale_price != wholesale_price or product.quantity != quantity:
-                                    should_activate = True
-                                    if not dry_run:
-                                        product.wholesale_price = wholesale_price
-                                        product.quantity = quantity
-                                        product.is_active = True
-                                        product.availability = 'in_stock' if quantity > 0 else 'order'
-                                        product.save(update_fields=['wholesale_price', 'quantity', 'is_active', 'availability'])
-                                    activated_wholesale += 1
+                                # ВАЖНО: Обновляем всегда, если есть цена и количество
+                                if not dry_run:
+                                    product.wholesale_price = wholesale_price
+                                    product.quantity = quantity
+                                    product.is_active = True
+                                    product.availability = 'in_stock' if quantity > 0 else 'order'
+                                    product.save(update_fields=['wholesale_price', 'quantity', 'is_active', 'availability'])
+                                activated_wholesale += 1
+                                should_activate = True
                             
                             if should_activate and activated_retail + activated_wholesale <= 10:
                                 price_info = f"цена: {retail_price if catalog_type == 'retail' else wholesale_price}"
-                                self.stdout.write(f"  ✓ {product.name[:50]} ({catalog_type}): количество: {quantity}, {price_info}")
+                                self.stdout.write(f"  ✓ {product.name[:50]} ({catalog_type}): количество: {quantity}, {price_info}, external_id: {product.external_id[:50] if product.external_id else 'нет'}")
                         else:
-                            if not_found < 5:
-                                self.stdout.write(f"  ⚠ Товар не найден: Ид={product_id}, каталог={catalog_type}")
+                            # ВАЖНО: Логируем товары, которые не найдены
+                            if not_found < 20:
+                                # Проверяем, есть ли товар с таким external_id в любом каталоге
+                                any_product = Product.objects.filter(
+                                    Q(external_id=product_id) |
+                                    Q(external_id=product_base_id) |
+                                    Q(external_id__startswith=product_base_id + '#')
+                                ).first()
+                                if any_product:
+                                    self.stdout.write(f"  ⚠ Товар найден в каталоге {any_product.catalog_type}, но нужен {catalog_type}: Ид={product_id}, external_id={any_product.external_id}")
+                                else:
+                                    self.stdout.write(f"  ⚠ Товар не найден вообще: Ид={product_id}, base_id={product_base_id}, каталог={catalog_type}")
                             not_found += 1
             
             self.stdout.write()
