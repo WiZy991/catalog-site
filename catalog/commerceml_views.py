@@ -402,7 +402,8 @@ def handle_file(request, filename):
             actual_size = os.path.getsize(file_path)
             logger.info(f"Файл успешно сохранен: {filename}, размер: {actual_size} байт")
             
-            # Если это ZIP, распаковываем сразу
+            # Если это ZIP, распаковываем, но ОБРАБОТКУ ДЕЛАЕМ В ФОНЕ,
+            # чтобы не упираться в таймаут nginx / 1С при больших файлах.
             if filename.lower().endswith('.zip'):
                 logger.info("Обнаружен ZIP архив, распаковываем...")
                 import zipfile
@@ -414,17 +415,42 @@ def handle_file(request, filename):
                         for ext_file in extracted_files[:5]:  # Логируем первые 5
                             logger.info(f"  - {ext_file}")
                         
-                        # Обрабатываем распакованные XML файлы автоматически
-                        for ext_file in extracted_files:
-                            if ext_file.lower().endswith('.xml'):
-                                ext_file_path = os.path.join(EXCHANGE_DIR, ext_file)
-                                if os.path.exists(ext_file_path):
-                                    logger.info(f"Автоматическая обработка распакованного файла: {ext_file}")
-                                    try:
-                                        result = process_commerceml_file(ext_file_path, ext_file, request)
-                                        logger.info(f"Результат обработки {ext_file}: {result.get('status')}")
-                                    except Exception as e:
-                                        logger.error(f"Ошибка автоматической обработки {ext_file}: {e}", exc_info=True)
+                        # Фоновая обработка распакованных XML файлов
+                        import threading
+
+                        def process_extracted_in_background():
+                            try:
+                                logger.info("Запускаем фоновую обработку распакованных файлов...")
+                                for ext_file in extracted_files:
+                                    if ext_file.lower().endswith('.xml'):
+                                        ext_file_path = os.path.join(EXCHANGE_DIR, ext_file)
+                                        if os.path.exists(ext_file_path):
+                                            logger.info(f"Фоновая обработка распакованного файла: {ext_file}")
+                                            try:
+                                                result = process_commerceml_file(ext_file_path, ext_file, request)
+                                                logger.info(
+                                                    f"Результат фоновой обработки {ext_file}: "
+                                                    f"{result.get('status')}, "
+                                                    f"processed={result.get('processed', 0)}"
+                                                )
+                                            except Exception as e:
+                                                logger.error(
+                                                    f"Ошибка фоновой обработки {ext_file}: {e}",
+                                                    exc_info=True
+                                                )
+                                logger.info("Фоновая обработка распакованных файлов завершена")
+                            except Exception as bg_e:
+                                logger.error(
+                                    f"Глобальная ошибка фоновой обработки распакованных файлов: {bg_e}",
+                                    exc_info=True
+                                )
+
+                        thread = threading.Thread(
+                            target=process_extracted_in_background,
+                            daemon=True
+                        )
+                        thread.start()
+                        logger.info("Фоновая обработка распакованных файлов запущена")
                 except zipfile.BadZipFile:
                     logger.warning("Файл не является ZIP архивом, оставляем как есть")
                 except Exception as e:
