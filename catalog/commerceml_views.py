@@ -667,7 +667,8 @@ def process_commerceml_file(file_path, filename, request=None):
         logger.info(f"Дочерние элементы корня: {[child.tag for child in root[:10]]}")
         
         if package is not None:
-            # Для файла предложений дополнительно проверяем типы цен
+            # Для файла предложений дополнительно проверяем типы цен (retail/wholesale),
+            # но сами предложения обрабатываем для ДВУХ каталогов: retail и wholesale.
             if catalog_type == 'retail':
                 # Ищем типы цен в ПакетПредложений
                 price_types_elem = None
@@ -730,11 +731,39 @@ def process_commerceml_file(file_path, filename, request=None):
                                 logger.info(f"Определен тип каталога: ОПТОВЫЙ (wholesale) по типу цены: {name_elem.text}")
                                 break
             
-            # Требование: один каталог/одна запись на товар.
-            # Поэтому offers.xml обрабатываем ОДИН раз (retail) без дублирования wholesale.
-            logger.info("Обнаружен файл предложений (offers.xml) - обрабатываем цены и остатки (один каталог: retail)")
-            result = process_offers_file(root, namespaces, filename, request, catalog_type='retail')
-            return result
+            # ВАЖНО: Файл offers.xml содержит оба типа цен (розничную и оптовую)
+            # Обрабатываем его для обоих каталогов, чтобы установить цены и остатки отдельно.
+            logger.info("Обнаружен файл предложений (offers.xml) - обрабатываем цены и остатки для обоих каталогов")
+            logger.info("=" * 80)
+            logger.info("ОБРАБОТКА ДЛЯ РОЗНИЧНОГО КАТАЛОГА (retail)")
+            logger.info("=" * 80)
+            result_retail = process_offers_file(root, namespaces, filename, request, catalog_type='retail')
+            
+            logger.info("=" * 80)
+            logger.info("ОБРАБОТКА ДЛЯ ОПТОВОГО КАТАЛОГА (wholesale)")
+            logger.info("=" * 80)
+            result_wholesale = process_offers_file(root, namespaces, filename, request, catalog_type='wholesale')
+            
+            offers_processed_external_ids = set()
+            if isinstance(result_retail.get('processed_external_ids'), set):
+                offers_processed_external_ids.update(result_retail.get('processed_external_ids', set()))
+            if isinstance(result_wholesale.get('processed_external_ids'), set):
+                offers_processed_external_ids.update(result_wholesale.get('processed_external_ids', set()))
+            
+            if request:
+                if not hasattr(request, '_offers_processed_external_ids'):
+                    request._offers_processed_external_ids = {}
+                request._offers_processed_external_ids['retail'] = result_retail.get('processed_external_ids', set())
+                request._offers_processed_external_ids['wholesale'] = result_wholesale.get('processed_external_ids', set())
+                logger.info(f"Сохранено {len(offers_processed_external_ids)} external_id из offers.xml для использования в логике скрытия")
+            
+            return {
+                'status': 'success' if result_retail.get('status') == 'success' and result_wholesale.get('status') == 'success' else 'partial',
+                'processed': result_retail.get('processed', 0) + result_wholesale.get('processed', 0),
+                'updated': result_retail.get('updated', 0) + result_wholesale.get('updated', 0),
+                'errors': result_retail.get('errors', []) + result_wholesale.get('errors', []),
+                'processed_external_ids': offers_processed_external_ids,
+            }
         
         # Ищем каталог товаров
         catalog = None
@@ -948,11 +977,11 @@ def process_commerceml_file(file_path, filename, request=None):
             )
             return {'status': 'partial', 'message': 'Товары не найдены в файле', 'processed': 0, 'created': 0, 'updated': 0}
         
-        # Требование: один каталог/одна запись на товар.
-        # Поэтому import.xml обрабатываем только для retail (без wholesale).
-        logger.info("Обнаружен файл каталога товаров (import.xml) - обрабатываем товары (один каталог: retail)")
+        # ВАЖНО: Файл import.xml содержит товары для обоих каталогов (розничного и оптового)
+        # Нужно обработать его для обоих каталогов, чтобы создать товары в обоих разделах
+        logger.info("Обнаружен файл каталога товаров (import.xml) - обрабатываем товары для обоих каталогов")
         
-        # Обрабатываем для обоих каталогов
+        # Обрабатываем для обоих каталогов (retail и wholesale)
         results = {}
         total_processed = 0
         total_created = 0
@@ -960,7 +989,7 @@ def process_commerceml_file(file_path, filename, request=None):
         total_deleted = 0
         all_errors = []
         
-        for current_catalog_type in ['retail']:
+        for current_catalog_type in ['retail', 'wholesale']:
             logger.info("=" * 80)
             logger.info(f"ОБРАБОТКА ДЛЯ КАТАЛОГА: {current_catalog_type.upper()}")
             logger.info("=" * 80)
@@ -1170,7 +1199,7 @@ def process_commerceml_file(file_path, filename, request=None):
         # ВАЖНО: Скрываем товары ТОЛЬКО после обработки всех каталогов
         total_deleted = 0
         if should_hide_products:
-            for current_catalog_type in ['retail']:
+            for current_catalog_type in ['retail', 'wholesale']:
                 catalog_results = results.get(current_catalog_type, {})
                 processed_external_ids = catalog_results.get('processed_external_ids', set())
                 processed_count = catalog_results.get('processed', 0)
@@ -1460,13 +1489,12 @@ def parse_commerceml_product(product_elem, namespaces, root_elem=None, groups_ca
         # Это позволяет обновлять один товар при наличии нескольких вариантов характеристик
         if '#' in full_id:
             base_id = full_id.split('#', 1)[0].strip()
-            # Требование: в БД должно быть ровно столько товаров, сколько позиций в обмене,
-            # без "вариантов" uuid#характеристика. Поэтому нормализуем external_id до base_id.
-            # Полный Ид сохраняем для отладки/следов (не участвует в уникальности товара).
+            # Вариант А: каждая комбинация uuid#характеристика = отдельный товар.
+            # Поэтому external_id храним ПОЛНЫЙ (full_id), а base_id — только для диагностики/поиска.
             product_data['base_id'] = base_id
             product_data['original_external_id'] = full_id
-            product_data['external_id'] = base_id
-            product_data['sku'] = base_id
+            product_data['external_id'] = full_id
+            product_data['sku'] = full_id
             # Логируем для диагностики (только первые 3 товара)
             if not hasattr(parse_commerceml_product, '_log_count'):
                 parse_commerceml_product._log_count = 0
@@ -1487,13 +1515,13 @@ def parse_commerceml_product(product_elem, namespaces, root_elem=None, groups_ca
         if 'Ид' in product_elem.attrib:
             full_id = product_elem.attrib['Ид'].strip()
             # ВАЖНО: В CommerceML 2.0 товар с вариантами характеристик имеет составной Ид вида "uuid#characteristic_id"
-            # Извлекаем основной Ид товара (до символа #)
+            # Здесь тоже: external_id = полный Ид, base_id — только вспомогательно.
             if '#' in full_id:
                 base_id = full_id.split('#', 1)[0].strip()
                 product_data['base_id'] = base_id
                 product_data['original_external_id'] = full_id
-                product_data['external_id'] = base_id
-                product_data['sku'] = base_id
+                product_data['external_id'] = full_id
+                product_data['sku'] = full_id
                 # Логируем для диагностики
                 if not hasattr(parse_commerceml_product, '_log_count'):
                     parse_commerceml_product._log_count = 0
