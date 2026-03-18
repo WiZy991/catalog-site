@@ -3092,6 +3092,39 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                     else:
                         update_fields.append('price')
                     save_with_retry(product, update_fields=update_fields)
+
+                    # ВАЖНО: offers.xml часто содержит базовый Ид (без '#'), а товары из import.xml
+                    # могут быть созданы как варианты с external_id вида "base_id#характеристика".
+                    # Раньше обновлялся только один товар (первый найденный), из-за чего остальные
+                    # варианты оставались quantity=0 и не попадали "в наличии".
+                    #
+                    # Если текущий Ид не составной (без '#'), распространяем обновленные поля
+                    # на все варианты с тем же base_id в текущем каталоге.
+                    if product_id and '#' not in str(product_id) and product_base_id:
+                        siblings_qs = Product.objects.filter(
+                            Q(external_id=product_base_id) | Q(external_id__startswith=str(product_base_id) + '#'),
+                            catalog_type=catalog_type
+                        ).exclude(pk=product.pk)
+
+                        # Обновляем те же поля, что и у основного товара
+                        siblings_update = {
+                            'quantity': product.quantity,
+                            'availability': product.availability,
+                            'is_active': product.is_active,
+                        }
+                        if catalog_type == 'wholesale':
+                            siblings_update['wholesale_price'] = product.wholesale_price
+                        else:
+                            siblings_update['price'] = product.price
+
+                        siblings_updated = siblings_qs.update(**siblings_update)
+                        if siblings_updated and idx < 10:
+                            logger.info(
+                                f"✓ Обновлены варианты товара (base_id={product_base_id}) в каталоге {catalog_type}: "
+                                f"{siblings_updated} шт."
+                            )
+                        if siblings_updated:
+                            updated_count += siblings_updated
                     
                     # ВАЖНО: Логируем ВСЕ товары с количеством = 0 и изменения количества
                     if quantity == 0 or old_quantity != quantity or old_is_active != product.is_active or '8-97086-338-2' in str(product.article):
