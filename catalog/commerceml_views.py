@@ -433,7 +433,12 @@ def handle_file(request, filename):
             
             # Если это XML файл, обрабатываем автоматически
             elif filename.lower().endswith('.xml'):
-                logger.info(f"Обнаружен XML файл, запускаем автоматическую обработку (СИНХРОННО)...")
+                logger.info("=" * 80)
+                logger.info(f"🚀 ОБНАРУЖЕН XML ФАЙЛ: {filename}")
+                logger.info(f"🚀 ЗАПУСКАЕМ АВТОМАТИЧЕСКУЮ ОБРАБОТКУ (СИНХРОННО)...")
+                logger.info(f"🚀 Путь к файлу: {file_path}")
+                logger.info(f"🚀 Файл существует: {os.path.exists(file_path)}")
+                logger.info("=" * 80)
                 try:
                     # Раньше здесь запускалась фоновая обработка в отдельном потоке.
                     # На реальном хостинге потоки могут «обрубаться» веб‑сервером,
@@ -443,12 +448,16 @@ def handle_file(request, filename):
                     # Теперь обрабатываем файл СИНХРОННО в рамках HTTP‑запроса от 1С.
                     # 1С спокойно ждёт ответ, а мы гарантированно завершаем обработку import/offers.
                     result = process_commerceml_file(file_path, filename, request)
-                    logger.info(
-                        f"Синхронная обработка XML файла {filename} завершена: "
-                        f"статус={result.get('status')}, обработано={result.get('processed', 0)}"
-                    )
+                    logger.info("=" * 80)
+                    logger.info(f"✅ СИНХРОННАЯ ОБРАБОТКА XML ФАЙЛА {filename} ЗАВЕРШЕНА")
+                    logger.info(f"✅ Статус: {result.get('status')}")
+                    logger.info(f"✅ Обработано товаров: {result.get('processed', 0)}")
+                    logger.info(f"✅ Обновлено товаров: {result.get('updated', 0)}")
+                    logger.info("=" * 80)
                 except Exception as e:
-                    logger.error(f"Ошибка автоматической обработки XML файла {filename}: {e}", exc_info=True)
+                    logger.error("=" * 80)
+                    logger.error(f"❌ ОШИБКА АВТОМАТИЧЕСКОЙ ОБРАБОТКИ XML ФАЙЛА {filename}: {e}")
+                    logger.error("=" * 80, exc_info=True)
                     # Не возвращаем ошибку, файл сохранен, 1С сможет повторить запрос или дообработать через import
         else:
             logger.error(f"Файл не найден после сохранения: {file_path}")
@@ -502,13 +511,21 @@ def handle_import(request, filename):
             logger.error(f"Директория обмена не существует: {EXCHANGE_DIR}")
         return HttpResponse('failure\nФайл не найден', status=404)
     
-    logger.info(f"Начало обработки файла: {filename}, размер: {os.path.getsize(file_path)} байт")
+    logger.info("=" * 80)
+    logger.info(f"🚀 РЕЖИМ IMPORT: Начало обработки файла: {filename}")
+    logger.info(f"🚀 Размер файла: {os.path.getsize(file_path)} байт")
+    logger.info("=" * 80)
     
     try:
         # Парсим и обрабатываем файл CommerceML 2
         result = process_commerceml_file(file_path, filename, request)
         
-        logger.info(f"Результат обработки файла {filename}: статус={result.get('status')}, обработано={result.get('processed', 0)}")
+        logger.info("=" * 80)
+        logger.info(f"✅ РЕЖИМ IMPORT: Результат обработки файла {filename}")
+        logger.info(f"✅ Статус: {result.get('status')}")
+        logger.info(f"✅ Обработано товаров: {result.get('processed', 0)}")
+        logger.info(f"✅ Обновлено товаров: {result.get('updated', 0)}")
+        logger.info("=" * 80)
         
         if result['status'] == 'success':
             return HttpResponse('success')
@@ -2072,6 +2089,7 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
     
     start_time = timezone.now()
     processed_count = 0
+    created_count = 0  # Счетчик созданных товаров из offers.xml
     updated_count = 0
     errors = []
     # ВАЖНО: Собираем external_id обработанных товаров для логики скрытия
@@ -2515,11 +2533,19 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                         is_active=False,  # Будет активирован после обновления цены/остатка
                     )
                     save_with_retry(product)
+                    # ВАЖНО: Увеличиваем счетчики сразу после создания товара
+                    processed_count += 1
+                    created_count += 1
                     if idx < 50:
                         logger.info(
                             f"✓ Создан новый товар из offers.xml: external_id={product_external_id}, "
                             f"article={product.article}, name={product.name[:80]}, catalog_type={catalog_type}"
                         )
+                    # Добавляем external_id в список обработанных
+                    if product.external_id:
+                        processed_external_ids.add(str(product.external_id).strip())
+                    elif product_id:
+                        processed_external_ids.add(str(product_id).strip())
                 
                 # ВАЖНО: Проверяем, что товар найден перед обновлением количества
                 # Эта проверка будет выполнена позже, после извлечения количества из XML
@@ -3159,7 +3185,14 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
     processing_time = (timezone.now() - start_time).total_seconds()
     request_ip = get_client_ip(request) if request else None
     
-    logger.info(f"Обработано товаров в offers.xml для каталога {catalog_type}: {len(processed_external_ids)} с external_id")
+    logger.info("=" * 80)
+    logger.info(f"📊 ИТОГИ ОБРАБОТКИ offers.xml для каталога {catalog_type}:")
+    logger.info(f"📊 Обработано товаров: {processed_count}")
+    logger.info(f"📊 Создано новых товаров: {created_count}")
+    logger.info(f"📊 Обновлено товаров: {updated_count}")
+    logger.info(f"📊 Ошибок: {len(errors)}")
+    logger.info(f"📊 Уникальных external_id: {len(processed_external_ids)}")
+    logger.info("=" * 80)
     
     # ВАЖНО: Статус 'success' только если товары действительно обработаны
     if processed_count == 0:
@@ -3191,7 +3224,7 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
             status=status,
             message=message,
             processed_count=processed_count,
-            created_count=0,
+            created_count=created_count,  # ВАЖНО: Используем реальное количество созданных товаров
             updated_count=updated_count,
             errors_count=len(errors),
             errors=errors,
@@ -3201,7 +3234,7 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
             processing_time=processing_time
         )
     
-    logger.info(f"Обработка предложений завершена: обработано {processed_count}, обновлено {updated_count}, ошибок {len(errors)}")
+    logger.info(f"Обработка предложений завершена: обработано {processed_count}, создано {created_count}, обновлено {updated_count}, ошибок {len(errors)}")
     
     return {
         'status': 'success',
