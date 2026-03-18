@@ -1499,23 +1499,23 @@ def parse_commerceml_product(product_elem, namespaces, root_elem=None, groups_ca
     if id_elem is not None and id_elem.text:
         full_id = id_elem.text.strip()
         # ВАЖНО: В CommerceML 2.0 товар с вариантами характеристик имеет составной Ид вида "uuid#characteristic_id"
-        # Например: "13a33496-235b-4440-ab12-15b1eb281f06#4f02ca3d-c696-11f0-811a-00155d01d802"
-        # Нужно извлечь основной Ид товара (до символа #)
-        # Это позволяет обновлять один товар при наличии нескольких вариантов характеристик
+        # Например: "14393176-aa13-4ac2-8095-1a5459b743c7#51374053-fd66-11ea-80ce-00155d01d802"
+        # ВАЖНО: Используем ПОЛНЫЙ Ид (включая часть после #) как external_id.
+        # Это гарантирует, что каждый товар с уникальным полным Ид создаст отдельную карточку.
         if '#' in full_id:
-            base_id = full_id.split('#', 1)[0].strip()
-            # Вариант А: каждая комбинация uuid#характеристика = отдельный товар.
-            # Поэтому external_id храним ПОЛНЫЙ (full_id), а base_id — только для диагностики/поиска.
-            product_data['base_id'] = base_id
+            base_id = full_id.split('#', 1)[0].strip()  # base_id только для диагностики/логирования
+            # ВАЖНО: external_id = ПОЛНЫЙ Ид (включая часть после #)
+            # Каждая комбинация uuid#характеристика = отдельный товар.
+            product_data['base_id'] = base_id  # Только для диагностики
             product_data['original_external_id'] = full_id
-            product_data['external_id'] = full_id
+            product_data['external_id'] = full_id  # ВАЖНО: Полный Ид!
             product_data['sku'] = full_id
             # Логируем для диагностики (только первые 3 товара)
             if not hasattr(parse_commerceml_product, '_log_count'):
                 parse_commerceml_product._log_count = 0
             parse_commerceml_product._log_count += 1
             if parse_commerceml_product._log_count <= 3:
-                logger.info(f"Найден составной Ид товара в XML: {full_id} -> используем base_id: {base_id}")
+                logger.info(f"Найден составной Ид товара в XML: ПОЛНЫЙ Ид={full_id}, base_id={base_id} (только для диагностики)")
         else:
             product_data['sku'] = full_id
             product_data['external_id'] = full_id
@@ -3500,8 +3500,9 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
         # Ищем товар по external_id или по артикулу в нужном типе каталога
         # ВАЖНО: 1С может давать новое Ид одному и тому же товару, поэтому поиск по артикулу имеет приоритет
         # ВАЖНО: В CommerceML 2.0 товар с вариантами характеристик имеет составной Ид вида "uuid#characteristic_id"
-        # Мы извлекаем базовый Ид (до #) и используем его для поиска товара
-        # Это позволяет обновлять один товар при наличии нескольких вариантов характеристик
+        # Например: "14393176-aa13-4ac2-8095-1a5459b743c7#51374053-fd66-11ea-80ce-00155d01d802"
+        # ВАЖНО: Используем ПОЛНЫЙ Ид (включая часть после #) для поиска и создания товаров.
+        # Это гарантирует, что каждый товар с уникальным полным Ид обрабатывается отдельно.
         product = None
         from django.db.models import Q
         
@@ -3512,7 +3513,7 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
             # ВАЖНО: В базе могут быть ДУБЛИКАТЫ по артикулу в одном и том же каталоге.
             # Тогда .first() даёт случайный товар → обновляется "не тот", а на сайте открывается другой по slug.
             # Поэтому:
-            # - выбираем "правильный" товар (предпочтительно по external_id из 1С)
+            # - выбираем "правильный" товар (предпочтительно по ПОЛНОМУ external_id из 1С)
             # - удаляем остальные дубликаты в этом catalog_type
             candidates = list(Product.objects.filter(article=article, catalog_type=catalog_type))
             if not candidates:
@@ -3522,9 +3523,11 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
                 # Выбор целевого товара
                 product = None
                 if external_id:
+                    # ВАЖНО: Используем ПОЛНЫЙ external_id для точного совпадения
                     ext = external_id.strip()
                     for p in candidates:
-                        if p.external_id == ext or (p.external_id and p.external_id.startswith(ext + '#')):
+                        # Ищем точное совпадение по полному external_id
+                        if p.external_id == ext:
                             product = p
                             break
                 if not product:
