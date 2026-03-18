@@ -2481,125 +2481,53 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                             logger.info(f"Создан товар в каталоге {catalog_type} на основе товара из другого каталога: {product_id}")
                 
                 if not product:
-                    # Товар не найден - логируем для отладки
-                    if idx < 50:  # Увеличиваем количество логируемых предупреждений для диагностики
-                        logger.warning(f"⚠ Товар с Ид {product_id} не найден в базе (catalog_type={catalog_type}). Проверяем, есть ли товары с таким external_id в других каталогах...")
-                        # Проверяем, есть ли товар с таким external_id в любом каталоге
-                        any_product = Product.objects.filter(external_id=product_id).first()
-                        if any_product:
-                            logger.warning(f"  → Найден товар в каталоге {any_product.catalog_type}, но нужен {catalog_type}. Создаем копию...")
-                                # Создаем копию товара в нужном каталоге
-                            # external_id должен быть уникальным, поэтому используем его только если он есть
-                            product_external_id = any_product.external_id.strip() if any_product.external_id and any_product.external_id.strip() else None
-                            product = Product(
-                                external_id=product_external_id,
-                                article=any_product.article or '',
-                                name=any_product.name or '',
-                                brand=any_product.brand or '',
-                                category=any_product.category,
-                                description=any_product.description or '',
-                                short_description=any_product.short_description or '',
-                                applicability=any_product.applicability or '',
-                                cross_numbers=any_product.cross_numbers or '',
-                                characteristics=any_product.characteristics or '',
-                                farpost_url=any_product.farpost_url or '',
-                                condition=any_product.condition or 'new',
-                                catalog_type=catalog_type,
-                                is_active=False,  # Будет активирован после обновления цены/остатка
-                            )
-                            # Устанавливаем цену в зависимости от типа каталога
-                            if catalog_type == 'wholesale':
-                                product.wholesale_price = any_product.wholesale_price or any_product.price
-                                product.price = any_product.price
-                            else:
-                                product.price = any_product.price
-                                product.wholesale_price = any_product.wholesale_price
-                            save_with_retry(product)
-                            # ВАЖНО: НЕ копируем изображения - оптовые товары используют изображения розничных аналогов
-                            # через методы get_main_image() и get_all_images() в модели Product
-                            logger.info(f"  ✓ Создан товар в каталоге {catalog_type} на основе товара из каталога {any_product.catalog_type}")
+                    # Товар не найден ни в одном каталоге и не был создан из import.xml.
+                    # Для схемы 1 предложение = 1 карточка создаём НОВЫЙ товар напрямую из offers.xml.
+                    if idx < 50:
+                        logger.warning(
+                            f"⚠ Товар с Ид {product_id} не найден в базе (catalog_type={catalog_type}). "
+                            f"Создаём новый товар напрямую из offers.xml"
+                        )
+                    # Пытаемся получить человекочитаемое имя товара из предложения
+                    offer_name = None
+                    try:
+                        if namespace:
+                            name_elem = offer_elem.find(f'.//{{{namespace}}}Наименование')
                         else:
-                            # ВАЖНО: Пробуем найти по артикулу из XML, если он был извлечен
-                            if article_from_xml:
-                                any_product = Product.objects.filter(article=article_from_xml).first()
-                                if any_product:
-                                    logger.warning(f"  → Найден товар по артикулу из XML ({article_from_xml}) в каталоге {any_product.catalog_type}, но нужен {catalog_type}. Создаем копию...")
-                                    # Создаем копию товара в нужном каталоге
-                                    product_external_id = None
-                                    if any_product.external_id and any_product.external_id.strip():
-                                        product_external_id = any_product.external_id.strip()
-                                    elif product_id and product_id.strip():
-                                        product_external_id = product_id.strip()
-                                    product = Product(
-                                        external_id=product_external_id,
-                                        article=any_product.article or '',
-                                        name=any_product.name or '',
-                                        brand=any_product.brand or '',
-                                        category=any_product.category,
-                                        description=any_product.description or '',
-                                        short_description=any_product.short_description or '',
-                                        applicability=any_product.applicability or '',
-                                        cross_numbers=any_product.cross_numbers or '',
-                                        characteristics=any_product.characteristics or '',
-                                        farpost_url=any_product.farpost_url or '',
-                                        condition=any_product.condition or 'new',
-                                        catalog_type=catalog_type,
-                                        is_active=False,  # Будет активирован после обновления цены/остатка
-                                    )
-                                    # Устанавливаем цену в зависимости от типа каталога
-                                    if catalog_type == 'wholesale':
-                                        product.wholesale_price = any_product.wholesale_price or any_product.price
-                                        product.price = any_product.price
-                                    else:
-                                        product.price = any_product.price
-                                        product.wholesale_price = any_product.wholesale_price
-                                    save_with_retry(product)
-                                    logger.info(f"  ✓ Создан товар в каталоге {catalog_type} на основе товара из каталога {any_product.catalog_type} (найден по артикулу из XML)")
-                            else:
-                                any_product = Product.objects.filter(article=product_id).first()
-                                if any_product:
-                                    logger.warning(f"  → Найден товар по артикулу в каталоге {any_product.catalog_type}, но нужен {catalog_type}. Создаем копию...")
-                                    # Создаем копию товара в нужном каталоге
-                                    # external_id должен быть уникальным, поэтому используем его только если он есть
-                                    product_external_id = None
-                                    if any_product.external_id and any_product.external_id.strip():
-                                        product_external_id = any_product.external_id.strip()
-                                    elif product_id and product_id.strip():
-                                        product_external_id = product_id.strip()
-                                    product = Product(
-                                        external_id=product_external_id,
-                                        article=any_product.article or '',
-                                        name=any_product.name or '',
-                                        brand=any_product.brand or '',
-                                        category=any_product.category,
-                                        description=any_product.description or '',
-                                        short_description=any_product.short_description or '',
-                                        applicability=any_product.applicability or '',
-                                        cross_numbers=any_product.cross_numbers or '',
-                                        characteristics=any_product.characteristics or '',
-                                        farpost_url=any_product.farpost_url or '',
-                                        condition=any_product.condition or 'new',
-                                        catalog_type=catalog_type,
-                                        is_active=False,  # Будет активирован после обновления цены/остатка
-                                    )
-                                    # Устанавливаем цену в зависимости от типа каталога
-                                    if catalog_type == 'wholesale':
-                                        product.wholesale_price = any_product.wholesale_price or any_product.price
-                                        product.price = any_product.price
-                                    else:
-                                        product.price = any_product.price
-                                        product.wholesale_price = any_product.wholesale_price
-                                    save_with_retry(product)
-                                    # ВАЖНО: НЕ копируем изображения - оптовые товары используют изображения розничных аналогов
-                                    # через методы get_main_image() и get_all_images() в модели Product
-                                    logger.info(f"  ✓ Создан товар в каталоге {catalog_type} на основе товара из каталога {any_product.catalog_type}")
-                                else:
-                                    logger.warning(f"  → Товар не найден ни в одном каталоге. Убедитесь, что import.xml обработан перед offers.xml")
-                                    # Пропускаем этот товар - он должен быть создан из import.xml
-                                    continue
-                    else:
-                        # Пропускаем этот товар - он должен быть создан из import.xml
-                        continue
+                            name_elem = offer_elem.find('.//Наименование')
+                        if name_elem is not None and name_elem.text:
+                            offer_name = name_elem.text.strip()
+                    except Exception:
+                        offer_name = None
+                    # Если имени нет, используем артикул или Ид
+                    if not offer_name:
+                        offer_name = article_from_xml or product_id or 'Товар из offers.xml'
+
+                    product_external_id = product_id.strip() if product_id and product_id.strip() else None
+                    product = Product(
+                        external_id=product_external_id,
+                        article=article_from_xml or '',
+                        name=offer_name,
+                        brand='',
+                        category=None,
+                        description='',
+                        short_description='',
+                        applicability='',
+                        cross_numbers='',
+                        characteristics='',
+                        farpost_url='',
+                        condition='new',
+                        catalog_type=catalog_type,
+                        quantity=0,
+                        availability='out_of_stock',
+                        is_active=False,  # Будет активирован после обновления цены/остатка
+                    )
+                    save_with_retry(product)
+                    if idx < 50:
+                        logger.info(
+                            f"✓ Создан новый товар из offers.xml: external_id={product_external_id}, "
+                            f"article={product.article}, name={product.name[:80]}, catalog_type={catalog_type}"
+                        )
                 
                 # ВАЖНО: Проверяем, что товар найден перед обновлением количества
                 # Эта проверка будет выполнена позже, после извлечения количества из XML
