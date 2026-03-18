@@ -2328,12 +2328,14 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                                             logger.info(f"Найден артикул в ЗначенияСвойства для товара {product_id}: {article_from_xml}")
                                         break
                     
-                    # ВАЖНО: Логируем поиск товара для диагностики (особенно для товара 8-97086-338-2)
+                    # ВАЖНО: Логируем поиск товара для диагностики (особенно для товара 8-97086-338-2 и 22680-AD210)
                     should_log_search = (
                         '86491d95-6cf4-44be-969c-e7f53c1bdb64' in str(product_id) or 
                         '86491d95-6cf4-44be-969c-e7f53c1bdb64' in str(product_base_id) or
                         article_from_xml == '8-97086-338-2' or
                         product_id == '8-97086-338-2' or
+                        article_from_xml == '22680-AD210' or
+                        '22680-AD210' in str(product_id) or
                         idx < 10
                     )
                     
@@ -2420,13 +2422,15 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                             # ВАЖНО: Логируем ВСЕ товары, найденные по артикулу из XML
                             logger.info(f"✓ Товар найден по артикулу из XML ({article_from_xml}) в каталоге {catalog_type}: {product.article} - {product.name[:50]}")
                     
-                    # ВАЖНО: Логируем, найден ли товар для диагностики (особенно для товара 8-97086-338-2)
+                    # ВАЖНО: Логируем, найден ли товар для диагностики (особенно для товара 8-97086-338-2 и 22680-AD210)
                     should_log_product = (
                         '86491d95-6cf4-44be-969c-e7f53c1bdb64' in str(product_id) or 
                         '86491d95-6cf4-44be-969c-e7f53c1bdb64' in str(product_base_id) or 
-                        (product and '8-97086-338-2' in str(product.article)) or
+                        (product and ('8-97086-338-2' in str(product.article) or '22680-AD210' in str(product.article))) or
                         article_from_xml == '8-97086-338-2' or
-                        product_id == '8-97086-338-2'
+                        product_id == '8-97086-338-2' or
+                        article_from_xml == '22680-AD210' or
+                        '22680-AD210' in str(product_id)
                     )
                     if should_log_product:
                         if product:
@@ -2598,14 +2602,7 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                         continue
                 
                 # ВАЖНО: Проверяем, что товар найден перед обновлением количества
-                if not product:
-                    if idx < 10:
-                        logger.error(f"✗ Товар {product_id} не найден, пропускаем обновление количества")
-                    continue
-                
-                # ВАЖНО: Если товар найден, но количество не было извлечено из XML,
-                # это значит, что в offers.xml нет элемента <Количество> для этого товара
-                # В этом случае НЕ обновляем количество, чтобы не потерять существующие данные
+                # Эта проверка будет выполнена позже, после извлечения количества из XML
                 
                 # Обновляем цену из предложений (приоритет - цены из offers.xml)
                 # В offers.xml может быть несколько типов цен:
@@ -2889,7 +2886,9 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                         quantity == 0 or 
                         (product and '8-97086-338-2' in str(product.article)) or
                         article_from_xml == '8-97086-338-2' or
-                        '86491d95-6cf4-44be-969c-e7f53c1bdb64' in str(product_id)
+                        '86491d95-6cf4-44be-969c-e7f53c1bdb64' in str(product_id) or
+                        article_from_xml == '22680-AD210' or
+                        '22680-AD210' in str(product_id)
                     )
                     if should_log_qty:
                         logger.info(f"✓ Общее количество из элементов <Количество> для товара {product_id} (артикул: {product.article if product else 'N/A'}, артикул из XML: {article_from_xml}): {quantity} (было: {product.quantity if product else 'N/A'}), found_quantity_in_xml={found_quantity_in_xml}")
@@ -2897,7 +2896,8 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                 
                 # Вариант 2: Если не нашли в элементе, ищем в атрибуте <Склад КоличествоНаСкладе="..."/>
                 # ВАЖНО: Может быть несколько складов, нужно суммировать количество со всех складов
-                if quantity is None:
+                # ВАЖНО: Проверяем quantity is None, чтобы не перезаписать количество, найденное в <Количество>
+                if not found_quantity_in_xml or quantity is None:
                     warehouse_elems = []
                     if namespace:
                         warehouse_elems = offer_elem.findall(f'.//{{{namespace}}}Склад')
@@ -2956,18 +2956,27 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                 # ВАЖНО: quantity может быть 0 (это валидное значение!), поэтому проверяем found_quantity_in_xml
                 # ВАЖНО: Если found_quantity_in_xml = True, значит количество найдено в XML (даже если = 0)
                 
-                # ВАЖНО: Логируем состояние для диагностики (особенно для товара 8-97086-338-2)
+                # ВАЖНО: Логируем состояние для диагностики (особенно для товара 8-97086-338-2 и 22680-AD210)
                 should_log_quantity_check = (
                     product is not None and (
                         '86491d95-6cf4-44be-969c-e7f53c1bdb64' in str(product_id) or 
                         '86491d95-6cf4-44be-969c-e7f53c1bdb64' in str(product_base_id) or
                         '8-97086-338-2' in str(product.article) or
-                        article_from_xml == '8-97086-338-2'
+                        article_from_xml == '8-97086-338-2' or
+                        '22680-AD210' in str(product.article) or
+                        article_from_xml == '22680-AD210' or
+                        '22680-AD210' in str(product_id)
                     )
                 )
                 
                 if should_log_quantity_check:
-                    logger.info(f"🔍 [ПРОВЕРКА КОЛИЧЕСТВА] Товар найден: {product.article}, found_quantity_in_xml={found_quantity_in_xml}, quantity={quantity}, текущий остаток={product.quantity if product else 'N/A'}")
+                    logger.info(f"🔍 [ПРОВЕРКА КОЛИЧЕСТВА] Товар найден: {product.article if product else 'N/A'}, found_quantity_in_xml={found_quantity_in_xml}, quantity={quantity}, текущий остаток={product.quantity if product else 'N/A'}")
+                
+                # ВАЖНО: Обновляем количество ТОЛЬКО если товар найден
+                if not product:
+                    if idx < 10:
+                        logger.warning(f"⚠ Товар {product_id} не найден, пропускаем обновление количества. found_quantity_in_xml={found_quantity_in_xml}, quantity={quantity}")
+                    continue
                 
                 if found_quantity_in_xml:
                     # Если quantity is None, но found_quantity_in_xml = True, значит количество = 0
@@ -2977,14 +2986,29 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                     # ВАЖНО: Логируем ВСЕ обновления количества для диагностики
                     old_quantity = product.quantity
                     # ВАЖНО: Логируем ВСЕ обновления количества (особенно для товаров с количеством = 0)
-                    if idx < 10 or quantity == 0 or old_quantity != quantity or (product and '8-97086-338-2' in str(product.article)):
+                    should_log_update = (
+                        idx < 10 or 
+                        quantity == 0 or 
+                        old_quantity != quantity or 
+                        (product and ('8-97086-338-2' in str(product.article) or '22680-AD210' in str(product.article))) or
+                        article_from_xml == '8-97086-338-2' or
+                        article_from_xml == '22680-AD210'
+                    )
+                    if should_log_update:
                         logger.info(f"🔍 [ОБНОВЛЕНИЕ КОЛИЧЕСТВА] Товар {product_id} (артикул: {product.article if product else 'N/A'}): found_quantity_in_xml={found_quantity_in_xml}, quantity={quantity}, old_quantity={old_quantity}")
                     
                     # ВАЖНО: Всегда обновляем количество, даже если оно = 0
                     # Это гарантирует синхронизацию остатков с 1С
                     product.quantity = quantity
                     # ВАЖНО: Логируем ВСЕ товары с количеством = 0 и изменения количества
-                    if quantity == 0 or old_quantity != quantity or '8-97086-338-2' in str(product.article):
+                    should_log_qty_change = (
+                        quantity == 0 or 
+                        old_quantity != quantity or 
+                        (product and ('8-97086-338-2' in str(product.article) or '22680-AD210' in str(product.article))) or
+                        article_from_xml == '8-97086-338-2' or
+                        article_from_xml == '22680-AD210'
+                    )
+                    if should_log_qty_change:
                         logger.info(f"🔄 Обновление количества для товара {product_id} (артикул: {product.article}, название: {product.name[:50]}): {old_quantity} → {quantity}")
                     # ВАЖНО: Синхронизируем количество с другим каталогом (retail <-> wholesale)
                     # Количество одинаково для обоих каталогов, разница только в ценах
