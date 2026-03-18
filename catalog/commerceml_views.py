@@ -2130,6 +2130,20 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
     logger.info(f"Найдено предложений: {len(offers)}")
     logger.info(f"Обработка для каталога: {catalog_type}")
     
+    # ВАЖНО: Подсчитываем уникальные Ид в offers.xml для диагностики
+    unique_ids = set()
+    for offer_elem in offers[:1000]:  # Проверяем первые 1000 для скорости
+        product_id_elem = None
+        if namespace:
+            product_id_elem = offer_elem.find(f'{{{namespace}}}Ид')
+        if product_id_elem is None:
+            product_id_elem = offer_elem.find('Ид')
+        if product_id_elem is not None and product_id_elem.text:
+            unique_ids.add(product_id_elem.text.strip())
+    logger.info(f"📊 Уникальных Ид в первых 1000 предложениях: {len(unique_ids)}")
+    if len(offers) > 1000:
+        logger.info(f"📊 Всего предложений: {len(offers)}, проверено: 1000")
+    
     # Проверяем, сколько товаров уже есть в базе для этого каталога
     existing_products_count = Product.objects.filter(catalog_type=catalog_type).count()
     logger.info(f"Товаров в базе для каталога {catalog_type}: {existing_products_count}")
@@ -2243,19 +2257,21 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                     product_id = product_id_elem.text.strip()
                     
                     # ВАЖНО: В CommerceML 2.0 Ид может быть составным: "uuid#характеристика".
-                    # В базе external_id у товаров может храниться как базовый uuid или как составной.
-                    # Для устойчивого матчинга используем базовый uuid.
-                    product_base_id = product_id.split('#', 1)[0].strip() if product_id else product_id
+                    # Например: "14393176-aa13-4ac2-8095-1a5459b743c7#a1f57d8f-cc9a-11eb-80d8-00155d01d802"
+                    # ВАЖНО: Используем ПОЛНЫЙ Ид (включая часть после #) как external_id.
+                    # Это гарантирует, что каждое предложение с уникальным полным Ид создаст отдельную карточку.
+                    # Часть после # - это идентификатор характеристики, и она важна для различения товаров.
                     
-                    # ВАЖНО: Логируем обработку каждого товара для диагностики (первые 100 и товары с артикулом 8-97086-338-2 или base_id 86491d95)
+                    # ВАЖНО: Логируем обработку каждого товара для диагностики (первые 100 и товары с артикулом 8-97086-338-2)
                     should_log = (
                         idx < 100 or 
                         '8-97086-338-2' in str(product_id) or 
-                        '86491d95-6cf4-44be-969c-e7f53c1bdb64' in str(product_id) or 
-                        '86491d95-6cf4-44be-969c-e7f53c1bdb64' in str(product_base_id)
+                        '86491d95-6cf4-44be-969c-e7f53c1bdb64' in str(product_id)
                     )
                     if should_log:
-                        logger.info(f"🔄 Обработка предложения #{idx+1} в offers.xml: Ид={product_id}, base_id={product_base_id}")
+                        # Извлекаем base_id только для логирования
+                        product_base_id = product_id.split('#', 1)[0].strip() if '#' in product_id else product_id
+                        logger.info(f"🔄 Обработка предложения #{idx+1} в offers.xml: ПОЛНЫЙ Ид={product_id}, base_id={product_base_id}")
                     
                     # ВАЖНО: Извлекаем артикул из характеристик товара в offers.xml
                     # Ищем элемент ХарактеристикиТовара или ЗначенияСвойства
@@ -2346,8 +2362,7 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                     
                     # ВАЖНО: Логируем поиск товара для диагностики (особенно для товара 8-97086-338-2 и 22680-AD210)
                     should_log_search = (
-                        '86491d95-6cf4-44be-969c-e7f53c1bdb64' in str(product_id) or 
-                        '86491d95-6cf4-44be-969c-e7f53c1bdb64' in str(product_base_id) or
+                        '86491d95-6cf4-44be-969c-e7f53c1bdb64' in str(product_id) or
                         article_from_xml == '8-97086-338-2' or
                         product_id == '8-97086-338-2' or
                         article_from_xml == '22680-AD210' or
@@ -2356,10 +2371,12 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                     )
                     
                     # ВАЖНО: Для схемы "1 предложение = 1 карточка" ищем товар ТОЛЬКО по точному external_id.
+                    # Используем ПОЛНЫЙ Ид (включая часть после #), например:
+                    # "14393176-aa13-4ac2-8095-1a5459b743c7#a1f57d8f-cc9a-11eb-80d8-00155d01d802"
                     # Если не найден - создаём новый товар, игнорируя поиск по base_id/артикулу.
-                    # Это гарантирует, что каждое предложение с уникальным Ид создаст отдельную карточку.
+                    # Это гарантирует, что каждое предложение с уникальным полным Ид создаст отдельную карточку.
                     product = Product.objects.filter(
-                        external_id=product_id,
+                        external_id=product_id,  # ВАЖНО: Используем ПОЛНЫЙ Ид, включая часть после #
                         catalog_type=catalog_type
                     ).first()
                     
@@ -2368,6 +2385,12 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                             logger.info(f"🔍 [ПОИСК ТОВАРА] Товар найден по ТОЧНОМУ external_id в каталоге {catalog_type}: Ид={product_id}, артикул={product.article}")
                         else:
                             logger.warning(f"🔍 [ПОИСК ТОВАРА] Товар НЕ найден по ТОЧНОМУ external_id в каталоге {catalog_type}: Ид={product_id}, артикул из XML={article_from_xml}. Будет создан новый товар.")
+                    
+                    # ВАЖНО: Логируем статистику для первых 100 товаров, чтобы понять паттерн
+                    if idx < 100 and not product:
+                        logger.info(f"📊 [СТАТИСТИКА] Предложение #{idx+1}: Ид={product_id}, артикул={article_from_xml}, товар НЕ найден - будет создан")
+                    elif idx < 100 and product:
+                        logger.info(f"📊 [СТАТИСТИКА] Предложение #{idx+1}: Ид={product_id}, артикул={article_from_xml}, товар НАЙДЕН (ID={product.id})")
                     
                     # Если не нашли в нужном каталоге, проверяем, есть ли в другом (для создания копии)
                     existing_product = None
@@ -2513,9 +2536,11 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                         except Exception:
                             pass
 
+                    # ВАЖНО: Используем ПОЛНЫЙ product_id (включая часть после #) как external_id
+                    # Это гарантирует уникальность каждого товара по полному идентификатору из 1С
                     product_external_id = product_id.strip() if product_id and product_id.strip() else None
                     product = Product(
-                        external_id=product_external_id,
+                        external_id=product_external_id,  # Полный Ид: "uuid#characteristic_id"
                         article=article_from_xml or '',
                         name=offer_name,
                         brand='',
@@ -2536,11 +2561,14 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                     # ВАЖНО: Увеличиваем счетчики сразу после создания товара
                     processed_count += 1
                     created_count += 1
-                    if idx < 50:
-                        logger.info(
-                            f"✓ Создан новый товар из offers.xml: external_id={product_external_id}, "
-                            f"article={product.article}, name={product.name[:80]}, catalog_type={catalog_type}"
-                        )
+                    # ВАЖНО: Помечаем товар как только что созданный, чтобы не увеличивать updated_count
+                    product._just_created = True
+                    # ВАЖНО: Логируем ВСЕ создания товаров (не только первые 50), чтобы видеть реальную статистику
+                    logger.info(
+                        f"✅ Создан новый товар из offers.xml (#{idx+1}): external_id={product_external_id}, "
+                        f"article={product.article}, name={product.name[:80]}, catalog_type={catalog_type}, "
+                        f"created_count={created_count}"
+                    )
                     # Добавляем external_id в список обработанных
                     if product.external_id:
                         processed_external_ids.add(str(product.external_id).strip())
@@ -3139,12 +3167,15 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                 # Или при создании/удалении товаров из import.xml (force=True)
                 
                 processed_count += 1
-                updated_count += 1
+                # ВАЖНО: Увеличиваем updated_count только если товар был найден (не создан)
+                # Если товар был создан выше, updated_count не увеличиваем
+                if not getattr(product, '_just_created', False):
+                    updated_count += 1
                 
                 # Логируем успешное обновление для первых товаров
                 if idx < 10:
                     current_price = product.price if catalog_type == 'retail' else product.wholesale_price
-                    logger.info(f"✓ Товар обновлен: Ид={product_id}, название={product.name[:50]}, цена={current_price}, остаток={product.quantity}, активен={product.is_active}, каталог={catalog_type}")
+                    logger.info(f"✓ Товар обновлен: Ид={product_id}, название={product.name[:50]}, цена={current_price}, остаток={product.quantity}, активен={product.is_active}, каталог={catalog_type}, updated_count={updated_count}")
                 
                 # Успешно обработано - выходим из retry цикла
                 processed_successfully = True
