@@ -730,46 +730,11 @@ def process_commerceml_file(file_path, filename, request=None):
                                 logger.info(f"Определен тип каталога: ОПТОВЫЙ (wholesale) по типу цены: {name_elem.text}")
                                 break
             
-            # ВАЖНО: Файл offers.xml содержит оба типа цен (розничную и оптовую)
-            # Нужно обработать его для обоих каталогов, чтобы установить правильные цены
-            logger.info(f"Обнаружен файл предложений (offers.xml) - обрабатываем цены и остатки для обоих каталогов")
-            
-            # Сначала обрабатываем для розничного каталога
-            logger.info("=" * 80)
-            logger.info("ОБРАБОТКА ДЛЯ РОЗНИЧНОГО КАТАЛОГА (retail)")
-            logger.info("=" * 80)
-            result_retail = process_offers_file(root, namespaces, filename, request, catalog_type='retail')
-            
-            # Затем обрабатываем для оптового каталога
-            logger.info("=" * 80)
-            logger.info("ОБРАБОТКА ДЛЯ ОПТОВОГО КАТАЛОГА (wholesale)")
-            logger.info("=" * 80)
-            result_wholesale = process_offers_file(root, namespaces, filename, request, catalog_type='wholesale')
-            
-            # ВАЖНО: Сохраняем processed_external_ids из offers.xml для использования в логике скрытия
-            # Это нужно, чтобы товары из offers.xml не скрывались при обработке import.xml
-            offers_processed_external_ids = set()
-            if isinstance(result_retail.get('processed_external_ids'), set):
-                offers_processed_external_ids.update(result_retail.get('processed_external_ids', set()))
-            if isinstance(result_wholesale.get('processed_external_ids'), set):
-                offers_processed_external_ids.update(result_wholesale.get('processed_external_ids', set()))
-            
-            # Сохраняем в request для использования в process_commerceml_file
-            if request:
-                if not hasattr(request, '_offers_processed_external_ids'):
-                    request._offers_processed_external_ids = {}
-                request._offers_processed_external_ids['retail'] = result_retail.get('processed_external_ids', set())
-                request._offers_processed_external_ids['wholesale'] = result_wholesale.get('processed_external_ids', set())
-                logger.info(f"Сохранено {len(offers_processed_external_ids)} external_id из offers.xml для использования в логике скрытия")
-            
-            # Объединяем результаты
-            return {
-                'status': 'success' if result_retail.get('status') == 'success' and result_wholesale.get('status') == 'success' else 'partial',
-                'processed': result_retail.get('processed', 0) + result_wholesale.get('processed', 0),
-                'updated': result_retail.get('updated', 0) + result_wholesale.get('updated', 0),
-                'errors': result_retail.get('errors', []) + result_wholesale.get('errors', []),
-                'processed_external_ids': offers_processed_external_ids  # Объединенные ID из обоих каталогов
-            }
+            # Требование: один каталог/одна запись на товар.
+            # Поэтому offers.xml обрабатываем ОДИН раз (retail) без дублирования wholesale.
+            logger.info("Обнаружен файл предложений (offers.xml) - обрабатываем цены и остатки (один каталог: retail)")
+            result = process_offers_file(root, namespaces, filename, request, catalog_type='retail')
+            return result
         
         # Ищем каталог товаров
         catalog = None
@@ -983,9 +948,9 @@ def process_commerceml_file(file_path, filename, request=None):
             )
             return {'status': 'partial', 'message': 'Товары не найдены в файле', 'processed': 0, 'created': 0, 'updated': 0}
         
-        # ВАЖНО: Файл import.xml содержит товары для обоих каталогов (розничного и оптового)
-        # Нужно обработать его для обоих каталогов, чтобы создать товары в обоих разделах
-        logger.info(f"Обнаружен файл каталога товаров (import.xml) - обрабатываем товары для обоих каталогов")
+        # Требование: один каталог/одна запись на товар.
+        # Поэтому import.xml обрабатываем только для retail (без wholesale).
+        logger.info("Обнаружен файл каталога товаров (import.xml) - обрабатываем товары (один каталог: retail)")
         
         # Обрабатываем для обоих каталогов
         results = {}
@@ -995,7 +960,7 @@ def process_commerceml_file(file_path, filename, request=None):
         total_deleted = 0
         all_errors = []
         
-        for current_catalog_type in ['retail', 'wholesale']:
+        for current_catalog_type in ['retail']:
             logger.info("=" * 80)
             logger.info(f"ОБРАБОТКА ДЛЯ КАТАЛОГА: {current_catalog_type.upper()}")
             logger.info("=" * 80)
@@ -1119,7 +1084,7 @@ def process_commerceml_file(file_path, filename, request=None):
             total_updated += updated_count
             all_errors.extend(errors)
         
-        # ВАЖНО: Скрываем товары ТОЛЬКО ПОСЛЕ обработки всех каталогов
+        # ВАЖНО: Скрываем товары ТОЛЬКО ПОСЛЕ обработки каталога
         # Это предотвращает ситуацию, когда товары скрываются/показываются во время обработки
         # ВАЖНО: Скрываем товары ТОЛЬКО при обработке через веб-интерфейс (когда 1С загружает файлы напрямую)
         # При обработке через скрипт (request=None) НЕ скрываем товары - это может быть повторная обработка
@@ -1205,7 +1170,7 @@ def process_commerceml_file(file_path, filename, request=None):
         # ВАЖНО: Скрываем товары ТОЛЬКО после обработки всех каталогов
         total_deleted = 0
         if should_hide_products:
-            for current_catalog_type in ['retail', 'wholesale']:
+            for current_catalog_type in ['retail']:
                 catalog_results = results.get(current_catalog_type, {})
                 processed_external_ids = catalog_results.get('processed_external_ids', set())
                 processed_count = catalog_results.get('processed', 0)
@@ -1494,16 +1459,20 @@ def parse_commerceml_product(product_elem, namespaces, root_elem=None, groups_ca
         # Нужно извлечь основной Ид товара (до символа #)
         # Это позволяет обновлять один товар при наличии нескольких вариантов характеристик
         if '#' in full_id:
-            base_id = full_id.split('#')[0]
+            base_id = full_id.split('#', 1)[0].strip()
+            # Требование: в БД должно быть ровно столько товаров, сколько позиций в обмене,
+            # без "вариантов" uuid#характеристика. Поэтому нормализуем external_id до base_id.
+            # Полный Ид сохраняем для отладки/следов (не участвует в уникальности товара).
             product_data['base_id'] = base_id
-            product_data['external_id'] = full_id
-            product_data['sku'] = full_id
+            product_data['original_external_id'] = full_id
+            product_data['external_id'] = base_id
+            product_data['sku'] = base_id
             # Логируем для диагностики (только первые 3 товара)
             if not hasattr(parse_commerceml_product, '_log_count'):
                 parse_commerceml_product._log_count = 0
             parse_commerceml_product._log_count += 1
             if parse_commerceml_product._log_count <= 3:
-                logger.info(f"Найден составной Ид товара в XML: {full_id} -> базовый Ид: {base_id}")
+                logger.info(f"Найден составной Ид товара в XML: {full_id} -> используем base_id: {base_id}")
         else:
             product_data['sku'] = full_id
             product_data['external_id'] = full_id
@@ -1520,16 +1489,17 @@ def parse_commerceml_product(product_elem, namespaces, root_elem=None, groups_ca
             # ВАЖНО: В CommerceML 2.0 товар с вариантами характеристик имеет составной Ид вида "uuid#characteristic_id"
             # Извлекаем основной Ид товара (до символа #)
             if '#' in full_id:
-                base_id = full_id.split('#')[0]
+                base_id = full_id.split('#', 1)[0].strip()
                 product_data['base_id'] = base_id
-                product_data['external_id'] = full_id
-                product_data['sku'] = full_id
+                product_data['original_external_id'] = full_id
+                product_data['external_id'] = base_id
+                product_data['sku'] = base_id
                 # Логируем для диагностики
                 if not hasattr(parse_commerceml_product, '_log_count'):
                     parse_commerceml_product._log_count = 0
                 parse_commerceml_product._log_count += 1
                 if parse_commerceml_product._log_count <= 3:
-                    logger.info(f"Найден составной Ид товара в атрибутах XML: {full_id} -> базовый Ид: {base_id}")
+                    logger.info(f"Найден составной Ид товара в атрибутах XML: {full_id} -> используем base_id: {base_id}")
             else:
                 product_data['sku'] = full_id
                 product_data['external_id'] = full_id
@@ -3012,47 +2982,7 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                     )
                     if should_log_qty_change:
                         logger.info(f"🔄 Обновление количества для товара {product_id} (артикул: {product.article}, название: {product.name[:50]}): {old_quantity} → {quantity}")
-                    # ВАЖНО: Синхронизируем количество с другим каталогом (retail <-> wholesale)
-                    # Количество одинаково для обоих каталогов, разница только в ценах
-                    if product.external_id:
-                        # Находим товар в другом каталоге с тем же external_id
-                        other_catalog_type = 'wholesale' if catalog_type == 'retail' else 'retail'
-                        other_product = Product.objects.filter(
-                            external_id=product.external_id,
-                            catalog_type=other_catalog_type
-                        ).first()
-                        if other_product:
-                            # ВАЖНО: Синхронизируем количество ТОЛЬКО если оно найдено в XML
-                            # Если quantity = 0 в XML, это валидное значение - обновляем
-                            # Но если quantity не найдено в XML (None), НЕ обновляем существующее количество
-                            other_product.quantity = quantity
-                            # Также обновляем availability для другого каталога
-                            # ВАЖНО: Товар скрывается ТОЛЬКО если quantity = 0 И price = 0
-                            # Получаем цену товара в другом каталоге
-                            if other_catalog_type == 'wholesale':
-                                other_price = other_product.wholesale_price or 0
-                            else:
-                                other_price = other_product.price or 0
-                            
-                            if quantity > 0 or other_price > 0:
-                                other_product.availability = 'in_stock' if quantity > 0 else 'order'
-                                other_product.is_active = True
-                            else:
-                                # ВАЖНО: Скрываем товар ТОЛЬКО если quantity = 0 И price = 0
-                                other_product.availability = 'out_of_stock'
-                                other_product.is_active = False
-                                # Логируем скрытие товара в другом каталоге
-                                should_log_other_hide = (
-                                    idx < 10 or 
-                                    (product and '8-97086-338-2' in str(product.article)) or
-                                    article_from_xml == '8-97086-338-2' or
-                                    '86491d95-6cf4-44be-969c-e7f53c1bdb64' in str(product_id)
-                                )
-                                if should_log_other_hide:
-                                    logger.warning(f"🔒 ТОВАР СКРЫТ В ДРУГОМ КАТАЛОГЕ (количество=0 И цена=0): {product_id} (артикул: {other_product.article}) в каталоге {other_catalog_type} - количество: {quantity}, цена: {other_price}")
-                            save_with_retry(other_product, update_fields=['quantity', 'availability', 'is_active'])
-                            if idx < 10 or quantity == 0:
-                                logger.info(f"✓ Синхронизировано количество для товара {product_id} в каталоге {other_catalog_type}: {quantity} (было: {other_product.quantity if hasattr(other_product, '_state') else 'N/A'})")
+                    # Один каталог: ничего не синхронизируем между retail/wholesale.
                     
                     # ВАЖНО: Определяем активность на основе количества И цены
                     # Товар активен если: quantity > 0 ИЛИ price > 0
@@ -3093,38 +3023,8 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                         update_fields.append('price')
                     save_with_retry(product, update_fields=update_fields)
 
-                    # ВАЖНО: offers.xml часто содержит базовый Ид (без '#'), а товары из import.xml
-                    # могут быть созданы как варианты с external_id вида "base_id#характеристика".
-                    # Раньше обновлялся только один товар (первый найденный), из-за чего остальные
-                    # варианты оставались quantity=0 и не попадали "в наличии".
-                    #
-                    # Если текущий Ид не составной (без '#'), распространяем обновленные поля
-                    # на все варианты с тем же base_id в текущем каталоге.
-                    if product_id and '#' not in str(product_id) and product_base_id:
-                        siblings_qs = Product.objects.filter(
-                            Q(external_id=product_base_id) | Q(external_id__startswith=str(product_base_id) + '#'),
-                            catalog_type=catalog_type
-                        ).exclude(pk=product.pk)
-
-                        # Обновляем те же поля, что и у основного товара
-                        siblings_update = {
-                            'quantity': product.quantity,
-                            'availability': product.availability,
-                            'is_active': product.is_active,
-                        }
-                        if catalog_type == 'wholesale':
-                            siblings_update['wholesale_price'] = product.wholesale_price
-                        else:
-                            siblings_update['price'] = product.price
-
-                        siblings_updated = siblings_qs.update(**siblings_update)
-                        if siblings_updated and idx < 10:
-                            logger.info(
-                                f"✓ Обновлены варианты товара (base_id={product_base_id}) в каталоге {catalog_type}: "
-                                f"{siblings_updated} шт."
-                            )
-                        if siblings_updated:
-                            updated_count += siblings_updated
+                    # Один товар = один external_id (base_id). Варианты uuid#... не создаем,
+                    # поэтому "siblings" обновлять не нужно.
                     
                     # ВАЖНО: Логируем ВСЕ товары с количеством = 0 и изменения количества
                     if quantity == 0 or old_quantity != quantity or old_is_active != product.is_active or '8-97086-338-2' in str(product.article):
@@ -3169,33 +3069,7 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                     # ВАЖНО: Сохраняем товар после обновления активности
                     save_with_retry(product, update_fields=['availability', 'is_active'])
                     
-                    # ВАЖНО: Синхронизируем availability с другим каталогом (retail <-> wholesale)
-                    # Availability должно быть одинаковым для обоих каталогов, если количество одинаково
-                    if product.external_id:
-                        # Находим товар в другом каталоге с тем же external_id
-                        other_catalog_type = 'wholesale' if catalog_type == 'retail' else 'retail'
-                        other_product = Product.objects.filter(
-                            external_id=product.external_id,
-                            catalog_type=other_catalog_type
-                        ).first()
-                        if other_product:
-                            # Получаем цену товара в другом каталоге
-                            if other_catalog_type == 'wholesale':
-                                other_price = other_product.wholesale_price or 0
-                            else:
-                                other_price = other_product.price or 0
-                            
-                            # Синхронизируем availability и is_active на основе количества и цены
-                            if existing_quantity > 0 or other_price > 0:
-                                other_product.availability = 'in_stock' if existing_quantity > 0 else 'order'
-                                other_product.is_active = True
-                            else:
-                                other_product.availability = 'out_of_stock'
-                                other_product.is_active = False
-                            
-                            save_with_retry(other_product, update_fields=['availability', 'is_active'])
-                            if idx < 5:
-                                logger.info(f"✓ Синхронизировано availability для товара {product_id} в каталоге {other_catalog_type}: {product.availability}")
+                    # Один каталог: ничего не синхронизируем между retail/wholesale.
                     
                     if idx < 10:
                         if catalog_type == 'wholesale':

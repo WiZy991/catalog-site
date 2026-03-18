@@ -24,6 +24,11 @@ class Command(BaseCommand):
             default='all',
             help='Тип каталога для очистки (retail, wholesale, all)',
         )
+        parser.add_argument(
+            '--yes',
+            action='store_true',
+            help='Подтвердить удаление без интерактивного ввода (для cron/CI)',
+        )
 
     def handle(self, *args, **options):
         dry_run = options['dry_run']
@@ -41,10 +46,14 @@ class Command(BaseCommand):
             self.stdout.write(self.style.ERROR("ВНИМАНИЕ: Будет удалено ВСЕ товары из 1С!"))
             self.stdout.write(self.style.ERROR("Убедитесь, что у вас есть резервная копия базы данных!"))
             self.stdout.write()
-            confirm = input("Введите 'yes' для подтверждения: ")
-            if confirm.lower() != 'yes':
-                self.stdout.write(self.style.WARNING("Операция отменена"))
-                return
+            self.stdout.write(self.style.WARNING("Подсказка: используйте --dry-run для проверки без удаления."))
+            self.stdout.write(self.style.WARNING("Для неинтерактивного запуска добавьте --yes"))
+            self.stdout.write()
+            if not options.get('yes'):
+                confirm = input("Введите 'yes' для подтверждения: ")
+                if confirm.lower() != 'yes':
+                    self.stdout.write(self.style.WARNING("Операция отменена"))
+                    return
         
         # Фильтруем товары из 1С (с external_id)
         filters = {
