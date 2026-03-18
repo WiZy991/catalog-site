@@ -433,25 +433,23 @@ def handle_file(request, filename):
             
             # Если это XML файл, обрабатываем автоматически
             elif filename.lower().endswith('.xml'):
-                logger.info(f"Обнаружен XML файл, запускаем автоматическую обработку...")
+                logger.info(f"Обнаружен XML файл, запускаем автоматическую обработку (СИНХРОННО)...")
                 try:
-                    # Запускаем обработку в фоне (не блокируем ответ 1С)
-                    import threading
-                    def process_in_background():
-                        try:
-                            logger.info(f"Начало фоновой обработки файла: {filename}")
-                            result = process_commerceml_file(file_path, filename, request)
-                            logger.info(f"Завершена обработка файла {filename}: статус={result.get('status')}, обработано={result.get('processed', 0)}")
-                        except Exception as e:
-                            logger.error(f"Ошибка фоновой обработки файла {filename}: {e}", exc_info=True)
-                    
-                    # Запускаем в отдельном потоке
-                    thread = threading.Thread(target=process_in_background, daemon=True)
-                    thread.start()
-                    logger.info("Фоновая обработка файла запущена")
+                    # Раньше здесь запускалась фоновая обработка в отдельном потоке.
+                    # На реальном хостинге потоки могут «обрубаться» веб‑сервером,
+                    # из‑за чего файл обрабатывался не полностью (или вообще не обрабатывался),
+                    # и товары подтягивались только после ручного запуска management‑команды.
+                    #
+                    # Теперь обрабатываем файл СИНХРОННО в рамках HTTP‑запроса от 1С.
+                    # 1С спокойно ждёт ответ, а мы гарантированно завершаем обработку import/offers.
+                    result = process_commerceml_file(file_path, filename, request)
+                    logger.info(
+                        f"Синхронная обработка XML файла {filename} завершена: "
+                        f"статус={result.get('status')}, обработано={result.get('processed', 0)}"
+                    )
                 except Exception as e:
-                    logger.error(f"Ошибка запуска фоновой обработки: {e}", exc_info=True)
-                    # Не возвращаем ошибку, файл сохранен
+                    logger.error(f"Ошибка автоматической обработки XML файла {filename}: {e}", exc_info=True)
+                    # Не возвращаем ошибку, файл сохранен, 1С сможет повторить запрос или дообработать через import
         else:
             logger.error(f"Файл не найден после сохранения: {file_path}")
             return HttpResponse('failure\nОшибка сохранения файла', status=500, content_type='text/plain; charset=utf-8')
@@ -2412,12 +2410,31 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                     except Exception:
                         offer_name = None
                     
+                    # Приводим название к «чистому» виду так же, как при импорте из import.xml
+                    if offer_name:
+                        try:
+                            import re
+                            clean_name = offer_name
+                            clean_name = re.sub(r',+', ',', clean_name)
+                            clean_name = re.sub(r'\s+', ' ', clean_name)
+                            clean_name = re.sub(r'\(\s*,', '(', clean_name)
+                            clean_name = re.sub(r',\s*\)', ')', clean_name)
+                            clean_name = re.sub(r'\(\s*\)', '', clean_name)
+                            clean_name = re.sub(r',\s*,', ',', clean_name)
+                            clean_name = clean_name.strip(' ,()')
+                            offer_name = clean_name
+                        except Exception:
+                            pass
+                    
                     # Если название найдено в offers.xml и отличается от текущего - обновляем
                     if offer_name and offer_name != product.name:
-                        old_name = product.name
+                        old_name = product.name or ''
                         product.name = offer_name
                         if idx < 10:
-                            logger.info(f"✓ Обновлено название товара {product_id} (артикул: {product.article}): '{old_name[:50]}' → '{offer_name[:50]}'")
+                            logger.info(
+                                f"✓ Обновлено название товара {product_id} (артикул: {product.article}): "
+                                f"'{old_name[:50]}' → '{offer_name[:50]}'"
+                            )
                 
                 if not product:
                     # Товар не найден ни в одном каталоге и не был создан из import.xml.
@@ -2438,6 +2455,25 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                             offer_name = name_elem.text.strip()
                     except Exception:
                         offer_name = None
+                    
+                    # Приводим название к «чистому» виду так же, как при импорте из import.xml
+                    # (убираем лишние запятые, пробелы, пустые скобки и т.п.), чтобы не было дублей
+                    # с «сырым» и отформатированным вариантом одного и того же названия.
+                    if offer_name:
+                        try:
+                            import re
+                            clean_name = offer_name
+                            clean_name = re.sub(r',+', ',', clean_name)
+                            clean_name = re.sub(r'\s+', ' ', clean_name)
+                            clean_name = re.sub(r'\(\s*,', '(', clean_name)
+                            clean_name = re.sub(r',\s*\)', ')', clean_name)
+                            clean_name = re.sub(r'\(\s*\)', '', clean_name)
+                            clean_name = re.sub(r',\s*,', ',', clean_name)
+                            clean_name = clean_name.strip(' ,()')
+                            offer_name = clean_name
+                        except Exception:
+                            # При любой ошибке просто используем исходное offer_name
+                            pass
                     # Если имени нет, используем артикул или Ид
                     if not offer_name:
                         offer_name = article_from_xml or product_id or 'Товар из offers.xml'
