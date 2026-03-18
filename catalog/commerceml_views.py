@@ -2397,6 +2397,28 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                         if idx < 5:
                             logger.info(f"Создан товар в каталоге {catalog_type} на основе товара из другого каталога: {product_id}")
                 
+                # ВАЖНО: Если товар найден, обновляем его название из offers.xml (если оно есть)
+                # Это гарантирует, что название всегда синхронизировано с 1С
+                if product:
+                    # Пытаемся получить название из предложения
+                    offer_name = None
+                    try:
+                        if namespace:
+                            name_elem = offer_elem.find(f'.//{{{namespace}}}Наименование')
+                        else:
+                            name_elem = offer_elem.find('.//Наименование')
+                        if name_elem is not None and name_elem.text:
+                            offer_name = name_elem.text.strip()
+                    except Exception:
+                        offer_name = None
+                    
+                    # Если название найдено в offers.xml и отличается от текущего - обновляем
+                    if offer_name and offer_name != product.name:
+                        old_name = product.name
+                        product.name = offer_name
+                        if idx < 10:
+                            logger.info(f"✓ Обновлено название товара {product_id} (артикул: {product.article}): '{old_name[:50]}' → '{offer_name[:50]}'")
+                
                 if not product:
                     # Товар не найден ни в одном каталоге и не был создан из import.xml.
                     # Для схемы 1 предложение = 1 карточка создаём НОВЫЙ товар напрямую из offers.xml.
@@ -2905,8 +2927,8 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                             logger.warning(f"🔒 ТОВАР СКРЫТ (количество=0 И цена=0): {product_id} (артикул: {product.article}, название: {product.name[:50]}) - количество: {old_quantity} → {quantity}, цена: {current_price}, is_active: {old_is_active} → {product.is_active}")
                     
                     # ВАЖНО: Сохраняем товар после обновления активности
-                    # ВАЖНО: Всегда включаем цену в update_fields, так как она могла быть обновлена выше
-                    update_fields = ['quantity', 'availability', 'is_active']
+                    # ВАЖНО: Всегда включаем цену и название в update_fields, так как они могли быть обновлены выше
+                    update_fields = ['quantity', 'availability', 'is_active', 'name']
                     if catalog_type == 'wholesale':
                         update_fields.append('wholesale_price')
                     else:
@@ -2957,7 +2979,8 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                             logger.warning(f"⚠ Товар {product_id} скрыт (количество=0 И цена=0, количество не найдено в XML)")
                     
                     # ВАЖНО: Сохраняем товар после обновления активности
-                    save_with_retry(product, update_fields=['availability', 'is_active'])
+                    # ВАЖНО: Включаем 'name' в update_fields, так как название могло быть обновлено выше
+                    save_with_retry(product, update_fields=['availability', 'is_active', 'name'])
                     
                     # Один каталог: ничего не синхронизируем между retail/wholesale.
                     
