@@ -2339,118 +2339,35 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                         idx < 10
                     )
                     
-                    # Ищем товар по external_id сначала в нужном типе каталога, потом в любом
+                    # ВАЖНО: Для схемы "1 предложение = 1 карточка" ищем товар ТОЛЬКО по точному external_id.
+                    # Если не найден - создаём новый товар, игнорируя поиск по base_id/артикулу.
+                    # Это гарантирует, что каждое предложение с уникальным Ид создаст отдельную карточку.
                     product = Product.objects.filter(
-                        Q(external_id=product_id) |
-                        Q(external_id=product_base_id) |
-                        Q(external_id__startswith=product_base_id + '#')
-                    ).filter(
+                        external_id=product_id,
                         catalog_type=catalog_type
                     ).first()
+                    
                     if should_log_search:
                         if product:
-                            logger.info(f"🔍 [ПОИСК ТОВАРА] Товар найден по external_id в каталоге {catalog_type}: Ид={product_id}, base_id={product_base_id}, артикул={product.article}")
+                            logger.info(f"🔍 [ПОИСК ТОВАРА] Товар найден по ТОЧНОМУ external_id в каталоге {catalog_type}: Ид={product_id}, артикул={product.article}")
                         else:
-                            logger.warning(f"🔍 [ПОИСК ТОВАРА] Товар НЕ найден по external_id в каталоге {catalog_type}: Ид={product_id}, base_id={product_base_id}, артикул из XML={article_from_xml}")
+                            logger.warning(f"🔍 [ПОИСК ТОВАРА] Товар НЕ найден по ТОЧНОМУ external_id в каталоге {catalog_type}: Ид={product_id}, артикул из XML={article_from_xml}. Будет создан новый товар.")
                     
+                    # Если не нашли в нужном каталоге, проверяем, есть ли в другом (для создания копии)
+                    existing_product = None
                     if not product:
-                        # Пробуем по артикулу из Ид (если Ид это артикул)
-                        product = Product.objects.filter(article=product_id, catalog_type=catalog_type).first()
-                        if product:
-                            if should_log_search:
-                                logger.info(f"🔍 [ПОИСК ТОВАРА] Товар найден по артикулу (из Ид) в каталоге {catalog_type}: {product.article} - {product.name[:50]}")
-                        elif should_log_search:
-                            logger.warning(f"🔍 [ПОИСК ТОВАРА] Товар НЕ найден по артикулу (из Ид) в каталоге {catalog_type}: Ид={product_id}")
-                    
-                    # ВАЖНО: Если не нашли по external_id, пробуем по артикулу из XML
-                    if not product and article_from_xml:
-                        product = Product.objects.filter(article=article_from_xml, catalog_type=catalog_type).first()
-                        if product:
-                            if should_log_search:
-                                logger.info(f"🔍 [ПОИСК ТОВАРА] Товар найден по артикулу из XML ({article_from_xml}) в каталоге {catalog_type}: {product.article} - {product.name[:50]}")
-                        elif should_log_search:
-                            logger.warning(f"🔍 [ПОИСК ТОВАРА] Товар НЕ найден по артикулу из XML ({article_from_xml}) в каталоге {catalog_type}")
-                    
-                    # Если не нашли в нужном типе каталога, ищем в любом каталоге
-                    existing_product = None  # Инициализируем переменную
-                    if not product:
-                        product = Product.objects.filter(
-                            Q(external_id=product_id) |
-                            Q(external_id=product_base_id) |
-                            Q(external_id__startswith=product_base_id + '#')
+                        existing_product = Product.objects.filter(
+                            external_id=product_id
                         ).first()
-                        if product and idx < 10:
-                            logger.info(f"Товар {product_id} найден по external_id в каталоге {product.catalog_type}: {product.article} - {product.name[:50]}")
-                    if not product:
-                        # Пробуем по артикулу из Ид
-                        product = Product.objects.filter(article=product_id).first()
-                        if product and idx < 10:
-                            logger.info(f"Товар {product_id} найден по артикулу (из Ид) в каталоге {product.catalog_type}: {product.article} - {product.name[:50]}")
-                    # ВАЖНО: Если не нашли по external_id, пробуем по артикулу из XML
-                    if not product and article_from_xml:
-                        product = Product.objects.filter(article=article_from_xml).first()
-                        if product and idx < 10:
-                            logger.info(f"Товар {product_id} найден по артикулу из XML ({article_from_xml}) в каталоге {product.catalog_type}: {product.article} - {product.name[:50]}")
-                    
-                    # Сохраняем найденный товар (если он есть) для возможного создания копии
-                    if product:
-                        existing_product = product
-                    
-                    # Проверяем, есть ли товар в нужном каталоге
-                    # ВАЖНО: Если товар уже найден выше, используем его
-                    if not product or product.catalog_type != catalog_type:
-                        product = Product.objects.filter(
-                            Q(external_id=product_id) |
-                            Q(external_id=product_base_id) |
-                            Q(external_id__startswith=product_base_id + '#')
-                        ).filter(
-                            catalog_type=catalog_type
-                        ).first()
-                    if not product:
-                        # Пробуем по артикулу из Ид
-                        product = Product.objects.filter(
-                            article=product_id,
-                            catalog_type=catalog_type
-                        ).first()
-                    # ВАЖНО: Если не нашли по external_id или артикулу из Ид, пробуем по артикулу из XML
-                    if not product and article_from_xml:
-                        product = Product.objects.filter(
-                            article=article_from_xml,
-                            catalog_type=catalog_type
-                        ).first()
-                        if product:
-                            # ВАЖНО: Логируем ВСЕ товары, найденные по артикулу из XML
-                            logger.info(f"✓ Товар найден по артикулу из XML ({article_from_xml}) в каталоге {catalog_type}: {product.article} - {product.name[:50]}")
-                    
-                    # ВАЖНО: Логируем, найден ли товар для диагностики (особенно для товара 8-97086-338-2 и 22680-AD210)
-                    should_log_product = (
-                        '86491d95-6cf4-44be-969c-e7f53c1bdb64' in str(product_id) or 
-                        '86491d95-6cf4-44be-969c-e7f53c1bdb64' in str(product_base_id) or 
-                        (product and ('8-97086-338-2' in str(product.article) or '22680-AD210' in str(product.article))) or
-                        article_from_xml == '8-97086-338-2' or
-                        product_id == '8-97086-338-2' or
-                        article_from_xml == '22680-AD210' or
-                        '22680-AD210' in str(product_id)
-                    )
-                    if should_log_product:
-                        if product:
-                            logger.info(f"✓ Товар найден в offers.xml для каталога {catalog_type}: Ид={product_id}, base_id={product_base_id}, артикул={product.article}, текущий остаток={product.quantity}, артикул из XML={article_from_xml}")
-                        else:
-                            logger.warning(f"⚠ Товар НЕ найден в offers.xml для каталога {catalog_type}: Ид={product_id}, base_id={product_base_id}, артикул из XML={article_from_xml}. Пробуем найти по артикулу...")
-                            # Пробуем найти по артикулу из XML
-                            if article_from_xml:
-                                found_by_article = Product.objects.filter(article=article_from_xml, catalog_type=catalog_type).first()
-                                if found_by_article:
-                                    logger.info(f"  → Найден товар по артикулу из XML ({article_from_xml}) в каталоге {catalog_type}: {found_by_article.article} - {found_by_article.name[:50]}")
-                                    product = found_by_article
-                                else:
-                                    logger.warning(f"  → Товар не найден даже по артикулу из XML ({article_from_xml}) в каталоге {catalog_type}")
+                        if existing_product and idx < 10:
+                            logger.info(f"Товар {product_id} найден в каталоге {existing_product.catalog_type}, но нужен {catalog_type}. Будет создана копия.")
                     
                     # Если товар не найден в нужном каталоге, но найден в другом - создаем копию
                     if not product and existing_product:
                         # Создаем новый товар в нужном каталоге на основе найденного
-                        # external_id должен быть уникальным, поэтому используем его только если он есть
-                        product_external_id = existing_product.external_id.strip() if existing_product.external_id and existing_product.external_id.strip() else None
+                        # ВАЖНО: Используем ПОЛНЫЙ product_id как external_id (не existing_product.external_id),
+                        # чтобы каждый каталог имел товар с правильным идентификатором из offers.xml
+                        product_external_id = product_id.strip() if product_id and product_id.strip() else None
                         product = Product(
                             external_id=product_external_id,
                             article=existing_product.article or '',
@@ -2503,13 +2420,30 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                     if not offer_name:
                         offer_name = article_from_xml or product_id or 'Товар из offers.xml'
 
+                    # Определяем категорию по названию товара
+                    category = None
+                    if offer_name:
+                        try:
+                            from .services import get_category_for_product
+                            category = get_category_for_product(offer_name)
+                        except Exception:
+                            pass
+                    
+                    # Если категория не найдена, используем первую активную корневую категорию
+                    if not category:
+                        try:
+                            from .models import Category
+                            category = Category.objects.filter(parent=None, is_active=True).first()
+                        except Exception:
+                            pass
+
                     product_external_id = product_id.strip() if product_id and product_id.strip() else None
                     product = Product(
                         external_id=product_external_id,
                         article=article_from_xml or '',
                         name=offer_name,
                         brand='',
-                        category=None,
+                        category=category,
                         description='',
                         short_description='',
                         applicability='',
