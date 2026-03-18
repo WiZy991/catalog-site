@@ -1239,47 +1239,49 @@ def process_commerceml_file(file_path, filename, request=None):
                     # Ищем товары, которые:
                     # 1. Имеют external_id (были импортированы из 1С)
                     # 2. Принадлежат к текущему типу каталога (retail или wholesale)
-                    # 3. Их external_id нет в списке обработанных
-                    # 4. ВАЖНО: Скрываем ТОЛЬКО те, у которых price = 0 И quantity = 0
-                    from django.db.models import Q
-                    
-                    # Скрываем только товары с price = 0 И quantity = 0
-                    if current_catalog_type == 'wholesale':
-                        products_to_hide = Product.objects.filter(
-                            catalog_type=current_catalog_type,
-                            external_id__isnull=False,
-                            external_id__gt='',
-                            quantity=0,
-                            wholesale_price=0
-                        ).exclude(external_id__in=processed_external_ids)
-                    else:
-                        products_to_hide = Product.objects.filter(
-                            catalog_type=current_catalog_type,
-                            external_id__isnull=False,
-                            external_id__gt='',
-                            quantity=0,
-                            price=0
-                        ).exclude(external_id__in=processed_external_ids)
+                    # 3. Их external_id нет в списке обработанных ИЗ ТЕКУЩЕГО ОБМЕНА
+                    # ВАЖНО: Для вашего случая нужно, чтобы на сайте оставались ТОЛЬКО товары,
+                    # которые пришли в текущем обмене. Поэтому НЕ смотрим на price/quantity,
+                    # а скрываем все товары, которых нет в processed_external_ids.
+                    products_to_hide = Product.objects.filter(
+                        catalog_type=current_catalog_type,
+                        external_id__isnull=False,
+                        external_id__gt=''
+                    ).exclude(external_id__in=processed_external_ids)
                     
                     deleted_count = products_to_hide.count()
                     if deleted_count > 0:
-                        logger.info(f"Найдено {deleted_count} товаров в каталоге {current_catalog_type}, которые не пришли в обмене И имеют price=0 И quantity=0 - скрываем их")
+                        logger.info(
+                            f"Найдено {deleted_count} товаров в каталоге {current_catalog_type}, "
+                            f"external_id которых НЕТ в текущем обмене (итого обработано: {len(processed_external_ids)}). "
+                            f"Скрываем их, чтобы на сайте показывались ТОЛЬКО товары из последнего XML."
+                        )
                         # Логируем первые 5 для отладки
                         for product in products_to_hide[:5]:
                             if current_catalog_type == 'wholesale':
                                 price_val = product.wholesale_price or 0
                             else:
                                 price_val = product.price or 0
-                            logger.info(f"  Скрываем: {product.name[:50]} (external_id={product.external_id}, article={product.article}, price={price_val}, quantity={product.quantity})")
+                            logger.info(
+                                f"  Скрываем (нет в текущем обмене): {product.name[:50]} "
+                                f"(external_id={product.external_id}, article={product.article}, "
+                                f"price={price_val}, quantity={product.quantity})"
+                            )
                         
-                        # ВАЖНО: Скрываем только товары с price = 0 И quantity = 0
+                        # Скрываем все товары, которых нет в текущем обмене
                         products_to_hide.update(is_active=False, availability='out_of_stock')
-                        logger.info(f"✓ Скрыто товаров в каталоге {current_catalog_type}: {deleted_count} (только с price=0 И quantity=0)")
+                        logger.info(
+                            f"✓ Скрыто товаров в каталоге {current_catalog_type}: {deleted_count} "
+                            f"(external_id НЕ входят в список из текущего обмена)"
+                        )
                         total_deleted += deleted_count
                         # Обновляем результаты для текущего каталога
                         results[current_catalog_type]['deleted'] = deleted_count
                     else:
-                        logger.info(f"Все товары из 1С присутствуют в обмене для каталога {current_catalog_type}, или у отсутствующих есть цена/количество - скрывать нечего")
+                        logger.info(
+                            f"Все товары из 1С присутствуют в текущем обмене для каталога {current_catalog_type} "
+                            f"(по external_id) - скрывать нечего"
+                        )
                 elif processed_count == 0:
                     logger.warning(f"⚠ В обмене нет товаров для каталога {current_catalog_type} (processed_count=0) - НЕ скрываем товары (предотвращает случайное скрытие всех товаров)")
                 elif error_rate >= 0.5:
