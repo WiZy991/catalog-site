@@ -3623,66 +3623,15 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
         was_created = product is None
         
         if was_created:
-            # Создаем новый товар
-            # external_id должен быть уникальным, поэтому используем его только если он есть
-            # Если external_id пустой, используем None (не пустую строку), чтобы избежать конфликтов с unique=True
-            product_external_id = external_id.strip() if external_id and external_id.strip() else None
-            
-            # ВАЖНО: Проверяем, что категория активна перед созданием товара
-            # Если категория неактивна, ищем активную родительскую или активную корневую
-            final_category = category
-            if category and not category.is_active:
-                # Ищем активную родительскую категорию
-                current_cat = category
-                active_parent = None
-                while current_cat:
-                    if current_cat.parent and current_cat.parent.is_active:
-                        active_parent = current_cat.parent
-                        break
-                    current_cat = current_cat.parent
-                
-                if active_parent:
-                    final_category = active_parent
-                    if process_product_from_commerceml._log_count <= 3:
-                        logger.warning(f"  ⚠ Категория '{category.name}' неактивна, новый товар будет создан в активной родительской категории: '{active_parent.name}'")
-                else:
-                    # Если нет активной родительской, ищем любую активную корневую категорию
-                    fallback_category = Category.objects.filter(parent=None, is_active=True).first()
-                    if fallback_category:
-                        final_category = fallback_category
-                        if process_product_from_commerceml._log_count <= 3:
-                            logger.warning(f"  ⚠ Категория '{category.name}' неактивна и нет активной родительской, новый товар будет создан в активной корневой категории: '{fallback_category.name}'")
-                    else:
-                        # Если нет активных категорий вообще, создаем товар без категории (category=None)
-                        final_category = None
-                        if process_product_from_commerceml._log_count <= 3:
-                            logger.error(f"  ⚠ ОШИБКА: Категория '{category.name}' неактивна, нет активных родительских и корневых категорий! Товар будет создан без категории.")
-            elif not category:
-                # Если категория не определена, ищем активную корневую категорию как fallback
-                fallback_category = Category.objects.filter(parent=None, is_active=True).first()
-                if fallback_category:
-                    final_category = fallback_category
-                    if process_product_from_commerceml._log_count <= 3:
-                        logger.warning(f"  ⚠ Категория не определена, новый товар будет создан в активной корневой категории: '{fallback_category.name}'")
-            
-            product = Product(
-                external_id=product_external_id,
-                article=article or '',
-                name=clean_name or '',  # Используем чистое название
-                brand=brand or '',  # Всегда строка, не None
-                # ВАЖНО: Новый товар из import.xml НЕ показываем пользователям до offers.xml
-                # (в import.xml часто нет актуальных остатков/наличия).
-                quantity=0,
-                availability='out_of_stock',
-                category=final_category,  # ВАЖНО: Используем проверенную активную категорию
-                catalog_type=catalog_type,  # Используем переданный тип каталога
-                is_active=False
-            )
-            # Для оптового каталога устанавливаем wholesale_price, для розничного - price
-            if catalog_type == 'wholesale':
-                product.wholesale_price = price
-            else:
-                product.price = price
+            # ВАЖНО: Товары из import.xml НЕ создаются, только обновляются существующие.
+            # Новые товары создаются из offers.xml, где есть название, цена и остаток.
+            # Это гарантирует, что товары создаются с правильными данными о наличии.
+            if process_product_from_commerceml._log_count <= 3:
+                logger.info(f"⚠ Товар с external_id={external_id} не найден в базе. "
+                           f"Товар НЕ будет создан из import.xml - он будет создан из offers.xml, "
+                           f"где есть название, цена и остаток.")
+            # Возвращаем None, чтобы указать, что товар не был создан/обновлен
+            return None, "Товар не найден в базе. Будет создан из offers.xml", False
         else:
             # Обновляем существующий товар
             # ВАЖНО: Всегда обновляем ВСЕ данные из 1С, даже если они уже были установлены
