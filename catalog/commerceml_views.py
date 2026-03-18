@@ -25,6 +25,26 @@ from .serializers import validate_product, SerializerValidationError
 
 logger = logging.getLogger(__name__)
 
+def _get_full_external_id_from_product_data(product_data: dict) -> str:
+    """
+    Возвращает ПОЛНЫЙ external_id товара (включая часть после '#', если она есть).
+
+    Иногда в данных/логике может встретиться ситуация, когда `external_id` уже
+    "нормализован" до base UUID (до '#'), но `sku`/`original_external_id` всё ещё
+    содержит полный составной Ид. Чтобы не схлопывать разные варианты в один товар,
+    везде предпочитаем полный Ид.
+    """
+    if not isinstance(product_data, dict):
+        return ''
+    for key in ('original_external_id', 'sku', 'external_id'):
+        v = product_data.get(key)
+        if v is None:
+            continue
+        s = str(v).strip()
+        if s:
+            return s
+    return ''
+
 
 def save_with_retry(instance, update_fields=None, max_retries=5, delay=0.2):
     """
@@ -931,9 +951,9 @@ def process_commerceml_file(file_path, filename, request=None):
         for idx, product_elem in enumerate(products_elements):
             product_data = parse_commerceml_product(product_elem, namespaces, root, groups_cache=groups_cache)
             if product_data:
-                external_id = product_data.get('external_id') or product_data.get('sku', '')
+                # ВАЖНО: ключ группировки = ПОЛНЫЙ Ид (uuid#характеристика), если он есть.
+                external_id = _get_full_external_id_from_product_data(product_data)
                 if external_id:
-                    external_id = external_id.strip()
                     # ВАЖНО: Используем ПОЛНЫЙ external_id как ключ (не обрезаем до base_id!)
                     # Это гарантирует, что товары с разными характеристиками обрабатываются отдельно.
                     if external_id in products_by_external_id:
@@ -3289,7 +3309,7 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
     try:
         # Получаем основные данные
         # ВАЖНО: Используем ПОЛНЫЙ external_id как пришло из XML (не обрезаем до base_id!)
-        external_id = (product_data.get('external_id') or product_data.get('sku') or '').strip()
+        external_id = _get_full_external_id_from_product_data(product_data).strip()
         if not external_id:
             external_id = None
         
