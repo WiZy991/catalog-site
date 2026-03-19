@@ -14,7 +14,7 @@ from datetime import datetime
 from django.http import HttpResponse, HttpResponseBadRequest
 from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_exempt
-from django.db import transaction, OperationalError, close_old_connections
+from django.db import transaction, OperationalError, close_old_connections, ProgrammingError
 from django.db.transaction import TransactionManagementError
 from django.db.models import Q
 from django.conf import settings
@@ -71,11 +71,19 @@ def save_with_retry(instance, update_fields=None, max_retries=5, delay=0.2):
             else:
                 instance.save()
             return
-        except (OperationalError, TransactionManagementError) as e:
+        except (OperationalError, TransactionManagementError, ProgrammingError) as e:
             msg = str(e).lower()
             is_locked = 'database is locked' in msg or 'database table is locked' in msg
+            is_closed = 'closed database' in msg or 'cannot operate on a closed database' in msg
             if is_locked and attempt < max_retries - 1:
                 # Закрываем старые соединения и ждём с exponential backoff
+                close_old_connections()
+                backoff = delay * (2 ** attempt)
+                jitter = random.uniform(0, delay)
+                time.sleep(backoff + jitter)
+                continue
+            if is_closed and attempt < max_retries - 1:
+                # Переподключаемся и пробуем снова
                 close_old_connections()
                 backoff = delay * (2 ** attempt)
                 jitter = random.uniform(0, delay)
