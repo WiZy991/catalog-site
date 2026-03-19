@@ -2347,84 +2347,13 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
         request: Объект запроса Django
         catalog_type: Тип каталога ('retail' или 'wholesale')
     """
-    logger.info(f"Обработка файла предложений (offers.xml) для каталога: {catalog_type}")
+    # Совместимость: любой старый вызов process_offers_file(...) перенаправляем
+    # в однопроходную обработку, чтобы исключить повторный прогон retail/wholesale.
+    logger.info(
+        f"process_offers_file(catalog_type={catalog_type}) перенаправлен в single-pass обработку"
+    )
+    return process_offers_file_single_pass(root, namespaces, filename, request)
     
-    start_time = timezone.now()
-    processed_count = 0
-    created_count = 0  # Счетчик созданных товаров из offers.xml
-    updated_count = 0
-    errors = []
-    # ВАЖНО: Собираем external_id обработанных товаров для логики скрытия
-    # Это нужно, чтобы товары из offers.xml не скрывались при обработке import.xml
-    processed_external_ids = set()
-    
-    # Получаем namespace из словаря
-    namespace = namespaces.get('', namespaces.get('cml', namespaces.get('cml2', None)))
-    
-    # Ищем предложения с учетом namespace
-    offers = []
-    if namespace:
-        # Вариант 1: С namespace напрямую
-        offers = root.findall(f'.//{{{namespace}}}Предложение')
-        # Вариант 2: В ПакетПредложений/Предложения/Предложение
-        if not offers:
-            package = root.find(f'.//{{{namespace}}}ПакетПредложений')
-            if package is not None:
-                offers = package.findall(f'.//{{{namespace}}}Предложение')
-    if not offers:
-        # Вариант 3: Без namespace
-        offers = root.findall('.//Предложение')
-        if not offers:
-            package = root.find('.//ПакетПредложений')
-            if package is not None:
-                offers = package.findall('.//Предложение')
-    if not offers and 'catalog' in namespaces:
-        # Вариант 4: С префиксом catalog:
-        try:
-            offers = root.findall('.//catalog:Предложение', namespaces)
-            if not offers:
-                package = root.find('.//catalog:ПакетПредложений', namespaces)
-                if package is not None:
-                    offers = package.findall('.//catalog:Предложение', namespaces)
-        except (KeyError, ValueError):
-            pass
-    
-    logger.info(f"Найдено предложений: {len(offers)}")
-    logger.info(f"Обработка для каталога: {catalog_type}")
-    
-    # ВАЖНО: Подсчитываем уникальные Ид в offers.xml для диагностики
-    unique_ids = set()
-    for offer_elem in offers[:1000]:  # Проверяем первые 1000 для скорости
-        product_id_elem = None
-        if namespace:
-            product_id_elem = offer_elem.find(f'{{{namespace}}}Ид')
-        if product_id_elem is None:
-            product_id_elem = offer_elem.find('Ид')
-        if product_id_elem is not None and product_id_elem.text:
-            unique_ids.add(product_id_elem.text.strip())
-    logger.info(f"📊 Уникальных Ид в первых 1000 предложениях: {len(unique_ids)}")
-    if len(offers) > 1000:
-        logger.info(f"📊 Всего предложений: {len(offers)}, проверено: 1000")
-    
-    # Проверяем, сколько товаров уже есть в базе для этого каталога
-    existing_products_count = Product.objects.filter(catalog_type=catalog_type).count()
-    logger.info(f"Товаров в базе для каталога {catalog_type}: {existing_products_count}")
-    
-    # Проверяем, сколько товаров есть во всех каталогах
-    all_products_count = Product.objects.count()
-    logger.info(f"Всего товаров в базе: {all_products_count}")
-    
-    # ВАЖНО: Логируем начало обработки offers.xml для диагностики
-    logger.info(f"=== НАЧАЛО ОБРАБОТКИ OFFERS.XML ДЛЯ КАТАЛОГА {catalog_type.upper()} ===")
-    
-    if not offers:
-        logger.warning("Предложения не найдены в файле offers.xml")
-        return {'status': 'success', 'message': 'Предложения не найдены в файле'}
-    
-    # Обрабатываем каждое предложение в отдельной транзакции
-    # Это позволяет избежать ситуации, когда ошибка одного предложения ломает обработку всех остальных
-    # ВАЖНО: Добавляем retry логику для обработки ошибок "database is locked" в SQLite
-    logger.info(f"Начало обработки {len(offers)} предложений (каждое в отдельной транзакции с retry)")
     
     def process_offer_with_retry(offer_elem, idx, max_retries=3):
         """Обрабатывает предложение с повторными попытками при ошибке 'database is locked'"""
