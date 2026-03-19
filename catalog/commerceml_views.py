@@ -53,27 +53,43 @@ def save_with_retry(instance, update_fields=None, max_retries=5, delay=0.2):
     Надёжное сохранение объекта с повтором при 'database is locked' (SQLite).
     Используется во всех местах обмена с 1С, чтобы единичные блокировки БД
     не ломали весь процесс импорта.
+    
+    ВАЖНО: Если вызывается внутри transaction.atomic(), использует savepoint.
+    Если вызывается вне транзакции, создаёт новую транзакцию.
     """
-    # ВАЖНО: retry должен происходить ПОСЛЕ выхода из transaction.atomic().
-    # Если поймать OperationalError внутри текущего atomic и продолжить, Django пометит
-    # транзакцию как "broken" и любые дальнейшие запросы дадут TransactionManagementError.
+    from django.db import connection
+    
+    # Проверяем, есть ли активная транзакция
+    in_atomic_block = connection.in_atomic_block
+    
     for attempt in range(max_retries):
         try:
-            with transaction.atomic():
-                if update_fields is not None:
-                    instance.save(update_fields=update_fields)
-                else:
-                    instance.save()
+            if in_atomic_block:
+                # Если уже внутри транзакции, используем savepoint для изоляции ошибок
+                with transaction.savepoint():
+                    if update_fields is not None:
+                        instance.save(update_fields=update_fields)
+                    else:
+                        instance.save()
+            else:
+                # Если вне транзакции, создаём новую
+                with transaction.atomic():
+                    if update_fields is not None:
+                        instance.save(update_fields=update_fields)
+                    else:
+                        instance.save()
             return
         except (OperationalError, TransactionManagementError) as e:
             msg = str(e).lower()
             is_locked = 'database is locked' in msg or 'database table is locked' in msg
             if is_locked and attempt < max_retries - 1:
+                # Закрываем старые соединения и ждём с exponential backoff
                 close_old_connections()
                 backoff = delay * (2 ** attempt)
                 jitter = random.uniform(0, delay)
                 time.sleep(backoff + jitter)
                 continue
+            # Если не database is locked или превышен лимит попыток - пробрасываем ошибку
             raise
 
 # Настройки

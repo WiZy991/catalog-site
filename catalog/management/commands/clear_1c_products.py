@@ -2,14 +2,39 @@
 Команда для удаления всех товаров из 1С перед новым обменом.
 Удаляет только товары с external_id (из 1С), сохраняя товары, созданные вручную.
 """
+import random
+import time
+
 from django.core.management.base import BaseCommand
+from django.db import OperationalError, close_old_connections, transaction
+
 from catalog.models import Product, ProductImage
-from django.db import transaction
-from django.utils import timezone
 
 
 class Command(BaseCommand):
     help = 'Удаляет все товары из 1С (с external_id) перед новым обменом'
+
+    def _run_with_sqlite_retry(self, fn, *, max_retries=8, delay=0.2, op_name="operation"):
+        """
+        SQLite может отдавать 'database is locked' если параллельно работает импорт/сайт/cron.
+        Чтобы команда не падала, делаем retry с backoff и небольшим jitter.
+        """
+        for attempt in range(max_retries):
+            try:
+                return fn()
+            except OperationalError as e:
+                msg = str(e).lower()
+                is_locked = 'database is locked' in msg or 'database table is locked' in msg
+                if is_locked and attempt < max_retries - 1:
+                    close_old_connections()
+                    backoff = delay * (2 ** attempt)
+                    jitter = random.uniform(0, delay)
+                    self.stdout.write(self.style.WARNING(
+                        f"SQLite locked during {op_name}, retry {attempt + 1}/{max_retries} in {backoff + jitter:.2f}s..."
+                    ))
+                    time.sleep(backoff + jitter)
+                    continue
+                raise
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -92,23 +117,37 @@ class Command(BaseCommand):
         self.stdout.write()
         
         if not dry_run:
-            # ВАЖНО: Используем транзакцию для безопасности
-            with transaction.atomic():
-                # Удаляем изображения товаров (CASCADE должно работать автоматически, но на всякий случай)
-                deleted_images = 0
-                for product in products_to_delete:
-                    images_count = product.images.count()
-                    if images_count > 0:
-                        product.images.all().delete()
-                        deleted_images += images_count
-                
-                # Удаляем товары
-                deleted_count = products_to_delete.count()
-                products_to_delete.delete()
-                
-                self.stdout.write(self.style.SUCCESS(f"✓ Удалено товаров: {deleted_count}"))
-                if deleted_images > 0:
-                    self.stdout.write(self.style.SUCCESS(f"✓ Удалено изображений: {deleted_images}"))
+            # ВАЖНО:
+            # - не держим одну длинную транзакцию на весь объём (SQLite легко ловит lock)
+            # - удаляем батчами
+            # - изображения удаляем bulk-ом, без N+1 по товарам
+            batch_size = 200
+            deleted_products_total = 0
+            deleted_images_total = 0
+
+            while True:
+                # Берём следующий батч id (детерминированно)
+                batch_ids = list(products_to_delete.order_by('id').values_list('id', flat=True)[:batch_size])
+                if not batch_ids:
+                    break
+
+                def _delete_batch():
+                    nonlocal deleted_products_total, deleted_images_total
+                    with transaction.atomic():
+                        # Сначала удаляем изображения для батча
+                        images_qs = ProductImage.objects.filter(product_id__in=batch_ids)
+                        deleted_images_total += images_qs.count()
+                        images_qs.delete()
+
+                        # Потом товары батча
+                        deleted_products_total += Product.objects.filter(id__in=batch_ids).count()
+                        Product.objects.filter(id__in=batch_ids).delete()
+
+                self._run_with_sqlite_retry(_delete_batch, op_name=f"delete batch (size={len(batch_ids)})")
+
+            self.stdout.write(self.style.SUCCESS(f"✓ Удалено товаров: {deleted_products_total}"))
+            if deleted_images_total > 0:
+                self.stdout.write(self.style.SUCCESS(f"✓ Удалено изображений: {deleted_images_total}"))
         else:
             self.stdout.write(self.style.WARNING("РЕЖИМ ПРОВЕРКИ - товары НЕ были удалены"))
             self.stdout.write("Запустите команду без --dry-run для фактического удаления")
