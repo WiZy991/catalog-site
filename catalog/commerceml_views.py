@@ -93,6 +93,47 @@ SUPPORT_ZIP = getattr(settings, 'ONE_C_SUPPORT_ZIP', True)
 os.makedirs(EXCHANGE_DIR, exist_ok=True)
 
 
+def _clear_1c_products_inline(*, catalog_type: str = 'all') -> dict:
+    """
+    Локальная (in-process) очистка 1С-товаров без вызова call_command.
+    Это избегает побочных эффектов management-команд (закрытие коннекшенов и т.п.).
+    """
+    from .models import Product, ProductImage
+
+    filters = {'external_id__isnull': False, 'external_id__gt': ''}
+    if catalog_type != 'all':
+        filters['catalog_type'] = catalog_type
+
+    products_qs = Product.objects.filter(**filters)
+    total = products_qs.count()
+    if total == 0:
+        return {'deleted_products': 0, 'deleted_images': 0}
+
+    batch_size = 200
+    deleted_products_total = 0
+    deleted_images_total = 0
+
+    while True:
+        batch_ids = list(products_qs.order_by('id').values_list('id', flat=True)[:batch_size])
+        if not batch_ids:
+            break
+        # Одна короткая транзакция на батч
+        try:
+            with transaction.atomic():
+                images_qs = ProductImage.objects.filter(product_id__in=batch_ids)
+                deleted_images_total += images_qs.count()
+                images_qs.delete()
+
+                deleted_products_total += Product.objects.filter(id__in=batch_ids).count()
+                Product.objects.filter(id__in=batch_ids).delete()
+        except Exception as e:
+            logger.error(f"Ошибка при удалении батча товаров из 1С: {e}", exc_info=True)
+            # Продолжаем, чтобы не оставлять базу в полусостоянии из-за одного батча
+            continue
+
+    return {'deleted_products': deleted_products_total, 'deleted_images': deleted_images_total}
+
+
 def get_client_ip(request):
     """Получить IP адрес клиента."""
     x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
@@ -615,11 +656,11 @@ def process_commerceml_file(file_path, filename, request=None):
         is_exchange_file = ('import' in filename_lower) or ('offers' in filename_lower)
         if request is not None and is_exchange_file:
             try:
-                from django.core.management import call_command
-                logger.warning("Файл обмена получен — очищаем 1С-товары перед обработкой: clear_1c_products --catalog-type all --yes")
-                call_command('clear_1c_products', catalog_type='all', yes=True)
+                logger.warning("Файл обмена получен — очищаем 1С-товары перед обработкой (inline)")
+                stats = _clear_1c_products_inline(catalog_type='all')
+                logger.info(f"✓ Очистка завершена: удалено товаров={stats.get('deleted_products', 0)}, изображений={stats.get('deleted_images', 0)}")
             except Exception as e:
-                logger.error(f"Ошибка очистки 1С-товаров перед обработкой: {e}", exc_info=True)
+                logger.error(f"Ошибка inline-очистки 1С-товаров перед обработкой: {e}", exc_info=True)
                 return {'status': 'failure', 'error': f'Ошибка очистки 1С-товаров: {str(e)}'}
         
         # Проверяем, не ZIP ли это
