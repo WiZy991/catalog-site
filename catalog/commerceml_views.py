@@ -863,37 +863,8 @@ def process_commerceml_file(file_path, filename, request=None):
             
             # ВАЖНО: Файл offers.xml содержит оба типа цен (розничную и оптовую)
             # Обрабатываем его для обоих каталогов, чтобы установить цены и остатки отдельно.
-            logger.info("Обнаружен файл предложений (offers.xml) - обрабатываем цены и остатки для обоих каталогов")
-            logger.info("=" * 80)
-            logger.info("ОБРАБОТКА ДЛЯ РОЗНИЧНОГО КАТАЛОГА (retail)")
-            logger.info("=" * 80)
-            result_retail = process_offers_file(root, namespaces, filename, request, catalog_type='retail')
-            
-            logger.info("=" * 80)
-            logger.info("ОБРАБОТКА ДЛЯ ОПТОВОГО КАТАЛОГА (wholesale)")
-            logger.info("=" * 80)
-            result_wholesale = process_offers_file(root, namespaces, filename, request, catalog_type='wholesale')
-            
-            offers_processed_external_ids = set()
-            if isinstance(result_retail.get('processed_external_ids'), set):
-                offers_processed_external_ids.update(result_retail.get('processed_external_ids', set()))
-            if isinstance(result_wholesale.get('processed_external_ids'), set):
-                offers_processed_external_ids.update(result_wholesale.get('processed_external_ids', set()))
-            
-            if request:
-                if not hasattr(request, '_offers_processed_external_ids'):
-                    request._offers_processed_external_ids = {}
-                request._offers_processed_external_ids['retail'] = result_retail.get('processed_external_ids', set())
-                request._offers_processed_external_ids['wholesale'] = result_wholesale.get('processed_external_ids', set())
-                logger.info(f"Сохранено {len(offers_processed_external_ids)} external_id из offers.xml для использования в логике скрытия")
-            
-            return {
-                'status': 'success' if result_retail.get('status') == 'success' and result_wholesale.get('status') == 'success' else 'partial',
-                'processed': result_retail.get('processed', 0) + result_wholesale.get('processed', 0),
-                'updated': result_retail.get('updated', 0) + result_wholesale.get('updated', 0),
-                'errors': result_retail.get('errors', []) + result_wholesale.get('errors', []),
-                'processed_external_ids': offers_processed_external_ids,
-            }
+            logger.info("Обнаружен файл предложений (offers.xml) - однопроходная обработка для retail+wholesale")
+            return process_offers_file_single_pass(root, namespaces, filename, request)
         
         # Ищем каталог товаров
         catalog = None
@@ -2185,6 +2156,184 @@ def parse_commerceml_product(product_elem, namespaces, root_elem=None, groups_ca
     product_data['is_active'] = True
     
     return product_data if product_data.get('sku') and product_data.get('name') else None
+
+
+def process_offers_file_single_pass(root, namespaces, filename, request=None):
+    """Обрабатывает offers.xml одним проходом сразу для retail и wholesale."""
+    from .models import Category
+    from .services import get_category_for_product
+
+    namespace = namespaces.get('', namespaces.get('cml', namespaces.get('cml2', None)))
+    offers = []
+    if namespace:
+        offers = root.findall(f'.//{{{namespace}}}Предложение')
+        if not offers:
+            package = root.find(f'.//{{{namespace}}}ПакетПредложений')
+            if package is not None:
+                offers = package.findall(f'.//{{{namespace}}}Предложение')
+    if not offers:
+        offers = root.findall('.//Предложение')
+        if not offers:
+            package = root.find('.//ПакетПредложений')
+            if package is not None:
+                offers = package.findall('.//Предложение')
+
+    if not offers:
+        return {'status': 'success', 'processed': 0, 'updated': 0, 'errors': [], 'processed_external_ids': set()}
+
+    RETAIL_PRICE_TYPE_ID = 'f6708032-0bd5-11f1-811f-00155d01d802'
+    WHOLESALE_PRICE_TYPE_ID = 'b12f44c0-1208-11f1-811f-00155d01d802'
+    stats = {
+        'retail': {'processed': 0, 'created': 0, 'updated': 0, 'errors': [], 'processed_external_ids': set()},
+        'wholesale': {'processed': 0, 'created': 0, 'updated': 0, 'errors': [], 'processed_external_ids': set()},
+    }
+
+    def _find(elem, tag):
+        if namespace:
+            x = elem.find(f'.//{{{namespace}}}{tag}')
+            if x is not None:
+                return x
+        return elem.find(f'.//{tag}')
+
+    def _parse_prices(offer_elem):
+        retail_price = None
+        wholesale_price = None
+        prices_elem = _find(offer_elem, 'Цены')
+        if prices_elem is None:
+            return retail_price, wholesale_price
+        if namespace:
+            price_elems = prices_elem.findall(f'{{{namespace}}}Цена')
+        else:
+            price_elems = []
+        if not price_elems:
+            price_elems = prices_elem.findall('Цена')
+        for price_elem in price_elems:
+            type_elem = _find(price_elem, 'ИдТипаЦены')
+            val_elem = _find(price_elem, 'ЦенаЗаЕдиницу')
+            if type_elem is None or val_elem is None or not type_elem.text or not val_elem.text:
+                continue
+            try:
+                val = float(val_elem.text.strip().replace(',', '.').replace(' ', '').replace('\xa0', ''))
+            except (ValueError, TypeError):
+                continue
+            if val <= 0:
+                continue
+            type_id = type_elem.text.strip()
+            if type_id == RETAIL_PRICE_TYPE_ID:
+                retail_price = val
+            elif type_id == WHOLESALE_PRICE_TYPE_ID:
+                wholesale_price = val
+        return retail_price, wholesale_price
+
+    def _parse_quantity(offer_elem):
+        if namespace:
+            qty_elems = offer_elem.findall(f'.//{{{namespace}}}Количество')
+        else:
+            qty_elems = []
+        if not qty_elems:
+            qty_elems = offer_elem.findall('.//Количество')
+        total = 0
+        found = False
+        for q in qty_elems:
+            if q is None or q.text is None:
+                continue
+            try:
+                total += int(float(q.text.strip().replace(',', '.')))
+                found = True
+            except (ValueError, TypeError):
+                continue
+        if found:
+            return total
+        if namespace:
+            warehouse_elems = offer_elem.findall(f'.//{{{namespace}}}Склад')
+        else:
+            warehouse_elems = []
+        if not warehouse_elems:
+            warehouse_elems = offer_elem.findall('.//Склад')
+        total = 0
+        found = False
+        for w in warehouse_elems:
+            raw = w.get('КоличествоНаСкладе') or w.get('QuantityInStock')
+            if not raw:
+                continue
+            try:
+                total += int(float(str(raw).strip().replace(',', '.')))
+                found = True
+            except (ValueError, TypeError):
+                continue
+        return total if found else 0
+
+    for offer_elem in offers:
+        close_old_connections()
+        product_id_elem = _find(offer_elem, 'Ид')
+        if product_id_elem is None or not product_id_elem.text:
+            continue
+        product_id = product_id_elem.text.strip()
+        if not product_id:
+            continue
+
+        name_elem = _find(offer_elem, 'Наименование')
+        offer_name = name_elem.text.strip() if (name_elem is not None and name_elem.text) else product_id
+        quantity = _parse_quantity(offer_elem)
+        retail_price, wholesale_price = _parse_prices(offer_elem)
+
+        for catalog_type in ('retail', 'wholesale'):
+            try:
+                product = Product.objects.filter(external_id=product_id, catalog_type=catalog_type).first()
+                created = product is None
+                if created:
+                    category = get_category_for_product(offer_name)
+                    if not category:
+                        category = Category.objects.filter(parent=None, is_active=True).first()
+                    product = Product(
+                        external_id=product_id,
+                        article='',
+                        name=offer_name,
+                        category=category,
+                        catalog_type=catalog_type,
+                        quantity=0,
+                        availability='out_of_stock',
+                        is_active=False,
+                    )
+
+                product.name = offer_name
+                product.quantity = quantity
+                product.availability = 'in_stock' if quantity > 0 else 'out_of_stock'
+                product.is_active = quantity > 0
+                if catalog_type == 'retail' and retail_price is not None:
+                    product.price = retail_price
+                if catalog_type == 'wholesale' and wholesale_price is not None:
+                    product.wholesale_price = wholesale_price
+
+                if created:
+                    save_with_retry(product)
+                    stats[catalog_type]['created'] += 1
+                else:
+                    fields = ['name', 'quantity', 'availability', 'is_active']
+                    fields.append('price' if catalog_type == 'retail' else 'wholesale_price')
+                    save_with_retry(product, update_fields=fields)
+                    stats[catalog_type]['updated'] += 1
+
+                stats[catalog_type]['processed'] += 1
+                stats[catalog_type]['processed_external_ids'].add(product_id)
+            except Exception as e:
+                stats[catalog_type]['errors'].append({'offer_id': product_id, 'error': str(e)})
+
+    if request:
+        if not hasattr(request, '_offers_processed_external_ids'):
+            request._offers_processed_external_ids = {}
+        request._offers_processed_external_ids['retail'] = stats['retail']['processed_external_ids']
+        request._offers_processed_external_ids['wholesale'] = stats['wholesale']['processed_external_ids']
+
+    all_errors = stats['retail']['errors'] + stats['wholesale']['errors']
+    all_ids = set(stats['retail']['processed_external_ids']).union(stats['wholesale']['processed_external_ids'])
+    return {
+        'status': 'success' if not all_errors else 'partial',
+        'processed': stats['retail']['processed'] + stats['wholesale']['processed'],
+        'updated': stats['retail']['updated'] + stats['wholesale']['updated'],
+        'errors': all_errors,
+        'processed_external_ids': all_ids,
+    }
 
 
 def process_offers_file(root, namespaces, filename, request=None, catalog_type='retail'):
