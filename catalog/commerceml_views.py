@@ -1444,7 +1444,7 @@ def process_commerceml_file(file_path, filename, request=None):
                     logger.info(f"  Файл: {marker_file_path}, размер маркера: {os.path.getsize(processed_marker)} байт")
                     logger.info(f"  Время файла: {file_mtime_iso}, обработано товаров: {total_processed}")
                     
-                    # Если есть вариант с .xml, создаем маркер и для него
+                    
                     if processed_marker_with_xml:
                         with open(processed_marker_with_xml, 'w') as f:
                             f.write(f'processed\n')
