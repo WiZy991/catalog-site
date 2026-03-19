@@ -64,14 +64,12 @@ def save_with_retry(instance, update_fields=None, max_retries=5, delay=0.2):
     
     for attempt in range(max_retries):
         try:
-            # Используем transaction.atomic() всегда. Внутри существующей транзакции
-            # Django создаст savepoint автоматически; вне транзакции — начнёт новую.
-            from django.db import transaction as db_transaction
-            with db_transaction.atomic():
-                if update_fields is not None:
-                    instance.save(update_fields=update_fields)
-                else:
-                    instance.save()
+            # Не используем контекстные менеджеры транзакций здесь, чтобы избежать проблем
+            # с несовместимыми реализациями. Вызов находится внутри atomic-обёрток выше по стеку.
+            if update_fields is not None:
+                instance.save(update_fields=update_fields)
+            else:
+                instance.save()
             return
         except (OperationalError, TransactionManagementError) as e:
             msg = str(e).lower()
@@ -611,49 +609,15 @@ def process_commerceml_file(file_path, filename, request=None):
         logger.info("=" * 80)
 
         # ЛОГИКА "КАЖДЫЙ ОБМЕН = ПОЛНАЯ ПЕРЕСБОРКА"
-        # 1С обычно загружает import.xml и offers.xml отдельными HTTP-запросами.
-        # Поэтому очищаем 1С-товары ОДИН РАЗ на обмен, с "окном" по времени:
-        # если очищали недавно (например, при обработке import.xml), то при обработке offers.xml
-        # повторно НЕ чистим (иначе снесём результаты между import → offers).
-        #
-        # ВАЖНО: очищаем только товары с external_id (1С), вручную созданные товары не трогаем.
+        # Всегда очищаем 1С-товары перед обработкой ЛЮБОГО файла обмена (import/offers).
+        # Это соответствует требованию: при каждом обмене чистить и пересоздавать заново.
         filename_lower = (filename or '').lower()
         is_exchange_file = ('import' in filename_lower) or ('offers' in filename_lower)
         if request is not None and is_exchange_file:
             try:
                 from django.core.management import call_command
-                import time as _time
-                marker_path = os.path.join(EXCHANGE_DIR, '.1c_products_cleared_at')
-                now_ts = _time.time()
-                clear_window_seconds = 30 * 60  # 30 минут — достаточно, чтобы import→offers прошёл без повторной очистки
-
-                last_cleared_ts = None
-                try:
-                    if os.path.exists(marker_path):
-                        with open(marker_path, 'r', encoding='utf-8') as f:
-                            raw = (f.read() or '').strip()
-                        if raw:
-                            last_cleared_ts = float(raw)
-                except Exception:
-                    last_cleared_ts = None
-
-                should_clear = (last_cleared_ts is None) or (now_ts - last_cleared_ts > clear_window_seconds)
-                if should_clear:
-                    logger.warning(
-                        "Файл обмена получен — очищаем 1С-товары перед обработкой: "
-                        "clear_1c_products --catalog-type all --yes"
-                    )
-                    call_command('clear_1c_products', catalog_type='all', yes=True)
-                    try:
-                        with open(marker_path, 'w', encoding='utf-8') as f:
-                            f.write(str(now_ts))
-                    except Exception:
-                        pass
-                else:
-                    logger.info(
-                        f"Очистка 1С-товаров уже выполнялась недавно "
-                        f"({int(now_ts - last_cleared_ts)} сек назад) — повторно НЕ очищаем"
-                    )
+                logger.warning("Файл обмена получен — очищаем 1С-товары перед обработкой: clear_1c_products --catalog-type all --yes")
+                call_command('clear_1c_products', catalog_type='all', yes=True)
             except Exception as e:
                 logger.error(f"Ошибка очистки 1С-товаров перед обработкой: {e}", exc_info=True)
                 return {'status': 'failure', 'error': f'Ошибка очистки 1С-товаров: {str(e)}'}
