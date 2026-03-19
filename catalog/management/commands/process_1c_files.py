@@ -17,6 +17,7 @@ import logging
 import time
 from datetime import datetime, timedelta
 from django.core.management.base import BaseCommand
+from django.core.management import call_command
 from django.conf import settings
 from catalog.commerceml_views import EXCHANGE_DIR, process_commerceml_file
 
@@ -148,6 +149,8 @@ class Command(BaseCommand):
             cutoff_time = datetime.now() - timedelta(minutes=recent_minutes)
             self.stdout.write(f'Обрабатываем файлы, измененные за последние {recent_minutes} минут')
         
+        cleared_1c_products = False
+
         for filename in target_files:  # Обрабатываем в правильном порядке
             file_path = os.path.join(EXCHANGE_DIR, filename)
             
@@ -216,6 +219,22 @@ class Command(BaseCommand):
                     self.stdout.write(f'Пропускаем старый файл: {filename} (изменен {file_mtime.strftime("%Y-%m-%d %H:%M:%S")})')
                     continue
             
+            # Перед началом нового обмена (перед import.xml) очищаем товары из 1С.
+            # Это реализует логику "каждый обмен = полная пересборка каталога", без сверок/диффов.
+            filename_lower = filename.lower()
+            is_import_file = 'import' in filename_lower and 'offers' not in filename_lower
+            if is_import_file and not cleared_1c_products:
+                self.stdout.write(self.style.WARNING(
+                    'Обнаружен import.xml — очищаем товары из 1С перед импортом: clear_1c_products --catalog-type all --yes'
+                ))
+                try:
+                    call_command('clear_1c_products', catalog_type='all', yes=True)
+                    cleared_1c_products = True
+                except Exception as e:
+                    self.stdout.write(self.style.ERROR(f'Ошибка очистки 1С-товаров: {e}'))
+                    # Не продолжаем импорт, чтобы не получить "частично очищенную" базу
+                    return
+
             self.stdout.write(f'Обработка файла: {filename}...')
             
             try:
