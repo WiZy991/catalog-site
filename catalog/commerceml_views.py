@@ -1107,17 +1107,15 @@ def process_commerceml_file(file_path, filename, request=None):
             )
             return {'status': 'partial', 'message': 'Товары не найдены в файле', 'processed': 0, 'created': 0, 'updated': 0}
         
-        # ВАЖНО: Файл import.xml содержит товары для обоих каталогов (розничного и оптового)
-        # Нужно обработать его для обоих каталогов, чтобы создать товары в обоих разделах
-        logger.info("Обнаружен файл каталога товаров (import.xml) - обрабатываем товары для обоих каталогов")
-        
-        # Обрабатываем для обоих каталогов (retail и wholesale)
-        results = {}
-        total_processed = 0
-        total_created = 0
-        total_updated = 0
-        total_deleted = 0
-        all_errors = []
+        # ВАЖНО: НОВАЯ ЛОГИКА ДЛЯ import.xml — НИЧЕГО не создаём и не обновляем.
+        logger.info("Обнаружен файл каталога товаров (import.xml) — создание/обновление отключено (всё создаём из offers.xml)")
+        return {
+            'status': 'success',
+            'processed': 0,
+            'created': 0,
+            'updated': 0,
+            'errors': []
+        }
         
         for current_catalog_type in ['retail', 'wholesale']:
             logger.info("=" * 80)
