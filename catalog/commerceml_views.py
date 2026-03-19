@@ -64,20 +64,13 @@ def save_with_retry(instance, update_fields=None, max_retries=5, delay=0.2):
     
     for attempt in range(max_retries):
         try:
-            if in_atomic_block:
-                # Если уже внутри транзакции, используем savepoint для изоляции ошибок
-                with transaction.savepoint():
-                    if update_fields is not None:
-                        instance.save(update_fields=update_fields)
-                    else:
-                        instance.save()
-            else:
-                # Если вне транзакции, создаём новую
-                with transaction.atomic():
-                    if update_fields is not None:
-                        instance.save(update_fields=update_fields)
-                    else:
-                        instance.save()
+            # Используем transaction.atomic() всегда. Внутри существующей транзакции
+            # Django создаст savepoint автоматически; вне транзакции — начнёт новую.
+            with transaction.atomic():
+                if update_fields is not None:
+                    instance.save(update_fields=update_fields)
+                else:
+                    instance.save()
             return
         except (OperationalError, TransactionManagementError) as e:
             msg = str(e).lower()
