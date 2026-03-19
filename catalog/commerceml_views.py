@@ -2970,184 +2970,34 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                         if should_log_warehouse:
                             logger.info(f"✓ Общее количество со всех складов для товара {product_id} (артикул: {product.article if product else 'N/A'}, артикул из XML: {article_from_xml}): {quantity} (было: {product.quantity if product else 'N/A'}), found_quantity_in_xml={found_quantity_in_xml}")
                 
-                # ВАЖНО: Обновляем количество и наличие ТОЛЬКО если товар найден
-                # Количество одинаково для обоих каталогов (retail и wholesale)
-                # Разница только в ценах (price для retail, wholesale_price для wholesale)
-                # ВАЖНО: Количество обновляется ВСЕГДА, если оно найдено в XML (даже если = 0)
-                # found_quantity_in_xml устанавливается при нахождении в <Количество> или <Склад>
-                # ВАЖНО: quantity может быть 0 (это валидное значение!), поэтому проверяем found_quantity_in_xml
-                # ВАЖНО: Если found_quantity_in_xml = True, значит количество найдено в XML (даже если = 0)
-                
-                # ВАЖНО: Логируем состояние для диагностики (особенно для товара 8-97086-338-2 и 22680-AD210)
-                should_log_quantity_check = (
-                    product is not None and (
-                        '86491d95-6cf4-44be-969c-e7f53c1bdb64' in str(product_id) or 
-                        '86491d95-6cf4-44be-969c-e7f53c1bdb64' in str(product_base_id) or
-                        '8-97086-338-2' in str(product.article) or
-                        article_from_xml == '8-97086-338-2' or
-                        '22680-AD210' in str(product.article) or
-                        article_from_xml == '22680-AD210' or
-                        '22680-AD210' in str(product_id)
-                    )
-                )
-                
-                if should_log_quantity_check:
-                    logger.info(f"🔍 [ПРОВЕРКА КОЛИЧЕСТВА] Товар найден: {product.article if product else 'N/A'}, found_quantity_in_xml={found_quantity_in_xml}, quantity={quantity}, текущий остаток={product.quantity if product else 'N/A'}")
-                
-                # ВАЖНО: Обновляем количество ТОЛЬКО если товар найден
+                # Обновляем количество и наличие ТОЛЬКО если товар найден
                 if not product:
                     if idx < 10:
                         logger.warning(f"⚠ Товар {product_id} не найден, пропускаем обновление количества. found_quantity_in_xml={found_quantity_in_xml}, quantity={quantity}")
                     continue
                 
                 if found_quantity_in_xml:
-                    # Если quantity is None, но found_quantity_in_xml = True, значит количество = 0
+                    # Если количество найдено в XML (даже если 0) — просто устанавливаем его,
+                    # и определяем активность ТОЛЬКО по количеству (без проверки цены).
                     if quantity is None:
                         quantity = 0
-                    
-                    # ВАЖНО: Логируем ВСЕ обновления количества для диагностики
-                    old_quantity = product.quantity
-                    # ВАЖНО: Логируем ВСЕ обновления количества (особенно для товаров с количеством = 0)
-                    should_log_update = (
-                        idx < 10 or 
-                        quantity == 0 or 
-                        old_quantity != quantity or 
-                        (product and ('8-97086-338-2' in str(product.article) or '22680-AD210' in str(product.article))) or
-                        article_from_xml == '8-97086-338-2' or
-                        article_from_xml == '22680-AD210'
-                    )
-                    if should_log_update:
-                        logger.info(f"🔍 [ОБНОВЛЕНИЕ КОЛИЧЕСТВА] Товар {product_id} (артикул: {product.article if product else 'N/A'}): found_quantity_in_xml={found_quantity_in_xml}, quantity={quantity}, old_quantity={old_quantity}")
-                    
-                    # ВАЖНО: Всегда обновляем количество, даже если оно = 0
-                    # Это гарантирует синхронизацию остатков с 1С
                     product.quantity = quantity
-                    # ВАЖНО: Логируем ВСЕ товары с количеством = 0 и изменения количества
-                    should_log_qty_change = (
-                        quantity == 0 or 
-                        old_quantity != quantity or 
-                        (product and ('8-97086-338-2' in str(product.article) or '22680-AD210' in str(product.article))) or
-                        article_from_xml == '8-97086-338-2' or
-                        article_from_xml == '22680-AD210'
-                    )
-                    if should_log_qty_change:
-                        logger.info(f"🔄 Обновление количества для товара {product_id} (артикул: {product.article}, название: {product.name[:50]}): {old_quantity} → {quantity}")
-                    # Один каталог: ничего не синхронизируем между retail/wholesale.
-                    
-                    # ВАЖНО: Определяем активность на основе количества И цены
-                    # Товар активен если: quantity > 0 ИЛИ price > 0
-                    # Товар скрыт ТОЛЬКО если: quantity = 0 И price = 0
-                    old_is_active = product.is_active
-                    
-                    # Получаем текущую цену товара
-                    if catalog_type == 'wholesale':
-                        current_price = product.wholesale_price or 0
-                    else:
-                        current_price = product.price or 0
-                    
-                    # Товар активен если есть количество ИЛИ есть цена
-                    if quantity > 0 or current_price > 0:
-                        product.availability = 'in_stock' if quantity > 0 else 'order'
-                        product.is_active = True  # Товар активен если есть количество или цена
-                    else:
-                        # ВАЖНО: Скрываем товар ТОЛЬКО если quantity = 0 И price = 0
-                        product.availability = 'out_of_stock'
-                        product.is_active = False
-                        # Логируем товары, которые скрываются
-                        should_log_hide = (
-                            idx < 10 or 
-                            old_quantity != 0 or  # Количество изменилось с ненулевого на 0
-                            (product and '8-97086-338-2' in str(product.article)) or
-                            article_from_xml == '8-97086-338-2' or
-                            '86491d95-6cf4-44be-969c-e7f53c1bdb64' in str(product_id)
-                        )
-                        if should_log_hide:
-                            logger.warning(f"🔒 ТОВАР СКРЫТ (количество=0 И цена=0): {product_id} (артикул: {product.article}, название: {product.name[:50]}) - количество: {old_quantity} → {quantity}, цена: {current_price}, is_active: {old_is_active} → {product.is_active}")
-                    
-                    # ВАЖНО: Сохраняем товар после обновления активности
-                    # ВАЖНО: Всегда включаем цену и название в update_fields, так как они могли быть обновлены выше
+                    product.availability = 'in_stock' if quantity > 0 else 'out_of_stock'
+                    product.is_active = quantity > 0
+                    # Сохраняем товар после обновления активности
                     update_fields = ['quantity', 'availability', 'is_active', 'name']
                     if catalog_type == 'wholesale':
                         update_fields.append('wholesale_price')
                     else:
                         update_fields.append('price')
                     save_with_retry(product, update_fields=update_fields)
-
-                    # Один товар = один external_id (base_id). Варианты uuid#... не создаем,
-                    # поэтому "siblings" обновлять не нужно.
-                    
-                    # ВАЖНО: Логируем ВСЕ товары с количеством = 0 и изменения количества
-                    if quantity == 0 or old_quantity != quantity or old_is_active != product.is_active or '8-97086-338-2' in str(product.article):
-                        if catalog_type == 'wholesale':
-                            current_price = product.wholesale_price
-                        else:
-                            current_price = product.price
-                        logger.info(f"✓ Обновлен остаток для товара {product_id} (артикул: {product.article}, название: {product.name[:50]}): {old_quantity} → {quantity}, наличие: {product.availability}, активен: {old_is_active} → {product.is_active}, цена: {current_price}")
                 else:
-                    # ВАЖНО: Если количество не найдено в XML, НЕ обновляем существующее количество
-                    # Это предотвращает случайное обнуление количества при повторной обработке
-                    # Товар может быть доступен под заказ, если есть цена
-                    # НЕ меняем product.quantity - оставляем существующее значение
-                    if idx < 10:
-                        logger.warning(f"⚠ Количество не найдено в XML для товара {product_id}, оставляем существующее количество: {product.quantity}")
-                    
-                    # ВАЖНО: Используем существующее количество (не обнуляем)
-                    # Количество одинаково для обоих каталогов
+                    # Если количество не найдено в XML — не трогаем существующее количество
+                    # и определяем активность ТОЛЬКО по нему (цена не участвует).
                     existing_quantity = product.quantity or 0
-                    
-                    # ВАЖНО: Определяем активность на основе количества И цены
-                    # Товар активен если: quantity > 0 ИЛИ price > 0
-                    # Товар скрыт ТОЛЬКО если: quantity = 0 И price = 0
-                    # Если количество не найдено в XML, используем существующее количество
-                    
-                    # Получаем текущую цену товара
-                    if catalog_type == 'wholesale':
-                        current_price = product.wholesale_price or 0
-                    else:
-                        current_price = product.price or 0
-                    
-                    if existing_quantity > 0 or current_price > 0:
-                        product.availability = 'in_stock' if existing_quantity > 0 else 'order'
-                        product.is_active = True  # Товар активен если есть количество или цена
-                    else:
-                        # Скрываем товар ТОЛЬКО если quantity = 0 И price = 0
-                        product.availability = 'out_of_stock'
-                        product.is_active = False
-                        if idx < 5:
-                            logger.warning(f"⚠ Товар {product_id} скрыт (количество=0 И цена=0, количество не найдено в XML)")
-                    
-                    # ВАЖНО: Сохраняем товар после обновления активности
-                    # ВАЖНО: Включаем 'name' в update_fields, так как название могло быть обновлено выше
+                    product.availability = 'in_stock' if existing_quantity > 0 else 'out_of_stock'
+                    product.is_active = existing_quantity > 0
                     save_with_retry(product, update_fields=['availability', 'is_active', 'name'])
-                    
-                    # Один каталог: ничего не синхронизируем между retail/wholesale.
-                    
-                    if idx < 10:
-                        if catalog_type == 'wholesale':
-                            current_price = product.wholesale_price
-                        else:
-                            current_price = product.price
-                        if product.is_active:
-                            logger.info(f"⚠ Количество не найдено в XML для товара {product_id}, но товар активен (существующее количество: {existing_quantity}, цена: {current_price}).")
-                        else:
-                            logger.warning(f"⚠ Количество не найдено в XML для товара {product_id} и нет цены. Товар скрыт.")
-                        # Выводим структуру элемента для отладки
-                        if idx < 3:
-                            logger.debug(f"  Структура предложения: tag={offer_elem.tag}, children={[child.tag for child in offer_elem]}")
-                            # Ищем все элементы с количеством
-                            all_quantity_elems = offer_elem.findall('.//Количество')
-                            if namespace:
-                                all_quantity_elems.extend(offer_elem.findall(f'.//{{{namespace}}}Количество'))
-                            logger.debug(f"  Найдено элементов <Количество>: {len(all_quantity_elems)}")
-                            for q_elem in all_quantity_elems:
-                                logger.debug(f"    <Количество>: {q_elem.text}")
-                            # Ищем все элементы Склад
-                            all_warehouse_elems = offer_elem.findall('.//Склад')
-                            if namespace:
-                                all_warehouse_elems.extend(offer_elem.findall(f'.//{{{namespace}}}Склад'))
-                            logger.debug(f"  Найдено элементов <Склад>: {len(all_warehouse_elems)}")
-                            for w_elem in all_warehouse_elems:
-                                logger.debug(f"    <Склад> атрибуты: {w_elem.attrib}")
                 
                 # ВАЖНО: НЕ переопределяем категорию при каждом обмене из offers.xml!
                 # Категория должна устанавливаться только из import.xml
