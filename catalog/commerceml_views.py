@@ -66,7 +66,8 @@ def save_with_retry(instance, update_fields=None, max_retries=5, delay=0.2):
         try:
             # Используем transaction.atomic() всегда. Внутри существующей транзакции
             # Django создаст savepoint автоматически; вне транзакции — начнёт новую.
-            with transaction.atomic():
+            from django.db import transaction as db_transaction
+            with db_transaction.atomic():
                 if update_fields is not None:
                     instance.save(update_fields=update_fields)
                 else:
