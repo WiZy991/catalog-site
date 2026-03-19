@@ -14,7 +14,7 @@ from datetime import datetime
 from django.http import HttpResponse, HttpResponseBadRequest
 from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_exempt
-from django.db import transaction, OperationalError, close_old_connections, ProgrammingError
+from django.db import transaction, OperationalError, close_old_connections, ProgrammingError, connections
 from django.db.transaction import TransactionManagementError
 from django.db.models import Q
 from django.conf import settings
@@ -64,6 +64,17 @@ def save_with_retry(instance, update_fields=None, max_retries=5, delay=0.2):
     
     for attempt in range(max_retries):
         try:
+            # Гарантируем активное соединение перед сохранением
+            try:
+                db_alias = getattr(getattr(instance, '_state', None), 'db', None) or 'default'
+                conn = connections[db_alias]
+                # Закрыть "битые" соединения и удостовериться, что соединение установлено
+                conn.close_if_unusable_or_obsolete()
+                conn.ensure_connection()
+            except Exception:
+                # Игнорируем, пробуем сохранить — если будет ошибка, поймаем ниже
+                pass
+
             # Не используем контекстные менеджеры транзакций здесь, чтобы избежать проблем
             # с несовместимыми реализациями. Вызов находится внутри atomic-обёрток выше по стеку.
             if update_fields is not None:
@@ -83,8 +94,15 @@ def save_with_retry(instance, update_fields=None, max_retries=5, delay=0.2):
                 time.sleep(backoff + jitter)
                 continue
             if is_closed and attempt < max_retries - 1:
-                # Переподключаемся и пробуем снова
-                close_old_connections()
+                # Переподключаемся и пробуем снова (конкретно для БД экземпляра)
+                try:
+                    db_alias = getattr(getattr(instance, '_state', None), 'db', None) or 'default'
+                    conn = connections[db_alias]
+                    conn.close()
+                except Exception:
+                    pass
+                finally:
+                    close_old_connections()
                 backoff = delay * (2 ** attempt)
                 jitter = random.uniform(0, delay)
                 time.sleep(backoff + jitter)
