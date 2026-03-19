@@ -7,13 +7,15 @@ import json
 import logging
 import re
 import time
+import random
 import xml.etree.ElementTree as ET
 from io import BytesIO
 from datetime import datetime
 from django.http import HttpResponse, HttpResponseBadRequest
 from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_exempt
-from django.db import transaction, OperationalError
+from django.db import transaction, OperationalError, close_old_connections
+from django.db.transaction import TransactionManagementError
 from django.db.models import Q
 from django.conf import settings
 from django.utils import timezone
@@ -52,21 +54,26 @@ def save_with_retry(instance, update_fields=None, max_retries=5, delay=0.2):
     Используется во всех местах обмена с 1С, чтобы единичные блокировки БД
     не ломали весь процесс импорта.
     """
+    # ВАЖНО: retry должен происходить ПОСЛЕ выхода из transaction.atomic().
+    # Если поймать OperationalError внутри текущего atomic и продолжить, Django пометит
+    # транзакцию как "broken" и любые дальнейшие запросы дадут TransactionManagementError.
     for attempt in range(max_retries):
         try:
-            if update_fields is not None:
-                instance.save(update_fields=update_fields)
-            else:
-                instance.save()
+            with transaction.atomic():
+                if update_fields is not None:
+                    instance.save(update_fields=update_fields)
+                else:
+                    instance.save()
             return
-        except OperationalError as e:
+        except (OperationalError, TransactionManagementError) as e:
             msg = str(e).lower()
-            # Для SQLite характерно сообщение 'database is locked'
-            if 'database is locked' in msg and attempt < max_retries - 1:
-                # Небольшая пауза и пробуем ещё раз
-                time.sleep(delay)
+            is_locked = 'database is locked' in msg or 'database table is locked' in msg
+            if is_locked and attempt < max_retries - 1:
+                close_old_connections()
+                backoff = delay * (2 ** attempt)
+                jitter = random.uniform(0, delay)
+                time.sleep(backoff + jitter)
                 continue
-            # Любая другая ошибка или превышен лимит попыток — пробрасываем дальше
             raise
 
 # Настройки
@@ -3641,7 +3648,9 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
                 if product:
                     logger.info(f"✓ Товар найден по external_id={external_id}: {product.article} - {product.name[:50]}")
                 else:
-                    logger.info(f"⚠ Товар не найден по external_id={external_id}, будет создан новый")
+                    # NOTE: import.xml может приходить раньше offers.xml. В этой версии логики
+                    # мы НЕ создаём новые товары из import.xml — только обновляем существующие.
+                    logger.info(f"⚠ Товар не найден по external_id={external_id}")
         
         was_created = product is None
         
