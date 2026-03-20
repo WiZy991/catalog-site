@@ -499,6 +499,7 @@ class ProductView(DetailView):
         # Исключаем материалы и другие ненужные характеристики
         excluded_keys = ['прокладка', 'gasket', 'паронит', 'paronit', 'материал', 'material']
         characteristics = []
+        has_size_in_source = False
         for key, value in all_characteristics:
             key_lower = key.lower().strip()
             # Пропускаем материалы и другие ненужные характеристики
@@ -507,6 +508,7 @@ class ProductView(DetailView):
                 if key_lower in article2_keys and product.article:
                     characteristics.append(('Кросс-номер', product.article))
                 elif key_lower in ('размер', 'size'):
+                    has_size_in_source = True
                     characteristics.append(('Характеристики', value))
                 else:
                     characteristics.append((key, value))
@@ -517,7 +519,7 @@ class ProductView(DetailView):
         existing_keys = {str(k).strip().lower() for k, _ in characteristics}
         name_parts = [p.strip() for p in (product.name or '').split(',') if p and p.strip()]
 
-        if name_parts and 'размер' not in existing_keys and 'size' not in existing_keys:
+        if name_parts and not has_size_in_source:
             size_candidate = name_parts[-1]
             if size_candidate:
                 characteristics.append(('Характеристики', size_candidate))
