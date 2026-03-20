@@ -2309,6 +2309,34 @@ def process_offers_file_single_pass(root, namespaces, filename, request=None):
                 return parts[1]
         return ''
 
+    def _extract_brand(offer_elem):
+        # 1) Пытаемся взять бренд из наименования: "Название (БРЕНД, АРТИКУЛ, ...)"
+        name_elem = _find(offer_elem, 'Наименование')
+        raw_name = name_elem.text.strip() if (name_elem is not None and name_elem.text) else ''
+        if raw_name and '(' in raw_name and ')' in raw_name:
+            inside = raw_name[raw_name.find('(') + 1: raw_name.rfind(')')]
+            parts = [p.strip() for p in inside.split(',') if p.strip()]
+            if parts:
+                brand_candidate = parts[0]
+                # Не используем UUID-подобные значения как бренд
+                if not re.match(r'^[0-9a-fA-F-]{20,}$', brand_candidate):
+                    return brand_candidate
+
+        # 2) Фоллбэк: ищем "Марка"/"Бренд" в ХарактеристикиТовара
+        characteristics_elem = _find(offer_elem, 'ХарактеристикиТовара')
+        if characteristics_elem is not None:
+            for char_elem in characteristics_elem.findall('.//*'):
+                name_node = _find(char_elem, 'Наименование')
+                value_node = _find(char_elem, 'Значение')
+                if name_node is None or value_node is None or not name_node.text or not value_node.text:
+                    continue
+                n = name_node.text.strip().lower()
+                v = value_node.text.strip()
+                if n in ('марка', 'бренд', 'производитель', 'brand') and v:
+                    if not re.match(r'^[0-9a-fA-F-]{20,}$', v):
+                        return v
+        return ''
+
     def _extract_characteristics_and_applicability(offer_elem):
         characteristics_parts = []
         applicability_parts = []
@@ -2352,6 +2380,9 @@ def process_offers_file_single_pass(root, namespaces, filename, request=None):
                 char_value = value_elem.text.strip()
                 if not char_name or not char_value:
                     continue
+                # Служебные поля не показываем в характеристиках карточки.
+                if char_name.strip().lower() in ('марка', 'бренд', 'brand'):
+                    continue
                 if char_name.lower() in ('артикул', 'артикул1', 'article', 'article1'):
                     continue
                 _add_char(char_name, char_value)
@@ -2377,6 +2408,9 @@ def process_offers_file_single_pass(root, namespaces, filename, request=None):
                 prop_value = value_elem.text.strip()
                 if not prop_name or not prop_value:
                     continue
+                # Служебные поля не показываем в характеристиках карточки.
+                if prop_name.strip().lower() in ('марка', 'бренд', 'brand'):
+                    continue
                 if prop_name.lower() in ('артикул', 'артикул1', 'article', 'article1'):
                     continue
                 _add_char(prop_name, prop_value)
@@ -2400,6 +2434,7 @@ def process_offers_file_single_pass(root, namespaces, filename, request=None):
         raw_offer_name = name_elem.text.strip() if (name_elem is not None and name_elem.text) else ''
         offer_name = _clean_offer_product_name(raw_offer_name) if raw_offer_name else product_id
         article = _extract_article(offer_elem)
+        brand = _extract_brand(offer_elem)
         characteristics_text, applicability_text = _extract_characteristics_and_applicability(offer_elem)
         quantity = _parse_quantity(offer_elem)
         retail_price, wholesale_price = _parse_prices(offer_elem)
@@ -2415,6 +2450,7 @@ def process_offers_file_single_pass(root, namespaces, filename, request=None):
                     product = Product(
                         external_id=product_id,
                         article=article,
+                        brand=brand,
                         name=offer_name,
                         category=category,
                         catalog_type=catalog_type,
@@ -2428,6 +2464,8 @@ def process_offers_file_single_pass(root, namespaces, filename, request=None):
                 product.name = offer_name
                 if article:
                     product.article = article
+                if brand:
+                    product.brand = brand
                 product.characteristics = characteristics_text
                 product.applicability = applicability_text
                 product.quantity = quantity
@@ -2442,7 +2480,7 @@ def process_offers_file_single_pass(root, namespaces, filename, request=None):
                     save_with_retry(product)
                     stats[catalog_type]['created'] += 1
                 else:
-                    fields = ['name', 'article', 'characteristics', 'applicability', 'quantity', 'availability', 'is_active']
+                    fields = ['name', 'article', 'brand', 'characteristics', 'applicability', 'quantity', 'availability', 'is_active']
                     fields.append('price' if catalog_type == 'retail' else 'wholesale_price')
                     save_with_retry(product, update_fields=fields)
                     stats[catalog_type]['updated'] += 1
