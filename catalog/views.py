@@ -587,6 +587,35 @@ class ProductView(DetailView):
                 if _looks_like_engine_token(part):
                     characteristics.append(('Двигатель', part))
                     break
+
+        # Fallback для "Кузов": часто "Кузов" не проходит фильтрацию в characteristics,
+        # но остаётся в applicability. Если кузов не найден — пытаемся взять
+        # из applicability, исключив значение двигателя.
+        existing_char_keys = {str(k).strip().lower() for k, _ in characteristics}
+        has_body = any(k in existing_char_keys for k in ('кузов', 'body'))
+        if not has_body:
+            engine_val = ''
+            for k, v in characteristics:
+                if str(k).strip().lower() in ('двигатель', 'engine'):
+                    engine_val = str(v).strip()
+                    break
+
+            applicability_list = product.get_applicability_list()
+            if applicability_list:
+                for item in applicability_list:
+                    item_str = str(item).strip()
+                    if not item_str:
+                        continue
+                    if engine_val and item_str == engine_val:
+                        continue
+                    if item_str.startswith('/'):
+                        continue
+                    if '-' in item_str:
+                        continue
+                    # Должно быть похоже на код с буквами и цифрами.
+                    if re.search(r'[A-Za-zА-Яа-я]', item_str) and re.search(r'\d', item_str):
+                        characteristics.append(('Кузов', item_str))
+                        break
         
         # Добавляем вольтаж, если он есть в применимости
         voltage = product.get_voltage_from_applicability()
