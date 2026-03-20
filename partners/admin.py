@@ -328,7 +328,7 @@ class PartnerOrderAdmin(admin.ModelAdmin):
     list_display = [
         'id', 'partner', 'status_badge', 'created_at', 'total_price', 'total_quantity'
     ]
-    list_filter = ['status', 'created_at']
+    list_filter = ['partner', 'status', 'created_at']
     search_fields = ['partner__full_name', 'partner__company_name', 'id']
     readonly_fields = ['created_at', 'updated_at']
     inlines = [PartnerOrderItemInline]

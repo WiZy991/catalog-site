@@ -148,6 +148,11 @@ class ConsentView(TemplateView):
         return context
 
 
+class RecommendationsView(TemplateView):
+    """Страница Правила применения рекомендательных технологий."""
+    template_name = 'core/recommendations.html'
+
+
 class WholesaleView(TemplateView):
     """Страница Оптовые продажи."""
     template_name = 'core/wholesale.html'

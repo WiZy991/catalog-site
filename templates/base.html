@@ -495,6 +495,7 @@
                         <li><a href="{% url 'catalog:index' %}">Каталог товаров</a></li>
                         <li><a href="{% url 'core:privacy_policy' %}">Политика конфиденциальности</a></li>
                         <li><a href="{% url 'core:consent' %}">Согласие на обработку персональных данных</a></li>
+                        <li><a href="{% url 'core:recommendations_rules' %}">Правила рекомендательных технологий</a></li>
                     </ul>
                 </div>
                 
@@ -543,7 +544,8 @@
     <div id="cookieConsent" class="cookie-consent" style="display: none;">
         <div class="cookie-consent__content">
             <p class="cookie-consent__text">
-                Мы обрабатываем файлы «cookie» для обеспечения технической функциональности сайта согласно <a href="{% url 'core:privacy_policy' %}#section8">разделу 8</a> нашей <a href="{% url 'core:privacy_policy' %}" target="_blank">Политики в отношении обработки персональных данных</a> (прочитайте до нажатия кнопки). Вы можете отключить их в браузере или согласиться на их использование, нажав кнопку «Принять».
+                Мы обрабатываем файлы «cookie» для обеспечения технической функциональности сайта согласно <a href="{% url 'core:privacy_policy' %}#section8">разделу 8</a> нашей <a href="{% url 'core:privacy_policy' %}" target="_blank" rel="noopener">Политики в отношении обработки персональных данных</a> (прочитайте до нажатия кнопки). Вы можете отключить их в браузере или согласиться на их использование, нажав кнопку «Принять».
+                Мы также применяем рекомендательные технологии. Ознакомьтесь с <a href="{% url 'core:recommendations_rules' %}" target="_blank" rel="noopener">правилами применения</a> до нажатия кнопки «Принять».
             </p>
             <button id="cookieAcceptBtn" class="btn btn--primary cookie-consent__btn">
                 Принять
