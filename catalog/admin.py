@@ -3,6 +3,7 @@ from django.contrib import messages
 from django import forms
 from django.utils.html import format_html
 from django.http import HttpResponse
+from django.db.models import Q
 from mptt.admin import DraggableMPTTAdmin
 from import_export import resources, fields
 from import_export.admin import ImportExportModelAdmin
@@ -369,6 +370,31 @@ class PriceFilter(admin.SimpleListFilter):
         return queryset
 
 
+class PriceTypeFilter(admin.SimpleListFilter):
+    """Фильтр по типу цены товара."""
+    title = 'Тип цены'
+    parameter_name = 'price_type'
+
+    def lookups(self, request, model_admin):
+        return [
+            ('retail', 'Розничная (price > 0)'),
+            ('wholesale', 'Оптовая (wholesale_price > 0)'),
+            ('both', 'Обе цены'),
+            ('none', 'Без цены'),
+        ]
+
+    def queryset(self, request, queryset):
+        if self.value() == 'retail':
+            return queryset.filter(price__gt=0)
+        if self.value() == 'wholesale':
+            return queryset.filter(wholesale_price__gt=0)
+        if self.value() == 'both':
+            return queryset.filter(price__gt=0, wholesale_price__gt=0)
+        if self.value() == 'none':
+            return queryset.filter(price=0).filter(Q(wholesale_price__isnull=True) | Q(wholesale_price=0))
+        return queryset
+
+
 @admin.register(Product)
 class ProductAdmin(ImportExportModelAdmin, FarpostExportMixin, admin.ModelAdmin):
     """Админка для товаров."""
@@ -378,7 +404,10 @@ class ProductAdmin(ImportExportModelAdmin, FarpostExportMixin, admin.ModelAdmin)
         'price', 'wholesale_price', 'availability', 'is_active', 'created_at'
     ]
     list_display_links = ['name']
-    list_filter = ['is_active', 'is_featured', 'condition', 'availability', 'category', 'brand', PriceFilter]
+    list_filter = [
+        'catalog_type', 'is_active', 'is_featured', 'condition', 'availability', 'category', 'brand',
+        PriceFilter, PriceTypeFilter
+    ]
     list_editable = ['price', 'wholesale_price', 'availability', 'is_active']
     search_fields = ['name', 'external_id', 'article', 'brand', 'cross_numbers', 'applicability']
     prepopulated_fields = {'slug': ('name',)}

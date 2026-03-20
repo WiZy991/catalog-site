@@ -912,6 +912,12 @@
         opacity: 0.5;
         cursor: not-allowed;
     }
+
+    .add-to-cart-btn.is-in-cart {
+        background: #16a34a !important;
+        border-color: #16a34a !important;
+        color: #fff !important;
+    }
     
     .products-table__quantity {
         white-space: nowrap;
@@ -1659,6 +1665,39 @@ function getCookie(name) {
 }
 
 document.addEventListener('DOMContentLoaded', function() {
+    const CART_PRODUCTS_STORAGE_KEY = 'partnersCartProductIds';
+
+    function getCartProductIds() {
+        try {
+            return JSON.parse(localStorage.getItem(CART_PRODUCTS_STORAGE_KEY) || '[]');
+        } catch (e) {
+            return [];
+        }
+    }
+
+    function setCartProductIds(ids) {
+        try {
+            localStorage.setItem(
+                CART_PRODUCTS_STORAGE_KEY,
+                JSON.stringify(Array.from(new Set(ids.map(String))))
+            );
+        } catch (e) {
+            // ignore localStorage errors
+        }
+    }
+
+    function markInCart(productId) {
+        const id = String(productId);
+        document.querySelectorAll('.add-to-cart-btn[data-product-id="' + id + '"]').forEach(function(btn) {
+            btn.classList.add('is-in-cart');
+            btn.innerHTML = '<i class="bi bi-cart-check-fill"></i> В корзине';
+            btn.disabled = false;
+        });
+    }
+
+    // Восстановление подсветки "В корзине" после перезагрузки страницы.
+    getCartProductIds().forEach(markInCart);
+
     // Аккордеон для категорий
     document.querySelectorAll('.category-list__toggle').forEach(function(toggle) {
         toggle.addEventListener('click', function(e) {
@@ -1766,8 +1805,11 @@ document.addEventListener('DOMContentLoaded', function() {
                         }
                     }
                     
-                    // Показываем уведомление
-                    alert(data.message || 'Товар добавлен в корзину');
+                    // Без всплывающих окон: визуально отмечаем кнопку как "в корзине"
+                    markInCart(productId);
+                    const ids = getCartProductIds();
+                    ids.push(String(productId));
+                    setCartProductIds(ids);
                     
                     // Сбрасываем количество
                     if (input) {
@@ -1782,9 +1824,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 alert('Произошла ошибка при добавлении товара');
             })
             .finally(() => {
-                // Разблокируем кнопку
-                this.disabled = false;
-                this.innerHTML = originalText;
+                // Если не добавили в корзину — возвращаем исходную кнопку.
+                if (!this.classList.contains('is-in-cart')) {
+                    this.disabled = false;
+                    this.innerHTML = originalText;
+                }
             });
         });
     });
@@ -1793,6 +1837,13 @@ document.addEventListener('DOMContentLoaded', function() {
     fetch('{% url "partners:cart_count" %}')
         .then(response => response.json())
         .then(data => {
+            if (!data.count || Number(data.count) <= 0) {
+                setCartProductIds([]);
+                document.querySelectorAll('.add-to-cart-btn.is-in-cart').forEach(function(btn) {
+                    btn.classList.remove('is-in-cart');
+                    btn.innerHTML = '<i class="bi bi-cart-plus"></i> В корз.';
+                });
+            }
             if (data.count > 0) {
                     // Обновляем кнопки в черной полосе (partner-header)
                     const partnerHeaderActions = document.querySelector('.partner-header__actions');

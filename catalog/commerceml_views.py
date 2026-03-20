@@ -62,9 +62,13 @@ def _clean_offer_product_name(name: str) -> str:
         s = re.sub(r',\s*\)', ')', s)
         s = re.sub(r'\(\s*\)', '', s)
         s = re.sub(r',\s*,', ',', s)
-        s = s.strip(' ,()')
+        # Не срезаем скобки по краям, чтобы не терять закрывающую скобку в валидных названиях.
+        s = s.strip(' ,')
         s = re.sub(r',\s*,', ',', s)
         s = s.strip()
+        # Если есть незакрытая "(", добавляем закрывающую ")".
+        if s.count('(') > s.count(')'):
+            s = s + ')'
     except Exception:
         pass
     return s
@@ -2285,6 +2289,30 @@ def process_offers_file_single_pass(root, namespaces, filename, request=None):
                 continue
         return total if found else 0
 
+    def _extract_article(offer_elem):
+        # 1) Пытаемся найти Артикул1 в ХарактеристикиТовара
+        characteristics_elem = _find(offer_elem, 'ХарактеристикиТовара')
+        if characteristics_elem is not None:
+            for char_elem in characteristics_elem.findall('.//*'):
+                name_elem = _find(char_elem, 'Наименование')
+                value_elem = _find(char_elem, 'Значение')
+                if name_elem is None or value_elem is None or not name_elem.text or not value_elem.text:
+                    continue
+                char_name = name_elem.text.strip().lower()
+                char_value = value_elem.text.strip()
+                if char_name in ['артикул1', 'артикул 1', 'article1', 'article 1'] and char_value:
+                    return char_value
+
+        # 2) Если не нашли, пробуем взять из имени по шаблону: "Название (БРЕНД, АРТИКУЛ, ...)"
+        name_elem = _find(offer_elem, 'Наименование')
+        raw_name = name_elem.text.strip() if (name_elem is not None and name_elem.text) else ''
+        if raw_name and '(' in raw_name and ')' in raw_name:
+            inside = raw_name[raw_name.find('(') + 1: raw_name.rfind(')')]
+            parts = [p.strip() for p in inside.split(',') if p.strip()]
+            if len(parts) >= 2:
+                return parts[1]
+        return ''
+
     for offer_elem in offers:
         close_old_connections()
         product_id_elem = _find(offer_elem, 'Ид')
@@ -2297,6 +2325,7 @@ def process_offers_file_single_pass(root, namespaces, filename, request=None):
         name_elem = _find(offer_elem, 'Наименование')
         raw_offer_name = name_elem.text.strip() if (name_elem is not None and name_elem.text) else ''
         offer_name = _clean_offer_product_name(raw_offer_name) if raw_offer_name else product_id
+        article = _extract_article(offer_elem)
         quantity = _parse_quantity(offer_elem)
         retail_price, wholesale_price = _parse_prices(offer_elem)
 
@@ -2310,7 +2339,7 @@ def process_offers_file_single_pass(root, namespaces, filename, request=None):
                         category = Category.objects.filter(parent=None, is_active=True).first()
                     product = Product(
                         external_id=product_id,
-                        article='',
+                        article=article,
                         name=offer_name,
                         category=category,
                         catalog_type=catalog_type,
@@ -2320,6 +2349,8 @@ def process_offers_file_single_pass(root, namespaces, filename, request=None):
                     )
 
                 product.name = offer_name
+                if article:
+                    product.article = article
                 product.quantity = quantity
                 product.availability = 'in_stock' if quantity > 0 else 'out_of_stock'
                 product.is_active = quantity > 0
@@ -2332,7 +2363,7 @@ def process_offers_file_single_pass(root, namespaces, filename, request=None):
                     save_with_retry(product)
                     stats[catalog_type]['created'] += 1
                 else:
-                    fields = ['name', 'quantity', 'availability', 'is_active']
+                    fields = ['name', 'article', 'quantity', 'availability', 'is_active']
                     fields.append('price' if catalog_type == 'retail' else 'wholesale_price')
                     save_with_retry(product, update_fields=fields)
                     stats[catalog_type]['updated'] += 1

@@ -449,6 +449,25 @@ function getCookie(name) {
 }
 
 document.addEventListener('DOMContentLoaded', function() {
+    const CART_PRODUCTS_STORAGE_KEY = 'partnersCartProductIds';
+
+    function setCartProductIds(ids) {
+        try {
+            localStorage.setItem(
+                CART_PRODUCTS_STORAGE_KEY,
+                JSON.stringify(Array.from(new Set((ids || []).map(String))))
+            );
+        } catch (e) {
+            // ignore localStorage errors
+        }
+    }
+
+    // При открытии корзины синхронизируем localStorage с фактическим содержимым корзины.
+    const currentIds = Array.from(document.querySelectorAll('.cart-item[data-product-id]'))
+        .map(el => el.getAttribute('data-product-id'))
+        .filter(Boolean);
+    setCartProductIds(currentIds);
+
     // Обновление количества
     document.querySelectorAll('.quantity-btn').forEach(function(btn) {
         btn.addEventListener('click', function() {
@@ -497,6 +516,11 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     function removeCartItem(productId) {
+        // Сразу обновляем localStorage, чтобы в каталоге снималась подсветка "В корзине".
+        const leftIds = Array.from(document.querySelectorAll('.cart-item[data-product-id]'))
+            .map(el => el.getAttribute('data-product-id'))
+            .filter(id => id && String(id) !== String(productId));
+        setCartProductIds(leftIds);
         updateCartItem(productId, 0);
     }
 });
