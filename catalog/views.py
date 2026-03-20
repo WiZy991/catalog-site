@@ -496,6 +496,15 @@ class ProductView(DetailView):
             if key_lower in article2_keys and value:
                 article2_value = str(value).strip()
                 break
+
+        # Fallback: если Артикул2/OEM не пришёл в характеристиках,
+        # иногда OEM хранится внутри наименования как "12345-67890".
+        if not article2_value:
+            import re
+            name = str(product.name or '')
+            m = re.search(r'\b\d{4,6}-\d{4,6}\b', name)
+            if m:
+                article2_value = m.group(0)
         # Исключаем материалы и другие ненужные характеристики
         excluded_keys = ['прокладка', 'gasket', 'паронит', 'paronit', 'материал', 'material']
         characteristics = []
@@ -507,9 +516,16 @@ class ProductView(DetailView):
                 # В карточке товара поле "Артикул2" показываем как "Кросс-номер".
                 if key_lower in article2_keys and product.article:
                     characteristics.append(('Кросс-номер', product.article))
-                elif key_lower in ('размер', 'size'):
+                elif ('размер' in key_lower) or ('size' in key_lower):
                     has_size_in_source = True
-                    characteristics.append(('Характеристики', value))
+                    # Иногда 1С ошибочно кладёт код двигателя в поле "Размер" (например: "3VZ/5VZ").
+                    v = str(value).strip()
+                    # Признак кода двигателя: буквы+цифры (часто без "/" тоже бывает, напр. "F23A").
+                    is_engine_code = bool(re.search(r'[A-Za-zА-Яа-я]', v)) and bool(re.search(r'\d', v))
+                    if is_engine_code:
+                        characteristics.append(('Двигатель', v))
+                    else:
+                        characteristics.append(('Характеристики', v))
                 else:
                     characteristics.append((key, value))
 
@@ -522,7 +538,28 @@ class ProductView(DetailView):
         if name_parts and not has_size_in_source:
             size_candidate = name_parts[-1]
             if size_candidate:
-                characteristics.append(('Характеристики', size_candidate))
+                import re
+                # Fallback: размер в названии часто стоит сразу после кода двигателя,
+                # поэтому пробуем взять "следующий сегмент после двигателя".
+                def _looks_like_engine_code(s: str) -> bool:
+                    s = str(s or '').strip()
+                    if not s:
+                        return False
+                    return bool(re.search(r'[A-Za-zА-Яа-я]', s)) and bool(re.search(r'\d', s))
+
+                engine_idx = None
+                # Ищем ПОСЛЕДНИЙ сегмент, который похож на код двигателя,
+                # чтобы брать размер именно после "самого позднего" двигателя в названии.
+                for i in range(len(name_parts) - 1, -1, -1):
+                    if _looks_like_engine_code(name_parts[i]):
+                        engine_idx = i
+                        break
+                if engine_idx is not None and engine_idx + 1 < len(name_parts):
+                    size_candidate = name_parts[engine_idx + 1]
+
+                s = str(size_candidate).strip()
+                if s and ('/' not in s) and (not _looks_like_engine_code(s)):
+                    characteristics.append(('Характеристики', s))
 
         if name_parts and 'двигатель' not in existing_keys and 'engine' not in existing_keys:
             for part in reversed(name_parts[:-1] if len(name_parts) > 1 else name_parts):
