@@ -1,3 +1,5 @@
+from urllib.parse import urlencode
+
 from django.contrib import admin
 from django.contrib import messages
 from django.contrib.auth.models import User
@@ -322,13 +324,63 @@ class PartnerOrderItemInline(admin.TabularInline):
     get_total.short_description = 'Сумма'
 
 
+class PartnerMultiSelectFilter(admin.SimpleListFilter):
+    """Мультивыбор партнёров в фильтре заказов."""
+    title = 'Партнёры'
+    parameter_name = 'partners'
+
+    def lookups(self, request, model_admin):
+        partners = Partner.objects.order_by('full_name').values_list('id', 'full_name')
+        return [(str(pid), name or f'Партнёр #{pid}') for pid, name in partners]
+
+    def queryset(self, request, queryset):
+        value = self.value()
+        if not value:
+            return queryset
+        ids = [v for v in value.split(',') if v.isdigit()]
+        if not ids:
+            return queryset
+        return queryset.filter(partner_id__in=ids)
+
+    def choices(self, changelist):
+        current_raw = self.value() or ''
+        current = [v for v in current_raw.split(',') if v]
+        current_set = set(current)
+
+        base_params = changelist.params.copy()
+        base_params.pop(self.parameter_name, None)
+
+        yield {
+            'selected': not current_set,
+            'query_string': f"?{urlencode(base_params, doseq=True)}" if base_params else '?',
+            'display': 'Все',
+        }
+
+        for lookup, title in self.lookup_choices:
+            updated = set(current_set)
+            if lookup in updated:
+                updated.remove(lookup)
+            else:
+                updated.add(lookup)
+
+            params = base_params.copy()
+            if updated:
+                params[self.parameter_name] = ','.join(sorted(updated, key=int))
+
+            yield {
+                'selected': lookup in current_set,
+                'query_string': f"?{urlencode(params, doseq=True)}" if params else '?',
+                'display': title,
+            }
+
+
 @admin.register(PartnerOrder)
 class PartnerOrderAdmin(admin.ModelAdmin):
     """Админка для заказов партнёров."""
     list_display = [
         'id', 'partner', 'status_badge', 'created_at', 'total_price', 'total_quantity'
     ]
-    list_filter = ['partner', 'status', 'created_at']
+    list_filter = [PartnerMultiSelectFilter, 'status', 'created_at']
     search_fields = ['partner__full_name', 'partner__company_name', 'id']
     readonly_fields = ['created_at', 'updated_at']
     inlines = [PartnerOrderItemInline]
