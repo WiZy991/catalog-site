@@ -503,18 +503,29 @@ class ProductView(DetailView):
             key_lower = key.lower().strip()
             # Пропускаем материалы и другие ненужные характеристики
             if not any(excluded in key_lower for excluded in excluded_keys):
-                # Если это размер, проверяем, что это действительно размер (содержит числа и * или x)
-                if 'размер' in key_lower or 'size' in key_lower:
-                    import re
-                    # Размер должен содержать числа и * или x (например, 20*450, 260*170*10*29)
-                    if re.search(r'\d+[*x]\d+', value):
-                        characteristics.append((key, value))
+                # В карточке товара поле "Артикул2" показываем как "Кросс-номер".
+                if key_lower in article2_keys and product.article:
+                    characteristics.append(('Кросс-номер', product.article))
                 else:
-                    # В карточке товара поле "Артикул2" показываем как "Кросс-номер".
-                    if key_lower in article2_keys and product.article:
-                        characteristics.append(('Кросс-номер', product.article))
-                    else:
-                        characteristics.append((key, value))
+                    characteristics.append((key, value))
+
+        # Fallback: если "Размер" или "Двигатель" не пришли из XML,
+        # пытаемся извлечь их из названия товара (последние сегменты после запятых).
+        import re
+        existing_keys = {str(k).strip().lower() for k, _ in characteristics}
+        name_parts = [p.strip() for p in (product.name or '').split(',') if p and p.strip()]
+
+        if name_parts and 'размер' not in existing_keys and 'size' not in existing_keys:
+            size_candidate = name_parts[-1]
+            if size_candidate:
+                characteristics.append(('Размер', size_candidate))
+
+        if name_parts and 'двигатель' not in existing_keys and 'engine' not in existing_keys:
+            for part in reversed(name_parts[:-1] if len(name_parts) > 1 else name_parts):
+                # Пример: 1Y/2Y/3Y/4Y, 1HD/1HZ, 2GR и т.п.
+                if re.search(r'[A-Za-zА-Яа-я]', part) and (('/' in part) or re.search(r'\d', part)):
+                    characteristics.append(('Двигатель', part))
+                    break
         
         # Добавляем вольтаж, если он есть в применимости
         voltage = product.get_voltage_from_applicability()
