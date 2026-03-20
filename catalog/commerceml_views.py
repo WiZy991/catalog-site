@@ -48,6 +48,28 @@ def _get_full_external_id_from_product_data(product_data: dict) -> str:
     return ''
 
 
+def _clean_offer_product_name(name: str) -> str:
+    """Нормализует наименование товара из offers.xml."""
+    if not name:
+        return ''
+    s = str(name).strip()
+    if not s:
+        return ''
+    try:
+        s = re.sub(r',+', ',', s)
+        s = re.sub(r'\s+', ' ', s)
+        s = re.sub(r'\(\s*,', '(', s)
+        s = re.sub(r',\s*\)', ')', s)
+        s = re.sub(r'\(\s*\)', '', s)
+        s = re.sub(r',\s*,', ',', s)
+        s = s.strip(' ,()')
+        s = re.sub(r',\s*,', ',', s)
+        s = s.strip()
+    except Exception:
+        pass
+    return s
+
+
 def save_with_retry(instance, update_fields=None, max_retries=5, delay=0.2):
     """
     Надёжное сохранение объекта с повтором при 'database is locked' (SQLite).
@@ -2273,7 +2295,8 @@ def process_offers_file_single_pass(root, namespaces, filename, request=None):
             continue
 
         name_elem = _find(offer_elem, 'Наименование')
-        offer_name = name_elem.text.strip() if (name_elem is not None and name_elem.text) else product_id
+        raw_offer_name = name_elem.text.strip() if (name_elem is not None and name_elem.text) else ''
+        offer_name = _clean_offer_product_name(raw_offer_name) if raw_offer_name else product_id
         quantity = _parse_quantity(offer_elem)
         retail_price, wholesale_price = _parse_prices(offer_elem)
 
