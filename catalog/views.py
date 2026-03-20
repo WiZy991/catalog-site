@@ -489,6 +489,13 @@ class ProductView(DetailView):
         
         # Получаем характеристики и фильтруем ненужные
         all_characteristics = product.get_characteristics_list()
+        article2_value = ''
+        article2_keys = ('артикул2', 'article2', 'oem', 'oem номер', 'oem-номер')
+        for key, value in all_characteristics:
+            key_lower = str(key).lower().strip()
+            if key_lower in article2_keys and value:
+                article2_value = str(value).strip()
+                break
         # Исключаем материалы и другие ненужные характеристики
         excluded_keys = ['прокладка', 'gasket', 'паронит', 'paronit', 'материал', 'material']
         characteristics = []
@@ -503,7 +510,11 @@ class ProductView(DetailView):
                     if re.search(r'\d+[*x]\d+', value):
                         characteristics.append((key, value))
                 else:
-                    characteristics.append((key, value))
+                    # В карточке товара поле "Артикул2" показываем как "Кросс-номер".
+                    if key_lower in article2_keys and product.article:
+                        characteristics.append(('Кросс-номер', product.article))
+                    else:
+                        characteristics.append((key, value))
         
         # Добавляем вольтаж, если он есть в применимости
         voltage = product.get_voltage_from_applicability()
@@ -516,6 +527,7 @@ class ProductView(DetailView):
         context['characteristics'] = characteristics
         context['cross_numbers'] = product.get_cross_numbers_list()
         context['applicability'] = product.get_applicability_list()
+        context['article2_value'] = article2_value
         
         return context
 

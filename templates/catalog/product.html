@@ -115,14 +115,9 @@
                 <h1 class="product-info__title">{{ product.name }}</h1>
                 
                 <div class="product-info__meta">
-                    {% if product.article %}
+                    {% if article2_value %}
                     <span class="product-meta__item">
-                        <strong>Кросс-номер:</strong> {{ product.article }}
-                    </span>
-                    {% endif %}
-                    {% if product.brand %}
-                    <span class="product-meta__item">
-                        <strong>Применимость:</strong> {{ product.brand }}
+                        <strong>OEM номер:</strong> {{ article2_value }}
                     </span>
                     {% endif %}
                     <span class="product-meta__item">
@@ -168,7 +163,7 @@
                 <div class="product-info__content">
                     <!-- Характеристики -->
                     <div class="product-info__section">
-                        <h3 class="product-info__section-title">Характеристики</h3>
+                        <h3 class="product-info__section-title">Применимость и характеристики</h3>
                         {% if characteristics %}
                         <div class="characteristics-list">
                             {% for key, value in characteristics %}
@@ -183,23 +178,6 @@
                         {% endif %}
                     </div>
                     
-                    <!-- Применимость -->
-                    {% if applicability %}
-                        {% for item in applicability %}
-                            {% if item %}
-                                {% if forloop.first %}
-                    <div class="product-info__section">
-                        <h3 class="product-info__section-title">Применимость</h3>
-                        <ul class="applicability-list">
-                                {% endif %}
-                            <li>{{ item }}</li>
-                                {% if forloop.last %}
-                        </ul>
-                    </div>
-                                {% endif %}
-                            {% endif %}
-                        {% endfor %}
-                    {% endif %}
                 </div>
                 
                 <div class="product-info__actions">
