@@ -43,7 +43,9 @@
                 {% if product.get_characteristics_list %}
                 <div class="product-card__characteristics">
                     {% for key, value in product.get_characteristics_list|slice:":2" %}
+                    {% if key != 'Артикул2' and key != 'article2' and key != 'OEM' and key != 'oem' %}
                     <span class="product-card__char-item">{{ key }}: {{ value|truncatechars:30 }}</span>
+                    {% endif %}
                     {% endfor %}
                 </div>
                 {% endif %}
