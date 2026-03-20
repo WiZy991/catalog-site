@@ -56,19 +56,15 @@ def _clean_offer_product_name(name: str) -> str:
     if not s:
         return ''
     try:
-        s = re.sub(r',+', ',', s)
         s = re.sub(r'\s+', ' ', s)
-        s = re.sub(r'\(\s*,', '(', s)
-        s = re.sub(r',\s*\)', ')', s)
-        s = re.sub(r'\(\s*\)', '', s)
-        s = re.sub(r',\s*,', ',', s)
-        # Не срезаем скобки по краям, чтобы не терять закрывающую скобку в валидных названиях.
-        s = s.strip(' ,')
-        s = re.sub(r',\s*,', ',', s)
-        s = s.strip()
-        # Если есть незакрытая "(", добавляем закрывающую ")".
-        if s.count('(') > s.count(')'):
-            s = s + ')'
+        # По задаче убираем обе скобки из наименования.
+        s = s.replace('(', ' ').replace(')', ' ')
+        s = re.sub(r'\s+', ' ', s)
+        # Удаляем лишние запятые и пустые элементы после разбиения.
+        s = re.sub(r',+', ',', s)
+        parts = [part.strip() for part in s.split(',')]
+        parts = [part for part in parts if part]
+        s = ', '.join(parts).strip(' ,')
     except Exception:
         pass
     return s
@@ -2313,6 +2309,84 @@ def process_offers_file_single_pass(root, namespaces, filename, request=None):
                 return parts[1]
         return ''
 
+    def _extract_characteristics_and_applicability(offer_elem):
+        characteristics_parts = []
+        applicability_parts = []
+        seen_chars = set()
+        seen_app = set()
+
+        def _add_char(name, value):
+            if not name or not value:
+                return
+            line = f"{name}: {value}"
+            if line not in seen_chars:
+                seen_chars.add(line)
+                characteristics_parts.append(line)
+
+        def _add_app(value):
+            if not value:
+                return
+            v = str(value).strip()
+            if not v:
+                return
+            key = v.lower()
+            if key not in seen_app:
+                seen_app.add(key)
+                applicability_parts.append(v)
+
+        def _is_applicability_key(name):
+            n = str(name).strip().lower()
+            return any(token in n for token in (
+                'примен', 'модель', 'двигател', 'кузов', 'марка', 'авто', 'engine', 'body'
+            ))
+
+        # 1) ХарактеристикиТовара
+        characteristics_elem = _find(offer_elem, 'ХарактеристикиТовара')
+        if characteristics_elem is not None:
+            for char_elem in characteristics_elem.findall('.//*'):
+                name_elem = _find(char_elem, 'Наименование')
+                value_elem = _find(char_elem, 'Значение')
+                if name_elem is None or value_elem is None or not name_elem.text or not value_elem.text:
+                    continue
+                char_name = name_elem.text.strip()
+                char_value = value_elem.text.strip()
+                if not char_name or not char_value:
+                    continue
+                if char_name.lower() in ('артикул', 'артикул1', 'article', 'article1'):
+                    continue
+                _add_char(char_name, char_value)
+                if _is_applicability_key(char_name):
+                    _add_app(char_value)
+
+        # 2) ЗначенияСвойства
+        props_elem = _find(offer_elem, 'ЗначенияСвойств')
+        if props_elem is not None:
+            if namespace:
+                prop_items = props_elem.findall(f'{{{namespace}}}ЗначенияСвойства')
+            else:
+                prop_items = []
+            if not prop_items:
+                prop_items = props_elem.findall('ЗначенияСвойства')
+
+            for item in prop_items:
+                name_elem = _find(item, 'Наименование')
+                value_elem = _find(item, 'Значение')
+                if name_elem is None or value_elem is None or not name_elem.text or not value_elem.text:
+                    continue
+                prop_name = name_elem.text.strip()
+                prop_value = value_elem.text.strip()
+                if not prop_name or not prop_value:
+                    continue
+                if prop_name.lower() in ('артикул', 'артикул1', 'article', 'article1'):
+                    continue
+                _add_char(prop_name, prop_value)
+                if _is_applicability_key(prop_name):
+                    _add_app(prop_value)
+
+        characteristics_text = '\n'.join(characteristics_parts).strip()
+        applicability_text = ', '.join(applicability_parts).strip()
+        return characteristics_text, applicability_text
+
     for offer_elem in offers:
         close_old_connections()
         product_id_elem = _find(offer_elem, 'Ид')
@@ -2326,6 +2400,7 @@ def process_offers_file_single_pass(root, namespaces, filename, request=None):
         raw_offer_name = name_elem.text.strip() if (name_elem is not None and name_elem.text) else ''
         offer_name = _clean_offer_product_name(raw_offer_name) if raw_offer_name else product_id
         article = _extract_article(offer_elem)
+        characteristics_text, applicability_text = _extract_characteristics_and_applicability(offer_elem)
         quantity = _parse_quantity(offer_elem)
         retail_price, wholesale_price = _parse_prices(offer_elem)
 
@@ -2343,6 +2418,8 @@ def process_offers_file_single_pass(root, namespaces, filename, request=None):
                         name=offer_name,
                         category=category,
                         catalog_type=catalog_type,
+                        characteristics=characteristics_text,
+                        applicability=applicability_text,
                         quantity=0,
                         availability='out_of_stock',
                         is_active=False,
@@ -2351,6 +2428,8 @@ def process_offers_file_single_pass(root, namespaces, filename, request=None):
                 product.name = offer_name
                 if article:
                     product.article = article
+                product.characteristics = characteristics_text
+                product.applicability = applicability_text
                 product.quantity = quantity
                 product.availability = 'in_stock' if quantity > 0 else 'out_of_stock'
                 product.is_active = quantity > 0
@@ -2363,7 +2442,7 @@ def process_offers_file_single_pass(root, namespaces, filename, request=None):
                     save_with_retry(product)
                     stats[catalog_type]['created'] += 1
                 else:
-                    fields = ['name', 'article', 'quantity', 'availability', 'is_active']
+                    fields = ['name', 'article', 'characteristics', 'applicability', 'quantity', 'availability', 'is_active']
                     fields.append('price' if catalog_type == 'retail' else 'wholesale_price')
                     save_with_retry(product, update_fields=fields)
                     stats[catalog_type]['updated'] += 1
