@@ -528,8 +528,14 @@ class ProductView(DetailView):
                     has_size_in_source = True
                     # Иногда 1С ошибочно кладёт код двигателя в поле "Размер" (например: "3VZ/5VZ").
                     v = str(value).strip()
-                    # Признак кода двигателя: буквы+цифры (часто без "/" тоже бывает, напр. "F23A").
-                    is_engine_code = bool(re.search(r'[A-Za-zА-Яа-я]', v)) and bool(re.search(r'\d', v))
+                    # Признак кода двигателя:
+                    # - обычно есть "/" (например: "1ARFE/2ZRFE", "EW/EV")
+                    # - либо есть буквы+цифры (например: "F23A")
+                    # Cross-номер/прочее обычно содержит "-" (мы его ниже не рассматриваем).
+                    is_engine_code = (
+                        ('/' in v and bool(re.search(r'[A-Za-zА-Яа-я]', v)))
+                        or (bool(re.search(r'[A-Za-zА-Яа-я]', v)) and bool(re.search(r'\d', v)))
+                    ) and ('-' not in v) and (not v.strip().startswith('/'))
                     if is_engine_code:
                         characteristics.append(('Двигатель', v))
                     else:
@@ -580,8 +586,11 @@ class ProductView(DetailView):
                 # Варианты вида "/022248" не берем как двигатель
                 if s.startswith('/'):
                     return False
-                # Двигатель — это буквы+цифры (часто с "/")
-                return bool(re.search(r'[A-Za-zА-Яа-я]', s)) and bool(re.search(r'\d', s))
+                # Двигатель — это либо "буквы+цифры", либо коды типа "EW/EV" (есть "/",
+                # но цифр может не быть). Не принимаем cross-номера с "-" и значения вида "/022248".
+                has_letters = bool(re.search(r'[A-Za-zА-Яа-я]', s))
+                has_digits = bool(re.search(r'\d', s))
+                return ('/' in s and has_letters and '-' not in s and not s.startswith('/')) or (has_letters and has_digits and '-' not in s)
 
             for part in reversed(name_parts):
                 if _looks_like_engine_token(part):
