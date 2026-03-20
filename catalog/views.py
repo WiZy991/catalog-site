@@ -505,6 +505,14 @@ class ProductView(DetailView):
             m = re.search(r'\b\d{4,6}-\d{4,6}\b', name)
             if m:
                 article2_value = m.group(0)
+
+        # Если Артикул2 в 1С приходит как "/022248" (т.е. не похоже на полный OEM),
+        # подставляем "полный" OEM вида "90947-02247" из названия.
+        if article2_value:
+            import re
+            full_oem = re.search(r'\b\d{4,6}-\d{4,6}\b', str(product.name or ''))
+            if str(article2_value).strip().startswith('/') and full_oem:
+                article2_value = full_oem.group(0)
         # Исключаем материалы и другие ненужные характеристики
         excluded_keys = ['прокладка', 'gasket', 'паронит', 'paronit', 'материал', 'material']
         characteristics = []
@@ -562,9 +570,21 @@ class ProductView(DetailView):
                     characteristics.append(('Характеристики', s))
 
         if name_parts and 'двигатель' not in existing_keys and 'engine' not in existing_keys:
-            for part in reversed(name_parts[:-1] if len(name_parts) > 1 else name_parts):
-                # Пример: 1Y/2Y/3Y/4Y, 1HD/1HZ, 2GR и т.п.
-                if re.search(r'[A-Za-zА-Яа-я]', part) and (('/' in part) or re.search(r'\d', part)):
+            def _looks_like_engine_token(s: str) -> bool:
+                s = str(s or '').strip()
+                if not s:
+                    return False
+                # Cross-номер содержит "-"
+                if '-' in s:
+                    return False
+                # Варианты вида "/022248" не берем как двигатель
+                if s.startswith('/'):
+                    return False
+                # Двигатель — это буквы+цифры (часто с "/")
+                return bool(re.search(r'[A-Za-zА-Яа-я]', s)) and bool(re.search(r'\d', s))
+
+            for part in reversed(name_parts):
+                if _looks_like_engine_token(part):
                     characteristics.append(('Двигатель', part))
                     break
         
