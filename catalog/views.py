@@ -506,6 +506,8 @@ class ProductView(DetailView):
                 # В карточке товара поле "Артикул2" показываем как "Кросс-номер".
                 if key_lower in article2_keys and product.article:
                     characteristics.append(('Кросс-номер', product.article))
+                elif key_lower in ('размер', 'size'):
+                    characteristics.append(('Характеристики', value))
                 else:
                     characteristics.append((key, value))
 
@@ -518,7 +520,7 @@ class ProductView(DetailView):
         if name_parts and 'размер' not in existing_keys and 'size' not in existing_keys:
             size_candidate = name_parts[-1]
             if size_candidate:
-                characteristics.append(('Размер', size_candidate))
+                characteristics.append(('Характеристики', size_candidate))
 
         if name_parts and 'двигатель' not in existing_keys and 'engine' not in existing_keys:
             for part in reversed(name_parts[:-1] if len(name_parts) > 1 else name_parts):
