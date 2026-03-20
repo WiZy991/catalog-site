@@ -528,14 +528,23 @@ class ProductView(DetailView):
                     has_size_in_source = True
                     # Иногда 1С ошибочно кладёт код двигателя в поле "Размер" (например: "3VZ/5VZ").
                     v = str(value).strip()
+                    v_lower = v.lower()
                     # Признак кода двигателя:
                     # - обычно есть "/" (например: "1ARFE/2ZRFE", "EW/EV")
                     # - либо есть буквы+цифры (например: "F23A")
                     # Cross-номер/прочее обычно содержит "-" (мы его ниже не рассматриваем).
+                    # ВАЖНО: значения вроде "12V/1.2KW/9T/ПР/ОТК" нельзя считать кодом двигателя.
+                    contains_characteristic_markers = (
+                        '.' in v
+                        or 'kw' in v_lower
+                        or 'квт' in v_lower
+                        or 'пр' in v_lower
+                        or 'отк' in v_lower
+                    )
                     is_engine_code = (
                         ('/' in v and bool(re.search(r'[A-Za-zА-Яа-я]', v)))
                         or (bool(re.search(r'[A-Za-zА-Яа-я]', v)) and bool(re.search(r'\d', v)))
-                    ) and ('-' not in v) and (not v.strip().startswith('/'))
+                    ) and ('-' not in v) and (not v.strip().startswith('/')) and (not contains_characteristic_markers)
                     if is_engine_code:
                         characteristics.append(('Двигатель', v))
                     else:
@@ -582,6 +591,9 @@ class ProductView(DetailView):
                     return False
                 # Cross-номер содержит "-"
                 if '-' in s:
+                    return False
+                sl = s.lower()
+                if '.' in s or 'kw' in sl or 'квт' in sl or 'пр' in sl or 'отк' in sl:
                     return False
                 # Варианты вида "/022248" не берем как двигатель
                 if s.startswith('/'):
