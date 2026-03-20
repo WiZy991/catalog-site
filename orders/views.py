@@ -43,6 +43,7 @@ def cart_add(request, product_id):
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
             return JsonResponse({
                 'success': True,
+                'product_id': product_id,
                 'cart_count': sum(item['quantity'] for item in cart.values()),
                 'message': f'Товар "{product.name}" добавлен в корзину'
             })
@@ -137,8 +138,12 @@ def cart_count(request):
         for product_id in items_to_remove:
             del cart[product_id]
         set_cart(request, cart)
-    
-    return JsonResponse({'count': total_quantity})
+
+    product_ids = [int(product_id) for product_id in cart.keys()]
+    return JsonResponse({
+        'count': total_quantity,
+        'product_ids': product_ids,
+    })
 
 
 def cart_clear(request):

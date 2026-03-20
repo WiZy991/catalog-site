@@ -156,6 +156,9 @@ function filterProducts(page) {
     })
     .then(function(data) {
         productsGrid.innerHTML = data.html;
+        initCart();
+        applyCartStatesFromStorage();
+        updateCartCount();
         
         const paginationContainer = document.querySelector('.pagination');
         if (paginationContainer) {
@@ -205,9 +208,13 @@ function formatPrice(price) {
 /**
  * Cart functionality
  */
+const CART_PRODUCTS_STORAGE_KEY = 'cartProductIds';
+
 function initCart() {
     // Добавление в корзину
     document.querySelectorAll('.btn-add-cart, .product-card__add-cart').forEach(function(btn) {
+        if (btn.dataset.cartBound === 'true') return;
+        btn.dataset.cartBound = 'true';
         btn.addEventListener('click', function(e) {
             e.preventDefault();
             e.stopPropagation();
@@ -215,6 +222,8 @@ function initCart() {
             addToCart(productId);
         });
     });
+
+    applyCartStatesFromStorage();
 }
 
 function addToCart(productId) {
@@ -230,6 +239,9 @@ function addToCart(productId) {
     })
     .then(function(data) {
         if (data.success) {
+            setProductInCartState(productId, true);
+            saveProductToCartStorage(productId);
+
             // Обновляем счётчик
             const cartCountEl = document.getElementById('cartCount');
             if (cartCountEl) {
@@ -271,6 +283,10 @@ function updateCartCount() {
                 cartCountEl.style.display = 'none';
             }
         }
+
+        if (Array.isArray(data.product_ids)) {
+            syncProductCardStates(data.product_ids);
+        }
     })
     .catch(function() {
         // При ошибке скрываем счётчик
@@ -279,6 +295,77 @@ function updateCartCount() {
             cartCountEl.style.display = 'none';
         }
     });
+}
+
+function setProductInCartState(productId, inCart) {
+    const normalizedId = String(productId);
+    document.querySelectorAll('.product-card__add-cart[data-product-id="' + normalizedId + '"]').forEach(function(btn) {
+        const card = btn.closest('.product-card');
+        const icon = btn.querySelector('i');
+
+        if (inCart) {
+            btn.classList.add('is-in-cart');
+            btn.title = 'Товар уже в корзине';
+            btn.setAttribute('aria-label', 'Товар уже в корзине');
+            if (card) {
+                card.classList.add('is-in-cart');
+            }
+            if (icon) {
+                icon.classList.remove('bi-cart-plus');
+                icon.classList.add('bi-cart-check-fill');
+            }
+        } else {
+            btn.classList.remove('is-in-cart');
+            btn.title = 'Добавить в корзину';
+            btn.setAttribute('aria-label', 'Добавить в корзину');
+            if (card) {
+                card.classList.remove('is-in-cart');
+            }
+            if (icon) {
+                icon.classList.remove('bi-cart-check-fill');
+                icon.classList.add('bi-cart-plus');
+            }
+        }
+    });
+}
+
+function syncProductCardStates(productIds) {
+    const idsSet = new Set(productIds.map(function(id) {
+        return String(id);
+    }));
+
+    document.querySelectorAll('.product-card__add-cart[data-product-id]').forEach(function(btn) {
+        const pid = String(btn.dataset.productId);
+        setProductInCartState(pid, idsSet.has(pid));
+    });
+
+    localStorage.setItem(CART_PRODUCTS_STORAGE_KEY, JSON.stringify(Array.from(idsSet)));
+}
+
+function saveProductToCartStorage(productId) {
+    const idsSet = new Set(getCartProductIdsFromStorage());
+    idsSet.add(String(productId));
+    localStorage.setItem(CART_PRODUCTS_STORAGE_KEY, JSON.stringify(Array.from(idsSet)));
+}
+
+function getCartProductIdsFromStorage() {
+    try {
+        const raw = localStorage.getItem(CART_PRODUCTS_STORAGE_KEY);
+        const parsed = raw ? JSON.parse(raw) : [];
+        if (Array.isArray(parsed)) {
+            return parsed.map(function(id) { return String(id); });
+        }
+        return [];
+    } catch (e) {
+        return [];
+    }
+}
+
+function applyCartStatesFromStorage() {
+    const ids = getCartProductIdsFromStorage();
+    if (ids.length) {
+        syncProductCardStates(ids);
+    }
 }
 
 function getCookie(name) {
