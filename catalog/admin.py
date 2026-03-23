@@ -214,6 +214,7 @@ class FarpostExportMixin:
                 photo_urls.append('')
             
             characteristics = ''
+            export_cross_numbers = (product.cross_numbers or '').strip()
             if product.characteristics:
                 char_list = product.get_characteristics_list()
                 # Убираем дубли с колонкой "Применимость" и нормализуем "Артикул2" -> "OEM"
@@ -229,12 +230,16 @@ class FarpostExportMixin:
 
                 normalized_lines = []
                 seen = set()
+                extracted_cross = []
                 for k, v in char_list:
                     key_norm = str(k).strip().lower()
                     val_str = str(v).strip()
                     if key_norm in ('артикул2', 'article2'):
                         line = f'OEM: {val_str}'
                     else:
+                        if key_norm in ('кросс-номер', 'кросс номер', 'cross numbers', 'cross_numbers', 'примечание', 'note'):
+                            extracted_cross.extend([x.strip() for x in val_str.replace('\n', ',').split(',') if x.strip()])
+                            continue
                         if key_norm in ('двигатель', 'engine', 'кузов', 'body'):
                             if applicability_tokens and _norm_tokens(val_str) <= applicability_tokens:
                                 continue
@@ -243,6 +248,16 @@ class FarpostExportMixin:
                         seen.add(line)
                         normalized_lines.append(line)
                 characteristics = '\n'.join(normalized_lines)
+
+                if not export_cross_numbers and extracted_cross:
+                    uniq = []
+                    seen_x = set()
+                    for x in extracted_cross:
+                        xl = x.lower()
+                        if xl not in seen_x:
+                            seen_x.add(xl)
+                            uniq.append(x)
+                    export_cross_numbers = ', '.join(uniq)
             
             quantity = product.quantity if product.is_active else 0
             
@@ -266,7 +281,7 @@ class FarpostExportMixin:
                 quantity,
                 characteristics,
                 product.applicability or '',
-                product.cross_numbers or '',
+                export_cross_numbers,
                 photo_urls[0],
                 photo_urls[1],
                 photo_urls[2],

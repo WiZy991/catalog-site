@@ -697,10 +697,29 @@ class ProductView(DetailView):
         
         context['characteristics'] = characteristics
 
-        # Для h1 убираем хвост с номерами из "Примечания", чтобы не дублировать его в названии.
+        # Для h1 убираем хвост с кросс-номерами, чтобы не дублировать блок "Кросс-номер" ниже.
         display_name = str(product.name or '')
-        if note_value and note_value in display_name:
-            display_name = display_name.replace(note_value, '').strip(' ,')
+        cross_values = []
+        if product.cross_numbers:
+            cross_values.extend([x.strip() for x in str(product.cross_numbers).replace('\n', ',').split(',') if x.strip()])
+        if note_value:
+            cross_values.extend([x.strip() for x in str(note_value).replace('\n', ',').split(',') if x.strip()])
+        # Убираем дубли, сохраняя порядок
+        uniq_cross = []
+        seen_cross = set()
+        for x in cross_values:
+            xl = x.lower()
+            if xl not in seen_cross:
+                seen_cross.add(xl)
+                uniq_cross.append(x)
+        # Вырезаем найденные кросс-номера из названия
+        for x in uniq_cross:
+            escaped = re.escape(x)
+            display_name = re.sub(rf'(?:,\s*)?{escaped}(?:\s*,)?', ', ', display_name, flags=re.IGNORECASE)
+        # Чистим повторные запятые/пробелы после вырезания
+        display_name = re.sub(r',\s*,+', ', ', display_name)
+        display_name = re.sub(r'\s+,', ',', display_name)
+        display_name = re.sub(r',\s*$', '', display_name).strip()
         context['display_name'] = display_name
         context['cross_numbers'] = product.get_cross_numbers_list()
         context['applicability'] = product.get_applicability_list()

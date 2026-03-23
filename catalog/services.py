@@ -1957,6 +1957,7 @@ def generate_farpost_api_file(products, file_format='xls', request=None):
                 photo_urls.append('')
             
             characteristics = ''
+            export_cross_numbers = (product.cross_numbers or '').strip()
             if product.characteristics:
                 char_list = product.get_characteristics_list()
                 # Набор применимости для фильтрации дублей из характеристик
@@ -1971,6 +1972,7 @@ def generate_farpost_api_file(products, file_format='xls', request=None):
 
                 normalized_lines = []
                 seen = set()
+                extracted_cross = []
                 for k, v in char_list:
                     key_norm = str(k).strip().lower()
                     val_str = str(v).strip()
@@ -1978,6 +1980,9 @@ def generate_farpost_api_file(products, file_format='xls', request=None):
                     if key_norm in ('артикул2', 'article2'):
                         line = f'OEM: {val_str}'
                     else:
+                        if key_norm in ('кросс-номер', 'кросс номер', 'cross numbers', 'cross_numbers', 'примечание', 'note'):
+                            extracted_cross.extend([x.strip() for x in val_str.replace('\n', ',').split(',') if x.strip()])
+                            continue
                         # Фильтруем дубли по применимости: удаляем Кузов/Двигатель, если их значение = применимости
                         if key_norm in ('двигатель', 'engine', 'кузов', 'body'):
                             if _norm_tokens(val_str) <= applicability_tokens and applicability_tokens:
@@ -1987,6 +1992,15 @@ def generate_farpost_api_file(products, file_format='xls', request=None):
                         seen.add(line)
                         normalized_lines.append(line)
                 characteristics = '\n'.join(normalized_lines)
+                if not export_cross_numbers and extracted_cross:
+                    uniq = []
+                    seen_x = set()
+                    for x in extracted_cross:
+                        xl = x.lower()
+                        if xl not in seen_x:
+                            seen_x.add(xl)
+                            uniq.append(x)
+                    export_cross_numbers = ', '.join(uniq)
             
             # Количество: если товар неактивен или снят с продажи — отправляем 0 (сигнал для удаления на Farpost)
             quantity = product.quantity if product.is_active else 0
@@ -2006,7 +2020,7 @@ def generate_farpost_api_file(products, file_format='xls', request=None):
                 quantity,
                 characteristics,
                 product.applicability or '',
-                product.cross_numbers or '',
+                export_cross_numbers,
                 photo_urls[0],
                 photo_urls[1],
                 photo_urls[2],
@@ -2053,6 +2067,7 @@ def generate_farpost_api_file(products, file_format='xls', request=None):
                 photo_urls.append('')
             
             characteristics = ''
+            export_cross_numbers = (product.cross_numbers or '').strip()
             if product.characteristics:
                 char_list = product.get_characteristics_list()
                 def _norm_tokens(s: str) -> set[str]:
@@ -2066,12 +2081,16 @@ def generate_farpost_api_file(products, file_format='xls', request=None):
 
                 normalized_lines = []
                 seen = set()
+                extracted_cross = []
                 for k, v in char_list:
                     key_norm = str(k).strip().lower()
                     val_str = str(v).strip()
                     if key_norm in ('артикул2', 'article2'):
                         line = f'OEM: {val_str}'
                     else:
+                        if key_norm in ('кросс-номер', 'кросс номер', 'cross numbers', 'cross_numbers', 'примечание', 'note'):
+                            extracted_cross.extend([x.strip() for x in val_str.replace('\n', ',').split(',') if x.strip()])
+                            continue
                         if key_norm in ('двигатель', 'engine', 'кузов', 'body'):
                             if _norm_tokens(val_str) <= applicability_tokens and applicability_tokens:
                                 continue
@@ -2080,6 +2099,15 @@ def generate_farpost_api_file(products, file_format='xls', request=None):
                         seen.add(line)
                         normalized_lines.append(line)
                 characteristics = '\n'.join(normalized_lines)
+                if not export_cross_numbers and extracted_cross:
+                    uniq = []
+                    seen_x = set()
+                    for x in extracted_cross:
+                        xl = x.lower()
+                        if xl not in seen_x:
+                            seen_x.add(xl)
+                            uniq.append(x)
+                    export_cross_numbers = ', '.join(uniq)
             
             # Количество: если товар неактивен — отправляем 0 (сигнал для удаления на Farpost)
             quantity = product.quantity if product.is_active else 0
@@ -2099,7 +2127,7 @@ def generate_farpost_api_file(products, file_format='xls', request=None):
                 quantity,
                 characteristics,
                 product.applicability or '',
-                product.cross_numbers or '',
+                export_cross_numbers,
                 photo_urls[0],
                 photo_urls[1],
                 photo_urls[2],
