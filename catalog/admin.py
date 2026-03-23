@@ -216,7 +216,33 @@ class FarpostExportMixin:
             characteristics = ''
             if product.characteristics:
                 char_list = product.get_characteristics_list()
-                characteristics = '\n'.join([f'{k}: {v}' for k, v in char_list])
+                # Убираем дубли с колонкой "Применимость" и нормализуем "Артикул2" -> "OEM"
+                def _norm_tokens(s: str):
+                    import re
+                    parts = re.split(r'[/,\s]+', str(s or '').strip())
+                    return {p.lower() for p in parts if p}
+
+                applicability_items = product.get_applicability_list()
+                applicability_tokens = set()
+                for item in applicability_items:
+                    applicability_tokens |= _norm_tokens(item)
+
+                normalized_lines = []
+                seen = set()
+                for k, v in char_list:
+                    key_norm = str(k).strip().lower()
+                    val_str = str(v).strip()
+                    if key_norm in ('артикул2', 'article2'):
+                        line = f'OEM: {val_str}'
+                    else:
+                        if key_norm in ('двигатель', 'engine', 'кузов', 'body'):
+                            if applicability_tokens and _norm_tokens(val_str) <= applicability_tokens:
+                                continue
+                        line = f'{k}: {val_str}'
+                    if line not in seen:
+                        seen.add(line)
+                        normalized_lines.append(line)
+                characteristics = '\n'.join(normalized_lines)
             
             quantity = product.quantity if product.is_active else 0
             
