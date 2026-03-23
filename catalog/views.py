@@ -524,6 +524,7 @@ class ProductView(DetailView):
         characteristics = []
         has_size_in_source = False
         has_oem_row = False
+        note_value = ''
         for key, value in all_characteristics:
             key_lower = key.lower().strip()
             # Пропускаем материалы и другие ненужные характеристики
@@ -562,9 +563,14 @@ class ProductView(DetailView):
                     else:
                         # Значения вида "R/R/L" — это размер/сторона, а не двигатель.
                         if is_single_letter_size:
-                            characteristics.append(('Размер', v))
+                            characteristics.append(('Характеристика', v))
                         else:
                             characteristics.append(('Характеристики', v))
+                elif key_lower in ('примечание', 'note'):
+                    # В карточке вместо "Примечание" показываем как "Кросс-номер".
+                    note_value = str(value).strip()
+                    if note_value:
+                        characteristics.append(('Кросс-номер', note_value))
                 else:
                     characteristics.append((key, value))
 
@@ -690,6 +696,12 @@ class ProductView(DetailView):
                 characteristics.append(('Напряжение', voltage))
         
         context['characteristics'] = characteristics
+
+        # Для h1 убираем хвост с номерами из "Примечания", чтобы не дублировать его в названии.
+        display_name = str(product.name or '')
+        if note_value and note_value in display_name:
+            display_name = display_name.replace(note_value, '').strip(' ,')
+        context['display_name'] = display_name
         context['cross_numbers'] = product.get_cross_numbers_list()
         context['applicability'] = product.get_applicability_list()
         context['article2_value'] = article2_value

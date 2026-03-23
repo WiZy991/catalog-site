@@ -112,12 +112,12 @@
             
             <!-- Информация -->
             <div class="product-info">
-                <h1 class="product-info__title">{{ product.name }}</h1>
+                <h1 class="product-info__title">{{ display_name|default:product.name }}</h1>
                 
                 <div class="product-info__meta">
                     {% if product.article %}
                     <span class="product-meta__item">
-                        <strong>Кросс-номер:</strong> {{ product.article }}
+                        <strong>Номер:</strong> {{ product.article }}
                     </span>
                     {% endif %}
                     <span class="product-meta__item">
