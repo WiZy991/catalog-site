@@ -462,6 +462,11 @@ def sync_subcategories_from_keywords(parent_category: Category, *, deactivate_re
             if len(other) <= len(kw_lower) + 1:
                 continue
             if other.startswith(kw_lower):
+                # Считаем обрезком только если продолжение идет БЕЗ разделителя.
+                # "прокладка гбц" -> не обрезок, "топливные" для "топливн" -> обрезок.
+                next_char = other[len(kw_lower)]
+                if not next_char.isalpha():
+                    continue
                 return True
         return False
 

@@ -60,6 +60,11 @@ class Command(BaseCommand):
             if len(kw) <= len(child_name_lower) + 1:
                 continue
             if kw.startswith(child_name_lower):
+                # Считаем обрезком только если продолжение идет БЕЗ разделителя.
+                # "прокладка гбц" -> не обрезок, "топливные" для "топливн" -> обрезок.
+                next_char = kw[len(child_name_lower)]
+                if not next_char.isalpha():
+                    continue
                 return True
         return False
 
