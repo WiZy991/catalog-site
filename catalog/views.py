@@ -490,12 +490,18 @@ class ProductView(DetailView):
         # Получаем характеристики и фильтруем ненужные
         all_characteristics = product.get_characteristics_list()
         article2_value = ''
+        # OEM в верхней строке показываем из cross_numbers (если есть),
+        # чтобы не терять несколько OEM-номеров.
+        cross_numbers = product.get_cross_numbers_list()
+        if cross_numbers:
+            article2_value = ', '.join(cross_numbers)
         article2_keys = ('артикул2', 'article2', 'oem', 'oem номер', 'oem-номер')
-        for key, value in all_characteristics:
-            key_lower = str(key).lower().strip()
-            if key_lower in article2_keys and value:
-                article2_value = str(value).strip()
-                break
+        if not article2_value:
+            for key, value in all_characteristics:
+                key_lower = str(key).lower().strip()
+                if key_lower in article2_keys and value:
+                    article2_value = str(value).strip()
+                    break
 
         # Fallback: если Артикул2/OEM не пришёл в характеристиках,
         # иногда OEM хранится внутри наименования как "12345-67890".
@@ -517,13 +523,17 @@ class ProductView(DetailView):
         excluded_keys = ['прокладка', 'gasket', 'паронит', 'paronit', 'материал', 'material']
         characteristics = []
         has_size_in_source = False
+        has_oem_row = False
         for key, value in all_characteristics:
             key_lower = key.lower().strip()
             # Пропускаем материалы и другие ненужные характеристики
             if not any(excluded in key_lower for excluded in excluded_keys):
-                # В карточке товара поле "Артикул2" показываем как "OEM".
+                # В блоке характеристик Артикул2 показываем как OEM.
                 if key_lower in article2_keys and product.article:
-                    characteristics.append(('OEM', product.article))
+                    oem_value = article2_value or str(value).strip()
+                    if oem_value:
+                        characteristics.append(('OEM', oem_value))
+                        has_oem_row = True
                 elif ('размер' in key_lower) or ('size' in key_lower):
                     has_size_in_source = True
                     # Иногда 1С ошибочно кладёт код двигателя в поле "Размер" (например: "3VZ/5VZ").
@@ -551,6 +561,9 @@ class ProductView(DetailView):
                         characteristics.append(('Характеристики', v))
                 else:
                     characteristics.append((key, value))
+
+        if article2_value and not has_oem_row:
+            characteristics.append(('OEM', article2_value))
 
         # Fallback: если "Размер" или "Двигатель" не пришли из XML,
         # пытаемся извлечь их из названия товара (последние сегменты после запятых).
@@ -600,9 +613,16 @@ class ProductView(DetailView):
                     return False
                 # Двигатель — это либо "буквы+цифры", либо коды типа "EW/EV" (есть "/",
                 # но цифр может не быть). Не принимаем cross-номера с "-" и значения вида "/022248".
+                # Варианты вида "R/R/L" (односимвольные сегменты) считаем характеристикой, а не двигателем.
                 has_letters = bool(re.search(r'[A-Za-zА-Яа-я]', s))
                 has_digits = bool(re.search(r'\d', s))
-                return ('/' in s and has_letters and '-' not in s and not s.startswith('/')) or (has_letters and has_digits and '-' not in s)
+                if '/' in s and has_letters and '-' not in s and not s.startswith('/'):
+                    parts = [p for p in s.split('/') if p]
+                    # Если во всех частях по 1 символу (например, R/R/L), это НЕ двигатель.
+                    if parts and all(len(p.strip()) <= 1 for p in parts):
+                        return False
+                    return True
+                return has_letters and has_digits and '-' not in s
 
             for part in reversed(name_parts):
                 if _looks_like_engine_token(part):
