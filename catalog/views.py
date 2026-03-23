@@ -539,6 +539,8 @@ class ProductView(DetailView):
                     # Иногда 1С ошибочно кладёт код двигателя в поле "Размер" (например: "3VZ/5VZ").
                     v = str(value).strip()
                     v_lower = v.lower()
+                    size_parts = [p.strip() for p in v.split('/') if p.strip()]
+                    is_single_letter_size = bool(size_parts) and all(len(p) == 1 for p in size_parts)
                     # Признак кода двигателя:
                     # - обычно есть "/" (например: "1ARFE/2ZRFE", "EW/EV")
                     # - либо есть буквы+цифры (например: "F23A")
@@ -554,11 +556,15 @@ class ProductView(DetailView):
                     is_engine_code = (
                         ('/' in v and bool(re.search(r'[A-Za-zА-Яа-я]', v)))
                         or (bool(re.search(r'[A-Za-zА-Яа-я]', v)) and bool(re.search(r'\d', v)))
-                    ) and ('-' not in v) and (not v.strip().startswith('/')) and (not contains_characteristic_markers)
+                    ) and ('-' not in v) and (not v.strip().startswith('/')) and (not contains_characteristic_markers) and (not is_single_letter_size)
                     if is_engine_code:
                         characteristics.append(('Двигатель', v))
                     else:
-                        characteristics.append(('Характеристики', v))
+                        # Значения вида "R/R/L" — это размер/сторона, а не двигатель.
+                        if is_single_letter_size:
+                            characteristics.append(('Размер', v))
+                        else:
+                            characteristics.append(('Характеристики', v))
                 else:
                     characteristics.append((key, value))
 
