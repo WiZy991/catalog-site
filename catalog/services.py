@@ -441,6 +441,30 @@ def sync_subcategories_from_keywords(parent_category: Category, *, deactivate_re
         
         return word_lower
 
+    # Подготавливаем список keyword в нижнем регистре для детекта "обрезков".
+    lowered_keywords = []
+    for kw in keywords:
+        kw_clean = (kw or '').strip().lower()
+        if kw_clean:
+            lowered_keywords.append(kw_clean)
+
+    def _looks_like_truncated_keyword(kw_lower: str) -> bool:
+        """
+        Определяет "обрезанные" ключи (стемы), которые не должны становиться подкатегориями.
+        Примеры: "автономн", "топливн", "трубк" при наличии более длинных вариантов.
+        """
+        if not kw_lower or ' ' in kw_lower:
+            return False
+        # Если есть более длинный keyword, начинающийся с этого стема — это обрезок.
+        for other in lowered_keywords:
+            if other == kw_lower:
+                continue
+            if len(other) <= len(kw_lower) + 1:
+                continue
+            if other.startswith(kw_lower):
+                return True
+        return False
+
     # Группируем ключевые слова по нормализованной форме (единственное число)
     # чтобы избежать дубликатов типа "Радиатор" и "Радиаторы"
     normalized_groups = {}  # {normalized_key: (original_name, original_keyword)}
@@ -450,6 +474,9 @@ def sync_subcategories_from_keywords(parent_category: Category, *, deactivate_re
         if not kw_clean:
             continue
         if not _is_cyrillic_keyword(kw_clean):
+            continue
+        if _looks_like_truncated_keyword(kw_clean.lower()):
+            # Не создаем подкатегории из "обрезанных" стемов.
             continue
         
         # Нормализуем к единственному числу для группировки
