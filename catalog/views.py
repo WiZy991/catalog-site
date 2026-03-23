@@ -663,6 +663,23 @@ class ProductView(DetailView):
                     if re.search(r'[A-Za-zА-Яа-я]', item_str) and re.search(r'\d', item_str):
                         characteristics.append(('Кузов', item_str))
                         break
+
+        # Удаляем дубли: если "Кузов" и "Двигатель" содержат одинаковое значение,
+        # оставляем только "Кузов" (для подобных кейсов с кодами кузова).
+        body_values = {
+            ' '.join(str(v).strip().lower().split())
+            for k, v in characteristics
+            if str(k).strip().lower() in ('кузов', 'body') and str(v).strip()
+        }
+        if body_values:
+            cleaned_characteristics = []
+            for k, v in characteristics:
+                k_norm = str(k).strip().lower()
+                v_norm = ' '.join(str(v).strip().lower().split())
+                if k_norm in ('двигатель', 'engine') and v_norm in body_values:
+                    continue
+                cleaned_characteristics.append((k, v))
+            characteristics = cleaned_characteristics
         
         # Добавляем вольтаж, если он есть в применимости
         voltage = product.get_voltage_from_applicability()
