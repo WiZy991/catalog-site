@@ -1959,14 +1959,33 @@ def generate_farpost_api_file(products, file_format='xls', request=None):
             characteristics = ''
             if product.characteristics:
                 char_list = product.get_characteristics_list()
+                # Набор применимости для фильтрации дублей из характеристик
+                def _norm_tokens(s: str) -> set[str]:
+                    import re
+                    parts = re.split(r'[/,\s]+', str(s or '').strip())
+                    return {p.lower() for p in parts if p}
+                applicability_items = product.get_applicability_list()
+                applicability_tokens = set()
+                for item in applicability_items:
+                    applicability_tokens |= _norm_tokens(item)
+
                 normalized_lines = []
+                seen = set()
                 for k, v in char_list:
                     key_norm = str(k).strip().lower()
+                    val_str = str(v).strip()
                     # Для Farpost в колонке "Характеристики" используем "OEM" вместо "Артикул2".
                     if key_norm in ('артикул2', 'article2'):
-                        normalized_lines.append(f'OEM: {v}')
+                        line = f'OEM: {val_str}'
                     else:
-                        normalized_lines.append(f'{k}: {v}')
+                        # Фильтруем дубли по применимости: удаляем Кузов/Двигатель, если их значение = применимости
+                        if key_norm in ('двигатель', 'engine', 'кузов', 'body'):
+                            if _norm_tokens(val_str) <= applicability_tokens and applicability_tokens:
+                                continue
+                        line = f'{k}: {val_str}'
+                    if line not in seen:
+                        seen.add(line)
+                        normalized_lines.append(line)
                 characteristics = '\n'.join(normalized_lines)
             
             # Количество: если товар неактивен или снят с продажи — отправляем 0 (сигнал для удаления на Farpost)
@@ -2036,14 +2055,30 @@ def generate_farpost_api_file(products, file_format='xls', request=None):
             characteristics = ''
             if product.characteristics:
                 char_list = product.get_characteristics_list()
+                def _norm_tokens(s: str) -> set[str]:
+                    import re
+                    parts = re.split(r'[/,\s]+', str(s or '').strip())
+                    return {p.lower() for p in parts if p}
+                applicability_items = product.get_applicability_list()
+                applicability_tokens = set()
+                for item in applicability_items:
+                    applicability_tokens |= _norm_tokens(item)
+
                 normalized_lines = []
+                seen = set()
                 for k, v in char_list:
                     key_norm = str(k).strip().lower()
-                    # Для Farpost в колонке "Характеристики" используем "OEM" вместо "Артикул2".
+                    val_str = str(v).strip()
                     if key_norm in ('артикул2', 'article2'):
-                        normalized_lines.append(f'OEM: {v}')
+                        line = f'OEM: {val_str}'
                     else:
-                        normalized_lines.append(f'{k}: {v}')
+                        if key_norm in ('двигатель', 'engine', 'кузов', 'body'):
+                            if _norm_tokens(val_str) <= applicability_tokens and applicability_tokens:
+                                continue
+                        line = f'{k}: {val_str}'
+                    if line not in seen:
+                        seen.add(line)
+                        normalized_lines.append(line)
                 characteristics = '\n'.join(normalized_lines)
             
             # Количество: если товар неактивен — отправляем 0 (сигнал для удаления на Farpost)
