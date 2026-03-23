@@ -115,9 +115,9 @@
                 <h1 class="product-info__title">{{ product.name }}</h1>
                 
                 <div class="product-info__meta">
-                    {% if article2_value %}
+                    {% if product.article %}
                     <span class="product-meta__item">
-                        <strong>OEM номер:</strong> {{ article2_value }}
+                        <strong>Кросс-номер:</strong> {{ product.article }}
                     </span>
                     {% endif %}
                     <span class="product-meta__item">

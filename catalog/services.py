@@ -1959,7 +1959,15 @@ def generate_farpost_api_file(products, file_format='xls', request=None):
             characteristics = ''
             if product.characteristics:
                 char_list = product.get_characteristics_list()
-                characteristics = '\n'.join([f'{k}: {v}' for k, v in char_list])
+                normalized_lines = []
+                for k, v in char_list:
+                    key_norm = str(k).strip().lower()
+                    # Для Farpost в колонке "Характеристики" используем "OEM" вместо "Артикул2".
+                    if key_norm in ('артикул2', 'article2'):
+                        normalized_lines.append(f'OEM: {v}')
+                    else:
+                        normalized_lines.append(f'{k}: {v}')
+                characteristics = '\n'.join(normalized_lines)
             
             # Количество: если товар неактивен или снят с продажи — отправляем 0 (сигнал для удаления на Farpost)
             quantity = product.quantity if product.is_active else 0
@@ -2028,7 +2036,15 @@ def generate_farpost_api_file(products, file_format='xls', request=None):
             characteristics = ''
             if product.characteristics:
                 char_list = product.get_characteristics_list()
-                characteristics = '\n'.join([f'{k}: {v}' for k, v in char_list])
+                normalized_lines = []
+                for k, v in char_list:
+                    key_norm = str(k).strip().lower()
+                    # Для Farpost в колонке "Характеристики" используем "OEM" вместо "Артикул2".
+                    if key_norm in ('артикул2', 'article2'):
+                        normalized_lines.append(f'OEM: {v}')
+                    else:
+                        normalized_lines.append(f'{k}: {v}')
+                characteristics = '\n'.join(normalized_lines)
             
             # Количество: если товар неактивен — отправляем 0 (сигнал для удаления на Farpost)
             quantity = product.quantity if product.is_active else 0

@@ -521,9 +521,9 @@ class ProductView(DetailView):
             key_lower = key.lower().strip()
             # Пропускаем материалы и другие ненужные характеристики
             if not any(excluded in key_lower for excluded in excluded_keys):
-                # В карточке товара поле "Артикул2" показываем как "Кросс-номер".
+                # В карточке товара поле "Артикул2" показываем как "OEM".
                 if key_lower in article2_keys and product.article:
-                    characteristics.append(('Кросс-номер', product.article))
+                    characteristics.append(('OEM', product.article))
                 elif ('размер' in key_lower) or ('size' in key_lower):
                     has_size_in_source = True
                     # Иногда 1С ошибочно кладёт код двигателя в поле "Размер" (например: "3VZ/5VZ").
