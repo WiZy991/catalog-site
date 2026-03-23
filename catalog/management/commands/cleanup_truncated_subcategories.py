@@ -57,6 +57,9 @@ class Command(BaseCommand):
         for kw in parent_keywords:
             if kw == child_name_lower:
                 continue
+            # Если это обычная пара ед./мн. числа, это НЕ обрезок.
+            if Command._normalize_to_singular(kw) == child_name_lower:
+                continue
             if len(kw) <= len(child_name_lower) + 1:
                 continue
             if kw.startswith(child_name_lower):

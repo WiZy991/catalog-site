@@ -459,6 +459,9 @@ def sync_subcategories_from_keywords(parent_category: Category, *, deactivate_re
         for other in lowered_keywords:
             if other == kw_lower:
                 continue
+            # Если это обычная пара ед./мн. числа, это не обрезок.
+            if _normalize_to_singular(other) == kw_lower:
+                continue
             if len(other) <= len(kw_lower) + 1:
                 continue
             if other.startswith(kw_lower):
