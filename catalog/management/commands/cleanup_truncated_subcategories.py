@@ -68,6 +68,10 @@ class Command(BaseCommand):
                 next_char = kw[len(child_name_lower)]
                 if not next_char.isalpha():
                     continue
+                # Для "обрезков" обычно после стема идет гласная: топливн->топливные, трубк->трубки.
+                # Случаи вроде провод->проводка (после основы согласная "к") не считаем обрезком.
+                if next_char.lower() not in "аеёиоуыэюя":
+                    continue
                 return True
         return False
 

@@ -470,6 +470,10 @@ def sync_subcategories_from_keywords(parent_category: Category, *, deactivate_re
                 next_char = other[len(kw_lower)]
                 if not next_char.isalpha():
                     continue
+                # Для "обрезков" обычно после стема идет гласная: топливн->топливные, трубк->трубки.
+                # Случаи вроде провод->проводка (после основы согласная "к") не считаем обрезком.
+                if next_char.lower() not in 'аеёиоуыэюя':
+                    continue
                 return True
         return False
 
