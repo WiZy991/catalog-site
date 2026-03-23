@@ -716,6 +716,16 @@ class ProductView(DetailView):
         for x in uniq_cross:
             escaped = re.escape(x)
             display_name = re.sub(rf'(?:,\s*)?{escaped}(?:\s*,)?', ', ', display_name, flags=re.IGNORECASE)
+        # Дополнительно удаляем "обрезки"/остатки кросс-номеров в сегментах названия
+        # (например, "48531-B1"), если они выглядят как номер с дефисом.
+        cleaned_parts = []
+        for part in [p.strip() for p in display_name.split(',') if p and p.strip()]:
+            p = str(part).strip()
+            looks_like_cross = ('-' in p) and bool(re.search(r'\d', p))
+            if looks_like_cross:
+                continue
+            cleaned_parts.append(p)
+        display_name = ', '.join(cleaned_parts)
         # Чистим повторные запятые/пробелы после вырезания
         display_name = re.sub(r',\s*,+', ', ', display_name)
         display_name = re.sub(r'\s+,', ',', display_name)
