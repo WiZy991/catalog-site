@@ -245,10 +245,6 @@ class FarpostExportMixin:
                         seen.add(line)
                         normalized_lines.append(line)
                 characteristics = '\n'.join(normalized_lines)
-                if not models_value:
-                    applicability_items = product.get_applicability_list()
-                    if applicability_items and len(applicability_items) >= 1:
-                        models_value = str(applicability_items[0]).strip()
 
                 if not export_cross_numbers and extracted_cross:
                     uniq = []
