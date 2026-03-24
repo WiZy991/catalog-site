@@ -2013,11 +2013,11 @@ def generate_farpost_api_file(products, file_format='xls', request=None):
                     if key_norm in ('артикул2', 'article2', 'oem', 'oem номер', 'oem-номер'):
                         # OEM должен идти только в отдельные поля, не в колонку "Характеристика"
                         continue
-                    if key_norm in ('кузов', 'body', 'применимо для моделей'):
+                    if key_norm in ('кузов', 'body'):
                         if not models_value:
                             models_value = val_str
                         continue
-                    if key_norm in ('двигатель', 'engine', 'применимо для двигателей'):
+                    if key_norm in ('двигатель', 'engine'):
                         if not engines_value:
                             engines_value = val_str
                         continue
@@ -2120,11 +2120,11 @@ def generate_farpost_api_file(products, file_format='xls', request=None):
                         continue
                     if key_norm in ('артикул2', 'article2', 'oem', 'oem номер', 'oem-номер'):
                         continue
-                    if key_norm in ('кузов', 'body', 'применимо для моделей'):
+                    if key_norm in ('кузов', 'body'):
                         if not models_value:
                             models_value = val_str
                         continue
-                    if key_norm in ('двигатель', 'engine', 'применимо для двигателей'):
+                    if key_norm in ('двигатель', 'engine'):
                         if not engines_value:
                             engines_value = val_str
                         continue
