@@ -769,10 +769,33 @@ class ProductView(DetailView):
         display_name = re.sub(r',\s*$', '', display_name).strip()
         # Заголовок для карточек: тип, номер, OEM, 1 модель, 1 двигатель, 1 характеристика.
         title_base = ''
+        def _first_model_and_body(raw: str) -> str:
+            text = str(raw or '').replace('\n', ' ').strip()
+            if not text:
+                return ''
+            parts = [p.strip() for p in text.split(',') if p and p.strip()]
+            if not parts:
+                return ''
+            # Для заголовка оставляем только первую модель и первый кузов.
+            if len(parts) >= 2:
+                return f'{parts[0]}, {parts[1]}'
+            return parts[0]
+
+        def _first_engine(raw: str) -> str:
+            text = str(raw or '').replace('\n', ' ').strip()
+            if not text:
+                return ''
+            # Берем только первый двигатель из списков "A/B, C" и т.п.
+            text = text.split(',')[0].strip()
+            text = text.split('/')[0].strip()
+            return text
+
         name_parts = [p.strip() for p in str(display_name or '').split(',') if p and p.strip()]
         if name_parts:
             title_base = name_parts[0]
-        title_chunks = [x for x in [title_base, product.article or '', article2_value or '', first_model, first_engine, first_characteristic] if x]
+        compact_model = _first_model_and_body(first_model)
+        compact_engine = _first_engine(first_engine)
+        title_chunks = [x for x in [title_base, product.article or '', article2_value or '', compact_model, compact_engine, first_characteristic] if x]
         unified_title = ', '.join(title_chunks) if title_chunks else display_name
         context['display_name'] = unified_title
         context['cross_numbers'] = product.get_cross_numbers_list()
