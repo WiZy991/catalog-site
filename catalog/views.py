@@ -522,6 +522,9 @@ class ProductView(DetailView):
         # Исключаем материалы и другие ненужные характеристики
         excluded_keys = ['прокладка', 'gasket', 'паронит', 'paronit', 'материал', 'material']
         characteristics = []
+        first_model = ''
+        first_engine = ''
+        first_characteristic = ''
         has_size_in_source = False
         has_oem_row = False
         note_value = ''
@@ -559,20 +562,37 @@ class ProductView(DetailView):
                         or (bool(re.search(r'[A-Za-zА-Яа-я]', v)) and bool(re.search(r'\d', v)))
                     ) and ('-' not in v) and (not v.strip().startswith('/')) and (not contains_characteristic_markers) and (not is_single_letter_size)
                     if is_engine_code:
-                        characteristics.append(('Двигатель', v))
+                        characteristics.append(('Применимо для двигателей', v))
+                        if not first_engine:
+                            first_engine = v
                     else:
                         # Значения вида "R/R/L" — это размер/сторона, а не двигатель.
                         if is_single_letter_size:
                             characteristics.append(('Характеристика', v))
+                            if not first_characteristic:
+                                first_characteristic = v
                         else:
-                            characteristics.append(('Характеристики', v))
+                            characteristics.append(('Характеристика', v))
+                            if not first_characteristic:
+                                first_characteristic = v
                 elif key_lower in ('примечание', 'note'):
                     # В карточке вместо "Примечание" показываем как "Кросс-номер".
                     note_value = str(value).strip()
                     if note_value:
-                        characteristics.append(('Кросс-номер', note_value))
+                        characteristics.append(('Кросс-номера', note_value))
                 else:
-                    characteristics.append((key, value))
+                    out_key = key
+                    if key_lower in ('кузов', 'body'):
+                        out_key = 'Применимо для моделей'
+                        if not first_model:
+                            first_model = str(value).strip()
+                    elif key_lower in ('двигатель', 'engine'):
+                        out_key = 'Применимо для двигателей'
+                        if not first_engine:
+                            first_engine = str(value).strip()
+                    elif key_lower in ('кросс-номер', 'кросс номер'):
+                        out_key = 'Кросс-номера'
+                    characteristics.append((out_key, value))
 
         if article2_value and not has_oem_row:
             characteristics.append(('OEM', article2_value))
@@ -638,7 +658,9 @@ class ProductView(DetailView):
 
             for part in reversed(name_parts):
                 if _looks_like_engine_token(part):
-                    characteristics.append(('Двигатель', part))
+                    characteristics.append(('Применимо для двигателей', part))
+                    if not first_engine:
+                        first_engine = part
                     break
 
         # Fallback для "Кузов": часто "Кузов" не проходит фильтрацию в characteristics,
@@ -667,7 +689,9 @@ class ProductView(DetailView):
                         continue
                     # Должно быть похоже на код с буквами и цифрами.
                     if re.search(r'[A-Za-zА-Яа-я]', item_str) and re.search(r'\d', item_str):
-                        characteristics.append(('Кузов', item_str))
+                        characteristics.append(('Применимо для моделей', item_str))
+                        if not first_model:
+                            first_model = item_str
                         break
 
         # Удаляем дубли: если "Кузов" и "Двигатель" содержат одинаковое значение,
@@ -682,7 +706,7 @@ class ProductView(DetailView):
             for k, v in characteristics:
                 k_norm = str(k).strip().lower()
                 v_norm = ' '.join(str(v).strip().lower().split())
-                if k_norm in ('двигатель', 'engine') and v_norm in body_values:
+                if k_norm in ('двигатель', 'engine', 'применимо для двигателей') and v_norm in body_values:
                     continue
                 cleaned_characteristics.append((k, v))
             characteristics = cleaned_characteristics
@@ -730,7 +754,14 @@ class ProductView(DetailView):
         display_name = re.sub(r',\s*,+', ', ', display_name)
         display_name = re.sub(r'\s+,', ',', display_name)
         display_name = re.sub(r',\s*$', '', display_name).strip()
-        context['display_name'] = display_name
+        # Заголовок для карточек: тип, номер, OEM, 1 модель, 1 двигатель, 1 характеристика.
+        title_base = ''
+        name_parts = [p.strip() for p in str(display_name or '').split(',') if p and p.strip()]
+        if name_parts:
+            title_base = name_parts[0]
+        title_chunks = [x for x in [title_base, product.article or '', article2_value or '', first_model, first_engine, first_characteristic] if x]
+        unified_title = ', '.join(title_chunks) if title_chunks else display_name
+        context['display_name'] = unified_title
         context['cross_numbers'] = product.get_cross_numbers_list()
         context['applicability'] = product.get_applicability_list()
         context['article2_value'] = article2_value

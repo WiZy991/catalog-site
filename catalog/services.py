@@ -1980,15 +1980,15 @@ def generate_farpost_api_file(products, file_format='xls', request=None):
         # Удален столбец "Заголовок" - Фарпост не хочет его считывать
         # Столбец "Производитель" возвращен - Фарпост должен получать производителя "Onesimus" из прайс-листа
         writer.writerow([
-            'Наименование', 'Цена', 'Описание', 'Артикул', 'Бренд',
-            'Состояние', 'Наличие', 'Количество', 'Характеристики', 'Применимость',
+            'Наименование', 'Цена', 'Артикул', 'Бренд',
+            'Состояние', 'Наличие', 'Количество', 'Характеристика',
+            'Применимо для моделей', 'Применимо для двигателей',
             'Кросс-номера', 'Фото1', 'Фото2', 'Фото3', 'Фото4', 'Фото5',
             'Ссылка на сайт', 'Категория', 'Производитель'
         ])
         
         for product in products:
             site_url = request.build_absolute_uri(product.get_absolute_url()) if request else ''
-            description = generate_farpost_description(product, site_url)
             photo_urls = generate_farpost_images(product, request)
             
             # Дополняем до 5 фото
@@ -1996,41 +1996,43 @@ def generate_farpost_api_file(products, file_format='xls', request=None):
                 photo_urls.append('')
             
             characteristics = ''
+            models_value = ''
+            engines_value = ''
             export_cross_numbers = (product.cross_numbers or '').strip()
             if product.characteristics:
                 char_list = product.get_characteristics_list()
-                # Набор применимости для фильтрации дублей из характеристик
-                def _norm_tokens(s: str) -> set[str]:
-                    import re
-                    parts = re.split(r'[/,\s]+', str(s or '').strip())
-                    return {p.lower() for p in parts if p}
-                applicability_items = product.get_applicability_list()
-                applicability_tokens = set()
-                for item in applicability_items:
-                    applicability_tokens |= _norm_tokens(item)
-
                 normalized_lines = []
                 seen = set()
                 extracted_cross = []
                 for k, v in char_list:
                     key_norm = str(k).strip().lower()
                     val_str = str(v).strip()
-                    # Для Farpost в колонке "Характеристики" используем "OEM" вместо "Артикул2".
-                    if key_norm in ('артикул2', 'article2'):
-                        line = f'OEM: {val_str}'
-                    else:
-                        if key_norm in ('кросс-номер', 'кросс номер', 'cross numbers', 'cross_numbers', 'примечание', 'note'):
-                            extracted_cross.extend([x.strip() for x in val_str.replace('\n', ',').split(',') if x.strip()])
-                            continue
-                        # Фильтруем дубли по применимости: удаляем Кузов/Двигатель, если их значение = применимости
-                        if key_norm in ('двигатель', 'engine', 'кузов', 'body'):
-                            if _norm_tokens(val_str) <= applicability_tokens and applicability_tokens:
-                                continue
-                        line = f'{k}: {val_str}'
+                    if key_norm in ('кросс-номер', 'кросс номер', 'cross numbers', 'cross_numbers', 'примечание', 'note'):
+                        extracted_cross.extend([x.strip() for x in val_str.replace('\n', ',').split(',') if x.strip()])
+                        continue
+                    if key_norm in ('артикул2', 'article2', 'oem', 'oem номер', 'oem-номер'):
+                        # OEM должен идти только в отдельные поля, не в колонку "Характеристика"
+                        continue
+                    if key_norm in ('кузов', 'body', 'применимо для моделей'):
+                        if not models_value:
+                            models_value = val_str
+                        continue
+                    if key_norm in ('двигатель', 'engine', 'применимо для двигателей'):
+                        if not engines_value:
+                            engines_value = val_str
+                        continue
+                    line = f'{k}: {val_str}'
                     if line not in seen:
                         seen.add(line)
                         normalized_lines.append(line)
                 characteristics = '\n'.join(normalized_lines)
+                if not models_value or not engines_value:
+                    applicability_items = product.get_applicability_list()
+                    if applicability_items:
+                        if not models_value and len(applicability_items) >= 1:
+                            models_value = str(applicability_items[0]).strip()
+                        if not engines_value and len(applicability_items) >= 2:
+                            engines_value = str(applicability_items[1]).strip()
                 if not export_cross_numbers and extracted_cross:
                     uniq = []
                     seen_x = set()
@@ -2051,14 +2053,14 @@ def generate_farpost_api_file(products, file_format='xls', request=None):
             writer.writerow([
                 full_name,  # Полное наименование товара (первый столбец)
                 str(product.price),
-                description,
                 product.article or '',
                 product.brand or '',
                 product.get_condition_display(),
                 product.get_availability_display(),
                 quantity,
                 characteristics,
-                product.applicability or '',
+                models_value,
+                engines_value,
                 export_cross_numbers,
                 photo_urls[0],
                 photo_urls[1],
@@ -2088,8 +2090,9 @@ def generate_farpost_api_file(products, file_format='xls', request=None):
         # Удален столбец "Заголовок" - Фарпост не хочет его считывать
         # Столбец "Производитель" возвращен - Фарпост должен получать производителя "Onesimus" из прайс-листа
         headers = [
-            'Наименование', 'Цена', 'Описание', 'Артикул', 'Бренд',
-            'Состояние', 'Наличие', 'Количество', 'Характеристики', 'Применимость',
+            'Наименование', 'Цена', 'Артикул', 'Бренд',
+            'Состояние', 'Наличие', 'Количество', 'Характеристика',
+            'Применимо для моделей', 'Применимо для двигателей',
             'Кросс-номера', 'Фото1', 'Фото2', 'Фото3', 'Фото4', 'Фото5',
             'Ссылка на сайт', 'Категория', 'Производитель'
         ]
@@ -2098,7 +2101,6 @@ def generate_farpost_api_file(products, file_format='xls', request=None):
         # Данные
         for product in products:
             site_url = request.build_absolute_uri(product.get_absolute_url()) if request else ''
-            description = generate_farpost_description(product, site_url)
             photo_urls = generate_farpost_images(product, request)
             
             # Дополняем до 5 фото
@@ -2106,38 +2108,42 @@ def generate_farpost_api_file(products, file_format='xls', request=None):
                 photo_urls.append('')
             
             characteristics = ''
+            models_value = ''
+            engines_value = ''
             export_cross_numbers = (product.cross_numbers or '').strip()
             if product.characteristics:
                 char_list = product.get_characteristics_list()
-                def _norm_tokens(s: str) -> set[str]:
-                    import re
-                    parts = re.split(r'[/,\s]+', str(s or '').strip())
-                    return {p.lower() for p in parts if p}
-                applicability_items = product.get_applicability_list()
-                applicability_tokens = set()
-                for item in applicability_items:
-                    applicability_tokens |= _norm_tokens(item)
-
                 normalized_lines = []
                 seen = set()
                 extracted_cross = []
                 for k, v in char_list:
                     key_norm = str(k).strip().lower()
                     val_str = str(v).strip()
-                    if key_norm in ('артикул2', 'article2'):
-                        line = f'OEM: {val_str}'
-                    else:
-                        if key_norm in ('кросс-номер', 'кросс номер', 'cross numbers', 'cross_numbers', 'примечание', 'note'):
-                            extracted_cross.extend([x.strip() for x in val_str.replace('\n', ',').split(',') if x.strip()])
-                            continue
-                        if key_norm in ('двигатель', 'engine', 'кузов', 'body'):
-                            if _norm_tokens(val_str) <= applicability_tokens and applicability_tokens:
-                                continue
-                        line = f'{k}: {val_str}'
+                    if key_norm in ('кросс-номер', 'кросс номер', 'cross numbers', 'cross_numbers', 'примечание', 'note'):
+                        extracted_cross.extend([x.strip() for x in val_str.replace('\n', ',').split(',') if x.strip()])
+                        continue
+                    if key_norm in ('артикул2', 'article2', 'oem', 'oem номер', 'oem-номер'):
+                        continue
+                    if key_norm in ('кузов', 'body', 'применимо для моделей'):
+                        if not models_value:
+                            models_value = val_str
+                        continue
+                    if key_norm in ('двигатель', 'engine', 'применимо для двигателей'):
+                        if not engines_value:
+                            engines_value = val_str
+                        continue
+                    line = f'{k}: {val_str}'
                     if line not in seen:
                         seen.add(line)
                         normalized_lines.append(line)
                 characteristics = '\n'.join(normalized_lines)
+                if not models_value or not engines_value:
+                    applicability_items = product.get_applicability_list()
+                    if applicability_items:
+                        if not models_value and len(applicability_items) >= 1:
+                            models_value = str(applicability_items[0]).strip()
+                        if not engines_value and len(applicability_items) >= 2:
+                            engines_value = str(applicability_items[1]).strip()
                 if not export_cross_numbers and extracted_cross:
                     uniq = []
                     seen_x = set()
@@ -2158,14 +2164,14 @@ def generate_farpost_api_file(products, file_format='xls', request=None):
             ws.append([
                 full_name,  # Полное наименование товара (первый столбец)
                 float(product.price),
-                description,
                 product.article or '',
                 product.brand or '',
                 product.get_condition_display(),
                 product.get_availability_display(),
                 quantity,
                 characteristics,
-                product.applicability or '',
+                models_value,
+                engines_value,
                 export_cross_numbers,
                 photo_urls[0],
                 photo_urls[1],

@@ -331,22 +331,50 @@ class PartnerProductView(PartnerRequiredMixin, DetailView):
         # Похожие товары (только из партнёрского каталога)
         product = self.object
         
-        # Получаем характеристики и фильтруем ненужные
+        # Получаем характеристики в едином формате с розницей.
         all_characteristics = product.get_characteristics_list()
-        # Исключаем материалы и другие ненужные характеристики
+        article2_keys = ('артикул2', 'article2', 'oem', 'oem номер', 'oem-номер')
+        article2_value = ''
+        cross_numbers = product.get_cross_numbers_list()
+        if cross_numbers:
+            article2_value = ', '.join(cross_numbers)
+        if not article2_value:
+            for key, value in all_characteristics:
+                if str(key).strip().lower() in article2_keys and value:
+                    article2_value = str(value).strip()
+                    break
+
         excluded_keys = ['прокладка', 'gasket', 'паронит', 'paronit', 'материал', 'material']
         characteristics = []
+        first_model = ''
+        first_engine = ''
+        first_characteristic = ''
         for key, value in all_characteristics:
-            key_lower = key.lower().strip()
-            # Пропускаем материалы и другие ненужные характеристики
-            if not any(excluded in key_lower for excluded in excluded_keys):
-                # Если это размер, проверяем, что это действительно размер (содержит числа и * или x)
-                if 'размер' in key_lower or 'size' in key_lower:
-                    import re
-                    if re.search(r'\d+[*x]\d+', value):
-                        characteristics.append((key, value))
-                else:
-                    characteristics.append((key, value))
+            key_lower = str(key).strip().lower()
+            if any(excluded in key_lower for excluded in excluded_keys):
+                continue
+
+            val = str(value).strip()
+            if key_lower in article2_keys:
+                characteristics.append(('OEM', val))
+            elif key_lower in ('кузов', 'body'):
+                characteristics.append(('Применимо для моделей', val))
+                if not first_model:
+                    first_model = val
+            elif key_lower in ('двигатель', 'engine'):
+                characteristics.append(('Применимо для двигателей', val))
+                if not first_engine:
+                    first_engine = val
+            elif key_lower in ('примечание', 'note'):
+                characteristics.append(('Кросс-номера', val))
+            elif 'размер' in key_lower or 'size' in key_lower or key_lower in ('характеристика', 'характеристики'):
+                characteristics.append(('Характеристика', val))
+                if not first_characteristic:
+                    first_characteristic = val
+            elif key_lower in ('кросс-номер', 'кросс номер'):
+                characteristics.append(('Кросс-номера', val))
+            else:
+                characteristics.append((key, value))
         
         # Добавляем вольтаж, если он есть в применимости
         voltage = product.get_voltage_from_applicability()
@@ -358,6 +386,13 @@ class PartnerProductView(PartnerRequiredMixin, DetailView):
         
         context['characteristics'] = characteristics
         context['applicability'] = product.get_applicability_list()
+        context['article2_value'] = article2_value
+
+        # Единый формат заголовка.
+        base = [p.strip() for p in str(product.name or '').split(',') if p and p.strip()]
+        title_base = base[0] if base else str(product.name or '')
+        title_parts = [x for x in [title_base, product.article or '', article2_value or '', first_model, first_engine, first_characteristic] if x]
+        context['display_name'] = ', '.join(title_parts) if title_parts else str(product.name or '')
         
         # Похожие товары - ищем по кросс-номерам и категории
         similar_products = []
@@ -609,9 +644,48 @@ class PublicPartnerProductView(DetailView):
         context = super().get_context_data(**kwargs)
         context['partner_settings'] = PartnerSettings.get_settings()
         
-        # Получаем характеристики и добавляем вольтаж, если он есть в применимости
+        # Получаем характеристики в едином формате с розницей.
         product = self.object
-        characteristics = product.get_characteristics_list()
+        all_characteristics = product.get_characteristics_list()
+        article2_keys = ('артикул2', 'article2', 'oem', 'oem номер', 'oem-номер')
+        article2_value = ''
+        cross_numbers = product.get_cross_numbers_list()
+        if cross_numbers:
+            article2_value = ', '.join(cross_numbers)
+        if not article2_value:
+            for key, value in all_characteristics:
+                if str(key).strip().lower() in article2_keys and value:
+                    article2_value = str(value).strip()
+                    break
+
+        characteristics = []
+        first_model = ''
+        first_engine = ''
+        first_characteristic = ''
+        for key, value in all_characteristics:
+            key_lower = str(key).strip().lower()
+            val = str(value).strip()
+            if key_lower in article2_keys:
+                characteristics.append(('OEM', val))
+            elif key_lower in ('кузов', 'body'):
+                characteristics.append(('Применимо для моделей', val))
+                if not first_model:
+                    first_model = val
+            elif key_lower in ('двигатель', 'engine'):
+                characteristics.append(('Применимо для двигателей', val))
+                if not first_engine:
+                    first_engine = val
+            elif key_lower in ('примечание', 'note'):
+                characteristics.append(('Кросс-номера', val))
+            elif 'размер' in key_lower or 'size' in key_lower or key_lower in ('характеристика', 'характеристики'):
+                characteristics.append(('Характеристика', val))
+                if not first_characteristic:
+                    first_characteristic = val
+            elif key_lower in ('кросс-номер', 'кросс номер'):
+                characteristics.append(('Кросс-номера', val))
+            else:
+                characteristics.append((key, value))
+
         voltage = product.get_voltage_from_applicability()
         if voltage:
             # Проверяем, нет ли уже вольтажа в характеристиках
@@ -619,6 +693,12 @@ class PublicPartnerProductView(DetailView):
             if not has_voltage:
                 characteristics.append(('Напряжение', voltage))
         context['characteristics'] = characteristics
+        context['article2_value'] = article2_value
+
+        base = [p.strip() for p in str(product.name or '').split(',') if p and p.strip()]
+        title_base = base[0] if base else str(product.name or '')
+        title_parts = [x for x in [title_base, product.article or '', article2_value or '', first_model, first_engine, first_characteristic] if x]
+        context['display_name'] = ', '.join(title_parts) if title_parts else str(product.name or '')
         
         return context
 

@@ -302,30 +302,17 @@
             
             <!-- Info -->
             <div class="product-info">
-                <h1 class="product-info__title">{{ product.name }}</h1>
+                <h1 class="product-info__title">{{ display_name|default:product.name }}</h1>
                 
                 <div class="product-info__meta">
                     {% if product.article %}
                     <span class="product-info__meta-item">
-                        <strong>Кросс-номер:</strong> {{ product.article }}
+                        <strong>Номер:</strong> {{ product.article }}
                     </span>
                     {% endif %}
-                    {% if product.cross_numbers %}
+                    {% if article2_value %}
                     <span class="product-info__meta-item">
-                        <strong>Доп. кросс-номера:</strong> 
-                        {% for num in product.get_cross_numbers_list|slice:":3" %}
-                            {{ num }}{% if not forloop.last %}, {% endif %}
-                        {% endfor %}
-                    </span>
-                    {% endif %}
-                    {% if product.brand %}
-                    <span class="product-info__meta-item">
-                        <strong>Бренд:</strong> {{ product.brand }}
-                    </span>
-                    {% endif %}
-                    {% if product.category %}
-                    <span class="product-info__meta-item">
-                        <strong>Категория:</strong> {{ product.category.name }}
+                        <strong>OEM:</strong> {{ article2_value }}
                     </span>
                     {% endif %}
                 </div>
@@ -359,7 +346,7 @@
                 
                 {% if characteristics %}
                 <div class="product-info__section">
-                    <h3 class="product-info__section-title">Характеристики</h3>
+                    <h3 class="product-info__section-title">Применимость и характеристики</h3>
                     <div class="product-info__characteristics">
                         {% for key, value in characteristics %}
                         <div class="product-info__char-item">
@@ -368,22 +355,6 @@
                         </div>
                         {% endfor %}
                     </div>
-                </div>
-                {% endif %}
-                
-                {% if applicability %}
-                <div class="product-info__section">
-                    <h3 class="product-info__section-title">Применимость</h3>
-                    <div class="product-info__applicability">
-                        {% for item in applicability %}
-                        <span class="product-info__applicability-item">{{ item }}</span>
-                        {% endfor %}
-                    </div>
-                </div>
-                {% elif product.description %}
-                <div class="product-info__section">
-                    <h3 class="product-info__section-title">Применимость</h3>
-                    <div class="product-info__description">{{ product.description|linebreaks }}</div>
                 </div>
                 {% endif %}
             </div>
