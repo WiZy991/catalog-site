@@ -343,6 +343,8 @@ class PartnerProductView(PartnerRequiredMixin, DetailView):
                 if str(key).strip().lower() in article2_keys and value:
                     article2_value = str(value).strip()
                     break
+        if article2_value:
+            article2_value = str(article2_value).strip().lstrip('/')
 
         excluded_keys = ['прокладка', 'gasket', 'паронит', 'paronit', 'материал', 'material']
         characteristics = []
@@ -356,7 +358,7 @@ class PartnerProductView(PartnerRequiredMixin, DetailView):
 
             val = str(value).strip()
             if key_lower in article2_keys:
-                characteristics.append(('OEM', val))
+                characteristics.append(('OEM', val.lstrip('/')))
             elif key_lower in ('кузов', 'body'):
                 characteristics.append(('Применимо для моделей', val))
                 if not first_model:
@@ -657,6 +659,8 @@ class PublicPartnerProductView(DetailView):
                 if str(key).strip().lower() in article2_keys and value:
                     article2_value = str(value).strip()
                     break
+        if article2_value:
+            article2_value = str(article2_value).strip().lstrip('/')
 
         characteristics = []
         first_model = ''
@@ -666,7 +670,7 @@ class PublicPartnerProductView(DetailView):
             key_lower = str(key).strip().lower()
             val = str(value).strip()
             if key_lower in article2_keys:
-                characteristics.append(('OEM', val))
+                characteristics.append(('OEM', val.lstrip('/')))
             elif key_lower in ('кузов', 'body'):
                 characteristics.append(('Применимо для моделей', val))
                 if not first_model:

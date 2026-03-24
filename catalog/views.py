@@ -519,6 +519,8 @@ class ProductView(DetailView):
             full_oem = re.search(r'\b\d{4,6}-\d{4,6}\b', str(product.name or ''))
             if str(article2_value).strip().startswith('/') and full_oem:
                 article2_value = full_oem.group(0)
+        if article2_value:
+            article2_value = str(article2_value).strip().lstrip('/')
         # Исключаем материалы и другие ненужные характеристики
         excluded_keys = ['прокладка', 'gasket', 'паронит', 'paronit', 'материал', 'material']
         characteristics = []
@@ -534,7 +536,7 @@ class ProductView(DetailView):
             if not any(excluded in key_lower for excluded in excluded_keys):
                 # В блоке характеристик Артикул2 показываем как OEM.
                 if key_lower in article2_keys and product.article:
-                    oem_value = article2_value or str(value).strip()
+                    oem_value = article2_value or str(value).strip().lstrip('/')
                     if oem_value:
                         characteristics.append(('OEM', oem_value))
                         has_oem_row = True
