@@ -667,7 +667,7 @@ class ProductView(DetailView):
         # но остаётся в applicability. Если кузов не найден — пытаемся взять
         # из applicability, исключив значение двигателя.
         existing_char_keys = {str(k).strip().lower() for k, _ in characteristics}
-        has_body = any(k in existing_char_keys for k in ('кузов', 'body'))
+        has_body = any(k in existing_char_keys for k in ('кузов', 'body', 'применимо для моделей'))
         if not has_body:
             engine_val = ''
             for k, v in characteristics:
@@ -710,6 +710,17 @@ class ProductView(DetailView):
                     continue
                 cleaned_characteristics.append((k, v))
             characteristics = cleaned_characteristics
+
+        # Убираем полные дубли строк (одинаковый ключ + значение).
+        unique_characteristics = []
+        seen_pairs = set()
+        for k, v in characteristics:
+            pair = (str(k).strip().lower(), ' '.join(str(v).strip().lower().split()))
+            if pair in seen_pairs:
+                continue
+            seen_pairs.add(pair)
+            unique_characteristics.append((k, v))
+        characteristics = unique_characteristics
         
         # Добавляем вольтаж, если он есть в применимости
         voltage = product.get_voltage_from_applicability()
