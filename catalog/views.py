@@ -631,7 +631,7 @@ class ProductView(DetailView):
                 if s and ('/' not in s) and (not _looks_like_engine_code(s)):
                     characteristics.append(('Характеристики', s))
 
-        if name_parts and 'двигатель' not in existing_keys and 'engine' not in existing_keys:
+        if name_parts and 'двигатель' not in existing_keys and 'engine' not in existing_keys and 'применимо для двигателей' not in existing_keys:
             def _looks_like_engine_token(s: str) -> bool:
                 s = str(s or '').strip()
                 if not s:

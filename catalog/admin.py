@@ -187,6 +187,7 @@ class FarpostExportMixin:
             generate_farpost_title,
             generate_farpost_images,
             clean_product_name,
+            build_farpost_compact_name,
         )
         import io as _io
         
@@ -265,7 +266,7 @@ class FarpostExportMixin:
             
             # ВАЖНО: Используем полное название товара, а не очищенное
             # Фарпост должен видеть полное наименование товара
-            full_name = product.name if product.name else ''
+            full_name = build_farpost_compact_name(product)
             
             writer.writerow([
                 full_name,  # Полное наименование товара (первый столбец)

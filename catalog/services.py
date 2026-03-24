@@ -1916,6 +1916,58 @@ def generate_farpost_title(product):
     return ' '.join(parts)
 
 
+def build_farpost_compact_name(product):
+    """
+    Короткое наименование для выгрузки (как в карточке):
+    тип, номер, OEM, 1 модель+1 кузов, 1 двигатель, 1 характеристика.
+    """
+    base_name = str(product.name or '').strip()
+    name_parts = [p.strip() for p in base_name.split(',') if p and p.strip()]
+    title_base = name_parts[0] if name_parts else base_name
+
+    article = str(product.article or '').strip()
+    oem = ''
+    cross_list = product.get_cross_numbers_list()
+    if cross_list:
+        oem = str(cross_list[0]).strip().lstrip('/')
+
+    model_raw = ''
+    engine_raw = ''
+    characteristic_raw = ''
+    for k, v in product.get_characteristics_list():
+        key = str(k).strip().lower()
+        val = str(v).strip()
+        if not val:
+            continue
+        if not model_raw and key in ('кузов', 'body', 'применимо для моделей'):
+            model_raw = val
+            continue
+        if not engine_raw and key in ('двигатель', 'engine', 'применимо для двигателей'):
+            engine_raw = val
+            continue
+        if not characteristic_raw and key in ('размер', 'size', 'характеристика', 'характеристики'):
+            characteristic_raw = val
+
+    def _first_model_and_body(raw: str) -> str:
+        parts = [p.strip() for p in str(raw or '').replace('\n', ' ').split(',') if p and p.strip()]
+        if len(parts) >= 2:
+            return f'{parts[0]}, {parts[1]}'
+        return parts[0] if parts else ''
+
+    def _first_engine(raw: str) -> str:
+        text = str(raw or '').replace('\n', ' ').strip()
+        if not text:
+            return ''
+        text = text.split(',')[0].strip()
+        text = text.split('/')[0].strip()
+        return text
+
+    compact_model = _first_model_and_body(model_raw)
+    compact_engine = _first_engine(engine_raw)
+    chunks = [x for x in [title_base, article, oem, compact_model, compact_engine, characteristic_raw] if x]
+    return ', '.join(chunks) if chunks else base_name
+
+
 def generate_farpost_description(product, site_url=''):
     """
     Генерирует описание для Farpost.
@@ -2044,7 +2096,7 @@ def generate_farpost_api_file(products, file_format='xls', request=None):
             
             # ВАЖНО: Используем полное название товара, а не очищенное
             # Фарпост должен видеть полное наименование товара
-            full_name = product.name if product.name else ''
+            full_name = build_farpost_compact_name(product)
             
             writer.writerow([
                 full_name,  # Полное наименование товара (первый столбец)
@@ -2151,7 +2203,7 @@ def generate_farpost_api_file(products, file_format='xls', request=None):
             
             # ВАЖНО: Используем полное название товара, а не очищенное
             # Фарпост должен видеть полное наименование товара
-            full_name = product.name if product.name else ''
+            full_name = build_farpost_compact_name(product)
             
             ws.append([
                 full_name,  # Полное наименование товара (первый столбец)
@@ -2207,7 +2259,7 @@ def generate_farpost_api_file(products, file_format='xls', request=None):
             
             # ВАЖНО: Используем полное название товара, а не очищенное
             # Фарпост должен видеть полное наименование товара
-            full_name = product.name if product.name else ''
+            full_name = build_farpost_compact_name(product)
             SubElement(offer_elem, 'name').text = full_name
             SubElement(offer_elem, 'price').text = str(product.price)
             SubElement(offer_elem, 'currencyId').text = 'RUR'
