@@ -2192,7 +2192,8 @@ def format_models_multiline(value: str) -> str:
     raw = str(value or '').strip()
     if not raw:
         return ''
-    parts = re.split(r'[,/\n]+', raw)
+    # Разбиваем по основным разделителям перечней, включая разные варианты слеша.
+    parts = re.split(r'[,/／\\|;\n\r\t]+', raw)
     out = []
     seen = set()
     for p in parts:
