@@ -1924,6 +1924,14 @@ def build_farpost_compact_name(product):
     base_name = str(product.name or '').strip()
     name_parts = [p.strip() for p in base_name.split(',') if p and p.strip()]
     title_base = name_parts[0] if name_parts else base_name
+    def _first_token_by_slash(text: str) -> str:
+        s = str(text or '').strip()
+        if not s:
+            return ''
+        # Берём только первую часть до "/"
+        return s.split('/')[0].strip()
+    # Укорачиваем бренд/тип, если там перечисление через "/"
+    title_base = _first_token_by_slash(title_base)
 
     article = str(product.article or '').strip()
     oem = ''
@@ -1950,9 +1958,13 @@ def build_farpost_compact_name(product):
 
     def _first_model_and_body(raw: str) -> str:
         parts = [p.strip() for p in str(raw or '').replace('\n', ' ').split(',') if p and p.strip()]
+        if not parts:
+            return ''
+        first = _first_token_by_slash(parts[0])
         if len(parts) >= 2:
-            return f'{parts[0]}, {parts[1]}'
-        return parts[0] if parts else ''
+            second = _first_token_by_slash(parts[1])
+            return f'{first}, {second}' if second else first
+        return first
 
     def _first_engine(raw: str) -> str:
         text = str(raw or '').replace('\n', ' ').strip()
