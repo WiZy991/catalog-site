@@ -2075,7 +2075,9 @@ document.addEventListener('DOMContentLoaded', function() {
                                 </td>
                                 <td class="products-table__description">
                                     <a href="{% url 'partners:product' product.slug %}" class="products-table__link">
-                                        {% if product.name and product.name.strip %}
+                                        {% if product.compact_name and product.compact_name.strip %}
+                                            {{ product.compact_name }}
+                                        {% elif product.name and product.name.strip %}
                                             {{ product.name }}
                                         {% elif product.article %}
                                             {{ product.article }}
@@ -2124,7 +2126,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                         <button type="button" 
                                                 class="btn btn--sm btn--primary add-to-cart-btn" 
                                                 data-product-id="{{ product.id }}"
-                                                data-product-name="{{ product.name }}">
+                                                data-product-name="{{ product.compact_name|default:product.name }}">
                                             <i class="bi bi-cart-plus"></i> В корз.
                                         </button>
                                     </div>

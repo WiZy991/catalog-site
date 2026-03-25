@@ -607,7 +607,7 @@
                                 </td>
                                 <td class="products-table__description">
                                     <a href="{% url 'partners:public_product' product.slug %}" class="products-table__link">
-                                        {{ product.name }}
+                                        {{ product.compact_name|default:product.name }}
                                     </a>
                                 </td>
                                 <td class="products-table__price">
