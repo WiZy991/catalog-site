@@ -2705,6 +2705,33 @@ body > p:first-child:not(.header):not(.mobile-menu) {
 .characteristics-value {
     color: var(--color-gray-900);
     font-weight: 500;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+/* Мобильная читаемость блока "Применимость и характеристики" */
+@media (max-width: 767px) {
+    .product-info__section {
+        padding: var(--space-lg);
+    }
+
+    .characteristics-item {
+        display: block;
+        padding: var(--space-md) 0;
+    }
+
+    .characteristics-key {
+        display: block;
+        margin-right: 0;
+        margin-bottom: 6px;
+        font-size: 1rem;
+    }
+
+    .characteristics-value {
+        display: block;
+        line-height: 1.45;
+        font-size: 1.02rem;
+    }
 }
 
 .applicability-list {

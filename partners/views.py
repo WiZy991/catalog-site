@@ -18,6 +18,7 @@ from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 
 from catalog.models import Category, Product
+from catalog.services import build_farpost_compact_name
 from .models import PartnerRequest, Partner, PartnerSettings, PartnerOrder, PartnerOrderItem
 from .forms import PartnerRequestForm, PartnerLoginForm, PartnerProfileForm, PartnerPasswordChangeForm, PartnerPasswordResetForm, PartnerSetPasswordForm
 from django.http import JsonResponse
@@ -611,6 +612,8 @@ class PublicPartnerCatalogView(ListView):
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        for product in context.get('products', []):
+            product.compact_name = build_farpost_compact_name(product)
         # Получаем корневые категории с подкатегориями
         root_categories = Category.objects.filter(
             parent=None, 
@@ -871,6 +874,8 @@ class PartnerCatalogView(PartnerRequiredMixin, ListView):
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        for product in context.get('products', []):
+            product.compact_name = build_farpost_compact_name(product)
         # Получаем корневые категории с подкатегориями
         # Показываем ВСЕ активные корневые категории
         root_categories = Category.objects.filter(
