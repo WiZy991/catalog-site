@@ -90,6 +90,148 @@ MAIN_CATEGORIES = {
     ],
 }
 
+# Жестко заданный эталонный список подкатегорий для 4 корневых категорий.
+# Эти значения всегда должны присутствовать в keywords родительских категорий.
+FIXED_ROOT_SUBCATEGORIES = {
+    'Автоэлектрика': [
+        'Датчик ABS',
+        'Датчик давления масла',
+        'Датчик кислородный',
+        'Датчик положения коленвала',
+        'Датчик положения распредвала',
+        'Датчик расхода воздуха',
+        'Датчик температурный',
+        'Датчик топливного фильтра',
+        'Диодный мост',
+        'Катушка зажигания',
+        'Наконечник катушки зажигания',
+        'Подогреватель топливного фильтра',
+        'Предпусковой подогреватель двигателя',
+        'Регулятор напряжения генератора',
+        'Реле генератора',
+        'Свеча зажигания',
+        'Свеча накала',
+        'Шлейф подрулевой',
+    ],
+    'Двигатель и выхлопная система': [
+        'Бендикс',
+        'Болт ГБЦ',
+        'Вискомуфта',
+        'Вкладыш коренной',
+        'Вкладыш шатунный',
+        'Вставка масляная',
+        'Втягивающее реле',
+        'Высоковольтные провода',
+        'ГБЦ в сборе',
+        'ГБЦ пустая',
+        'Генератор',
+        'Гильзы',
+        'Клапан VVTi',
+        'Клапан впускной',
+        'Клапан выпускной',
+        'Клапан холостого хода',
+        'Коленвал',
+        'Кольца поршневые',
+        'Кольца глушителя',
+        'Кронштейн вискомуфты',
+        'Крышка радиатора',
+        'Крышка трамблёра',
+        'Направляющая клапана',
+        'Насос гидроусилителя',
+        'Насос масляный',
+        'Насос низкого давления',
+        'Насос ручной подкачки топлива',
+        'Насос топливный',
+        'Натяжитель',
+        'Опора двигателя',
+        'Опора кузова',
+        'Плунжер ТНВД',
+        'Плунжерная пара',
+        'Подшипник генератора',
+        'Подшипник компрессора кондиционера',
+        'Подшипник натяжной',
+        'Подшипник обводной',
+        'Подшипник стартера',
+        'Помпа водяная',
+        'Поршни',
+        'Прокладка ГБЦ',
+        'Прокладка клапанной крышки',
+        'Прокладка форсунки',
+        'Радиатор',
+        'Распредвал',
+        'Распылитель форсунки',
+        'Ремкомплект двигателя',
+        'Ремкомплект ГРМ',
+        'Ремкомплект ТНВД',
+        'Ремкомплект турбины',
+        'Ролик натяжной',
+        'Стартер',
+        'Термостат',
+        'Трамблёр',
+        'Трубка обратки',
+        'Турбина',
+        'Фильтр воздушный',
+        'Фильтр масляный',
+        'Фильтр салонный',
+        'Фильтр топливный',
+        'Фильтр топливный погружной',
+        'Форсунка топливная',
+        'Шкив генератора',
+        'Шкив коленвала',
+        'Щёточный узел генератора',
+        'Щёточный узел стартера',
+    ],
+    'Детали подвески': [
+        'Амортизатор',
+        'Линк стабилизатора',
+        'Опора амортизатора',
+        'Отбойник амортизатора',
+        'Пневмоподушка',
+        'Подшипник опорный',
+        'Пружина подвески',
+        'Пыльник амортизатора',
+        'Пыльник шаровой опоры',
+        'Подшипник рулевой рейки',
+        'Пыльник рулевой рейки',
+        'Рулевая рейка',
+        'Рулевой наконечник',
+        'Рулевой редуктор',
+        'Рычаг подвески',
+        'Сайлентблок',
+        'Тяга подвески',
+        'Тяга рулевая',
+        'Шаровая опора',
+    ],
+    'Трансмиссия и тормозная система': [
+        'Втулка бронзовая',
+        'Главный тормозной цилиндр',
+        'Гофра',
+        'Диск сцепления',
+        'Карданный вал',
+        'Колодки барабанные',
+        'Колодки дисковые',
+        'Корзина сцепления',
+        'Крестовина',
+        'Крышка электрического хаба',
+        'Лок/Хаб',
+        'Подшипник выжимной',
+        'Подшипник игольчатый',
+        'Подшипник КПП',
+        'Подшипник подвесной',
+        'Подшипник редукторный',
+        'Подшипник ступичный',
+        'Привод',
+        'Пыльник привода',
+        'Ремкомплект поворотного кулака',
+        'Ступичный узел',
+        'Суппорт тормозной',
+        'Тормозной шланг',
+        'Трос МКПП',
+        'Трос спидометра',
+        'Шрус внешний',
+    ],
+}
+
 # Маппинг ключевых слов на подкатегории (внутри основных категорий)
 SUBCATEGORY_KEYWORDS = {
     # Автоэлектрика
@@ -393,7 +535,30 @@ def sync_subcategories_from_keywords(parent_category: Category, *, deactivate_re
     if not parent_category:
         return (0, 0, 0)
 
-    keywords = parent_category.get_keywords_list()
+    fixed_keywords_raw = FIXED_ROOT_SUBCATEGORIES.get((parent_category.name or '').strip(), [])
+    manual_keywords_raw = [k.strip() for k in str(parent_category.keywords or '').split(',') if k and k.strip()]
+
+    # Объединяем "эталонные" + ручные ключевые слова (ручные не теряем).
+    merged_keywords_raw = []
+    seen_merged = set()
+    for kw in list(fixed_keywords_raw) + list(manual_keywords_raw):
+        kw_clean = str(kw).strip()
+        if not kw_clean:
+            continue
+        k_norm = kw_clean.lower()
+        if k_norm in seen_merged:
+            continue
+        seen_merged.add(k_norm)
+        merged_keywords_raw.append(kw_clean)
+
+    # Автозаполняем keywords в админке, чтобы эталонные подкатегории всегда были видны в корневых категориях.
+    if fixed_keywords_raw:
+        merged_keywords_text = ', '.join(merged_keywords_raw)
+        if (parent_category.keywords or '').strip() != merged_keywords_text:
+            parent_category.keywords = merged_keywords_text
+            parent_category.save(update_fields=['keywords', 'updated_at'])
+
+    keywords = [k.lower() for k in merged_keywords_raw] if merged_keywords_raw else parent_category.get_keywords_list()
     # Не синхронизируем, если ключевых слов нет
     if not keywords:
         return (0, 0, 0)
@@ -479,7 +644,8 @@ def sync_subcategories_from_keywords(parent_category: Category, *, deactivate_re
 
     # Группируем ключевые слова по нормализованной форме (единственное число)
     # чтобы избежать дубликатов типа "Радиатор" и "Радиаторы"
-    normalized_groups = {}  # {normalized_key: (original_name, original_keyword)}
+    normalized_groups = {}  # {normalized_key: (display_name, keyword_lower)}
+    fixed_display_by_lower = {str(x).strip().lower(): str(x).strip() for x in fixed_keywords_raw}
     
     for kw in keywords:
         kw_clean = (kw or '').strip()
@@ -496,17 +662,18 @@ def sync_subcategories_from_keywords(parent_category: Category, *, deactivate_re
         
         # Если уже есть слово с такой нормализованной формой, выбираем более короткое
         # (обычно единственное число короче множественного)
+        display_name = fixed_display_by_lower.get(kw_clean.lower(), capfirst(kw_clean))
         if normalized not in normalized_groups:
-            normalized_groups[normalized] = (capfirst(kw_clean), kw_clean.lower())
+            normalized_groups[normalized] = (display_name, kw_clean.lower())
         else:
             existing_name, existing_kw = normalized_groups[normalized]
             # Предпочитаем единственное число (более короткое слово)
             if len(kw_clean) < len(existing_kw):
-                normalized_groups[normalized] = (capfirst(kw_clean), kw_clean.lower())
+                normalized_groups[normalized] = (display_name, kw_clean.lower())
             # Если одинаковой длины, предпочитаем то, что уже в единственном числе
             elif len(kw_clean) == len(existing_kw):
                 if not kw_clean.lower().endswith(('ы', 'и', 'а', 'я')):
-                    normalized_groups[normalized] = (capfirst(kw_clean), kw_clean.lower())
+                    normalized_groups[normalized] = (display_name, kw_clean.lower())
 
     # Формируем список уникальных имен подкатегорий
     desired_names = [name for name, _ in normalized_groups.values()]
