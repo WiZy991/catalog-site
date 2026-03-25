@@ -399,9 +399,14 @@ class PartnerProductView(PartnerRequiredMixin, DetailView):
             parts = [p.strip() for p in text.split(',') if p and p.strip()]
             if not parts:
                 return ''
+            def _first_token(s: str) -> str:
+                chunks = [c.strip() for c in str(s or '').split('/') if c and c.strip()]
+                return chunks[0] if chunks else str(s or '').strip()
+            first = _first_token(parts[0])
             if len(parts) >= 2:
-                return f'{parts[0]}, {parts[1]}'
-            return parts[0]
+                second = _first_token(parts[1])
+                return f'{first}, {second}' if second else first
+            return first
 
         def _first_engine(raw: str) -> str:
             text = str(raw or '').replace('\n', ' ').strip()
@@ -730,9 +735,14 @@ class PublicPartnerProductView(DetailView):
             parts = [p.strip() for p in text.split(',') if p and p.strip()]
             if not parts:
                 return ''
+            def _first_token(s: str) -> str:
+                chunks = [c.strip() for c in str(s or '').split('/') if c and c.strip()]
+                return chunks[0] if chunks else str(s or '').strip()
+            first = _first_token(parts[0])
             if len(parts) >= 2:
-                return f'{parts[0]}, {parts[1]}'
-            return parts[0]
+                second = _first_token(parts[1])
+                return f'{first}, {second}' if second else first
+            return first
 
         def _first_engine(raw: str) -> str:
             text = str(raw or '').replace('\n', ' ').strip()
