@@ -149,16 +149,13 @@ class Command(BaseCommand):
             cutoff_time = datetime.now() - timedelta(minutes=recent_minutes)
             self.stdout.write(f'Обрабатываем файлы, измененные за последние {recent_minutes} минут')
         
-        # Всегда очищаем 1С-товары один раз перед началом обработки пакета файлов
-        self.stdout.write(self.style.WARNING(
-            'Очищаем товары из 1С перед началом обмена: clear_1c_products --catalog-type all --yes'
-        ))
-        try:
-            from django.core.management import call_command
-            call_command('clear_1c_products', catalog_type='all', yes=True)
-        except Exception as e:
-            self.stdout.write(self.style.ERROR(f'Ошибка очистки 1С-товаров: {e}'))
-            return
+        # ВАЖНО:
+        # Не очищаем товары заранее. Иначе возможен сценарий:
+        # 1) очистили товары
+        # 2) все файлы пропущены по маркерам/фильтрам
+        # => на сайте 0 товаров.
+        # Очищаем только перед фактической обработкой ПЕРВОГО файла.
+        cleared_before_processing = False
 
         for filename in target_files:  # Обрабатываем в правильном порядке
             file_path = os.path.join(EXCHANGE_DIR, filename)
@@ -228,6 +225,18 @@ class Command(BaseCommand):
                     self.stdout.write(f'Пропускаем старый файл: {filename} (изменен {file_mtime.strftime("%Y-%m-%d %H:%M:%S")})')
                     continue
             
+            if not cleared_before_processing:
+                self.stdout.write(self.style.WARNING(
+                    'Очищаем товары из 1С перед началом обмена: clear_1c_products --catalog-type all --yes'
+                ))
+                try:
+                    from django.core.management import call_command
+                    call_command('clear_1c_products', catalog_type='all', yes=True)
+                    cleared_before_processing = True
+                except Exception as e:
+                    self.stdout.write(self.style.ERROR(f'Ошибка очистки 1С-товаров: {e}'))
+                    return
+
             self.stdout.write(f'Обработка файла: {filename}...')
             
             try:
