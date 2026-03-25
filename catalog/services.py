@@ -17,7 +17,7 @@ MAIN_CATEGORIES = {
         'реле', 'проводка', 'блок управления',
         'аккумулятор', 'предохранитель', 'лампа',
         'фара', 'фонарь', 'сигнал', 'электро',
-        'высоковольтн', 'провод', 'блок управления двигателем', 'эбу', 'ecu',
+        'провод', 'блок управления двигателем', 'эбу', 'ecu',
         # Датчики общего назначения (не двигателя) - более специфичные первыми
         'датчик abs', 'датчик скорости', 'датчик парковки', 'датчик света',
         'датчик дождя', 'датчик света фар', 'датчик давления шин',
@@ -37,10 +37,11 @@ MAIN_CATEGORIES = {
         'ремень грм', 'цепь грм', 'натяжитель', 'ролик', 'выхлоп', 'глушитель',
         'катализатор', 'коллектор', 'engine', 'piston', 'valve', 'turbo', 'injector',
         'вкладыш', 'шатун', 'маслосъемн', 'сальник', 'маслоохладитель',
+        'высоковольтн', 'высоковольтные провода',
         'интеркулер', 'egr', 'дроссель', 'впуск', 'плунжер', 'трубк', 'обратк',
         'трубка обратки', 'трубки обратки', 'обратка', 'обратки',
-        'топливн', 'ремкомплект грм', 'ремкомплект двигателя', 'отопител',
-        'автономн', 'печк', 'прокладка', 'ремень', 'oil seal',
+        'топливн', 'ремкомплект грм', 'ремкомплект двигателя',
+        'печк', 'прокладка', 'ремень', 'oil seal',
         # Дополнительные компоненты двигателя
         'маслоотделитель', 'адсорбер', 'клапан egr', 'клапан pcv',
         'масляный щуп', 'крышка клапанов', 'головка блока', 'блок двигателя',
@@ -121,7 +122,6 @@ FIXED_ROOT_SUBCATEGORIES = {
         'Вкладыш шатунный',
         'Вставка масляная',
         'Втягивающее реле',
-        'Высоковольтные провода',
         'ГБЦ в сборе',
         'ГБЦ пустая',
         'Генератор',
@@ -232,11 +232,25 @@ FIXED_ROOT_SUBCATEGORIES = {
     ],
 }
 
+# Алиасы "старых" / дублирующих названий подкатегорий -> каноническое имя.
+CANONICAL_SUBCATEGORY_ALIASES = {
+    'плунжерные пары': 'Плунжерная пара',
+    'ремкомплекты двигателя': 'Ремкомплект двигателя',
+    'водяные помпы': 'Помпа водяная',
+    'водянные помпы': 'Помпа водяная',
+    'топливные насосы': 'Насос топливный',
+}
+
+# Запрещенные подкатегории (не должны создаваться/активироваться).
+FORBIDDEN_SUBCATEGORY_NAMES = {
+    'автономные отопители',
+}
+
 # Маппинг ключевых слов на подкатегории (внутри основных категорий)
 SUBCATEGORY_KEYWORDS = {
     # Автоэлектрика
     'реле': ('Автоэлектрика', 'Реле'),
-    'высоковольтн': ('Автоэлектрика', 'Высоковольтные провода'),
+    'высоковольтн': ('Двигатель и выхлопная система', 'Высоковольтные провода'),
     
     # Двигатель и выхлопная система
     # Генераторы и стартеры - это части двигателя
@@ -259,8 +273,8 @@ SUBCATEGORY_KEYWORDS = {
     'турбокомпрессор': ('Двигатель и выхлопная система', 'Турбины'),
     'форсунка': ('Двигатель и выхлопная система', 'Форсунки'),
     'тнвд': ('Двигатель и выхлопная система', 'ТНВД'),
-    'насос топливный': ('Двигатель и выхлопная система', 'Топливные насосы'),
-    'топливный насос': ('Двигатель и выхлопная система', 'Топливные насосы'),
+    'насос топливный': ('Двигатель и выхлопная система', 'Насос топливный'),
+    'топливный насос': ('Двигатель и выхлопная система', 'Насос топливный'),
     'фильтр': ('Двигатель и выхлопная система', 'Фильтры'),
     'фильтры': ('Двигатель и выхлопная система', 'Фильтры'),
     'термостат': ('Двигатель и выхлопная система', 'Термостаты'),
@@ -271,8 +285,8 @@ SUBCATEGORY_KEYWORDS = {
     'трубки обратки': ('Двигатель и выхлопная система', 'Трубки обратки'),
     'радиатор': ('Двигатель и выхлопная система', 'Радиаторы'),
     'термостат': ('Двигатель и выхлопная система', 'Термостаты'),
-    'помпа': ('Двигатель и выхлопная система', 'Водяные помпы'),
-    'водяной насос': ('Двигатель и выхлопная система', 'Водяные помпы'),
+    'помпа': ('Двигатель и выхлопная система', 'Помпа водяная'),
+    'водяной насос': ('Двигатель и выхлопная система', 'Помпа водяная'),
     'вентилятор': ('Двигатель и выхлопная система', 'Вентиляторы'),
     'вискомуфта': ('Двигатель и выхлопная система', 'Вискомуфты'),
     'коленвал': ('Двигатель и выхлопная система', 'Коленвалы'),
@@ -285,12 +299,10 @@ SUBCATEGORY_KEYWORDS = {
     'прокладка гбц': ('Двигатель и выхлопная система', 'ГБЦ'),
     'масляный насос': ('Двигатель и выхлопная система', 'Масляные насосы'),
     'ремкомплект грм': ('Двигатель и выхлопная система', 'Ремкомплекты ГРМ'),
-    'ремкомплект двигателя': ('Двигатель и выхлопная система', 'Ремкомплекты двигателя'),
-    'плунжер': ('Двигатель и выхлопная система', 'Плунжерные пары'),
+    'ремкомплект двигателя': ('Двигатель и выхлопная система', 'Ремкомплект двигателя'),
+    'плунжер': ('Двигатель и выхлопная система', 'Плунжерная пара'),
     'трубк': ('Двигатель и выхлопная система', 'Трубки обратки'),
     'обратк': ('Двигатель и выхлопная система', 'Трубки обратки'),
-    'отопител': ('Двигатель и выхлопная система', 'Автономные отопители'),
-    'автономн': ('Двигатель и выхлопная система', 'Автономные отопители'),
     'опора двигателя': ('Двигатель и выхлопная система', 'Опора двигателя'),
     'подушка двигателя': ('Двигатель и выхлопная система', 'Опора двигателя'),
     'сальник': ('Двигатель и выхлопная система', 'Сальники'),
@@ -545,6 +557,9 @@ def sync_subcategories_from_keywords(parent_category: Category, *, deactivate_re
         kw_clean = str(kw).strip()
         if not kw_clean:
             continue
+        kw_clean = CANONICAL_SUBCATEGORY_ALIASES.get(kw_clean.lower(), kw_clean)
+        if kw_clean.lower() in FORBIDDEN_SUBCATEGORY_NAMES:
+            continue
         k_norm = kw_clean.lower()
         if k_norm in seen_merged:
             continue
@@ -651,6 +666,9 @@ def sync_subcategories_from_keywords(parent_category: Category, *, deactivate_re
         kw_clean = (kw or '').strip()
         if not kw_clean:
             continue
+        kw_clean = CANONICAL_SUBCATEGORY_ALIASES.get(kw_clean.lower(), kw_clean)
+        if kw_clean.lower() in FORBIDDEN_SUBCATEGORY_NAMES:
+            continue
         if not _is_cyrillic_keyword(kw_clean):
             continue
         if _looks_like_truncated_keyword(kw_clean.lower()):
@@ -718,6 +736,25 @@ def sync_subcategories_from_keywords(parent_category: Category, *, deactivate_re
                 duplicate.is_active = False
                 duplicate.save(update_fields=['is_active', 'updated_at'])
                 deactivated += 1
+
+    # Принудительно отключаем запрещённые подкатегории (независимо от способа создания).
+    for child in Category.objects.filter(parent=parent_category, is_active=True):
+        if child.name.strip().lower() in FORBIDDEN_SUBCATEGORY_NAMES:
+            child.is_active = False
+            child.save(update_fields=['is_active', 'updated_at'])
+            deactivated += 1
+
+    # Для старых/дублирующих алиасов: если подкатегория пустая, отключаем её.
+    alias_names_lower = set(CANONICAL_SUBCATEGORY_ALIASES.keys())
+    for child in Category.objects.filter(parent=parent_category, is_active=True):
+        child_name_lower = child.name.strip().lower()
+        if child_name_lower not in alias_names_lower:
+            continue
+        has_products = child.products.exists()
+        if not has_products:
+            child.is_active = False
+            child.save(update_fields=['is_active', 'updated_at'])
+            deactivated += 1
 
     for name in desired_names:
         key = name.strip().lower()
@@ -2147,6 +2184,29 @@ def build_farpost_compact_name(product):
     return ', '.join(chunks) if chunks else base_name
 
 
+def format_models_multiline(value: str) -> str:
+    """
+    Форматирует применимость для моделей в многострочный вид:
+    каждый элемент на новой строке (для CSV/XLS Farpost).
+    """
+    raw = str(value or '').strip()
+    if not raw:
+        return ''
+    parts = re.split(r'[,/\n]+', raw)
+    out = []
+    seen = set()
+    for p in parts:
+        item = p.strip()
+        if not item:
+            continue
+        key = item.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(item)
+    return '\n'.join(out)
+
+
 def generate_farpost_description(product, site_url=''):
     """
     Генерирует описание для Farpost.
@@ -2286,7 +2346,7 @@ def generate_farpost_api_file(products, file_format='xls', request=None):
                 product.get_availability_display(),
                 quantity,
                 characteristics,
-                models_value,
+                format_models_multiline(models_value),
                 engines_value,
                 export_cross_numbers,
                 photo_urls[0],
@@ -2393,7 +2453,7 @@ def generate_farpost_api_file(products, file_format='xls', request=None):
                 product.get_availability_display(),
                 quantity,
                 characteristics,
-                models_value,
+                format_models_multiline(models_value),
                 engines_value,
                 export_cross_numbers,
                 photo_urls[0],

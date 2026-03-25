@@ -188,6 +188,7 @@ class FarpostExportMixin:
             generate_farpost_images,
             clean_product_name,
             build_farpost_compact_name,
+            format_models_multiline,
         )
         import io as _io
         
@@ -277,7 +278,7 @@ class FarpostExportMixin:
                 product.get_availability_display(),
                 quantity,
                 characteristics,
-                models_value,
+                format_models_multiline(models_value),
                 engines_value,
                 export_cross_numbers,
                 photo_urls[0],
