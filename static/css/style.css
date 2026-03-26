@@ -2757,6 +2757,26 @@ body > p:first-child:not(.header):not(.mobile-menu) {
         font-size: 1.02rem;
     }
 
+    .characteristics-item--stacked {
+        padding: 0.625rem 0;
+    }
+
+    .characteristics-item--stacked .characteristics-key {
+        font-size: 0.95rem;
+        margin-bottom: 0.35rem;
+    }
+
+    .characteristics-item--stacked .characteristics-value {
+        font-size: 0.98rem;
+        line-height: 1.45;
+    }
+
+    .product-info__section-title {
+        font-size: 1rem;
+        margin-bottom: 0.625rem;
+        padding-bottom: 0.5rem;
+    }
+
     .product-info__title,
     .product-info__char-key,
     .product-info__char-value,
