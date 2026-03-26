@@ -355,6 +355,14 @@ class ProductView(DetailView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         product = self.object
+        def _format_models_multiline(v: str) -> str:
+            text = str(v or '').strip()
+            if not text:
+                return ''
+            # Разбиваем "Lexus GS300, ... Lexus GS350, ... Toyota ... " на отдельные строки по моделям.
+            chunks = re.split(r'(?=(?:[A-ZА-Я][a-zа-я]+(?:\s+[A-ZА-Я][a-zа-я0-9-]+)?,))', text)
+            lines = [c.strip(' ,') for c in chunks if c and c.strip(' ,')]
+            return '\n'.join(lines) if lines else text
         
         if product.category:
             context['breadcrumbs'] = product.category.get_ancestors(include_self=True)
@@ -586,6 +594,7 @@ class ProductView(DetailView):
                     out_key = key
                     if key_lower in ('кузов', 'body'):
                         out_key = 'Применимо для моделей'
+                        value = _format_models_multiline(value)
                         if not first_model:
                             first_model = str(value).strip()
                     elif key_lower in ('двигатель', 'engine'):

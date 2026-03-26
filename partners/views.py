@@ -334,6 +334,13 @@ class PartnerProductView(PartnerRequiredMixin, DetailView):
         
         # Получаем характеристики в едином формате с розницей.
         all_characteristics = product.get_characteristics_list()
+        def _format_models_multiline(v: str) -> str:
+            text = str(v or '').strip()
+            if not text:
+                return ''
+            chunks = re.split(r'(?=(?:[A-ZА-Я][a-zа-я]+(?:\s+[A-ZА-Я][a-zа-я0-9-]+)?,))', text)
+            lines = [c.strip(' ,') for c in chunks if c and c.strip(' ,')]
+            return '\n'.join(lines) if lines else text
         article2_keys = ('артикул2', 'article2', 'oem', 'oem номер', 'oem-номер')
         article2_value = ''
         cross_numbers = product.get_cross_numbers_list()
@@ -361,6 +368,7 @@ class PartnerProductView(PartnerRequiredMixin, DetailView):
             if key_lower in article2_keys:
                 characteristics.append(('OEM', val.lstrip('/')))
             elif key_lower in ('кузов', 'body'):
+                val = _format_models_multiline(val)
                 characteristics.append(('Применимо для моделей', val))
                 if not first_model:
                     first_model = val
@@ -678,6 +686,13 @@ class PublicPartnerProductView(DetailView):
         # Получаем характеристики в едином формате с розницей.
         product = self.object
         all_characteristics = product.get_characteristics_list()
+        def _format_models_multiline(v: str) -> str:
+            text = str(v or '').strip()
+            if not text:
+                return ''
+            chunks = re.split(r'(?=(?:[A-ZА-Я][a-zа-я]+(?:\s+[A-ZА-Я][a-zа-я0-9-]+)?,))', text)
+            lines = [c.strip(' ,') for c in chunks if c and c.strip(' ,')]
+            return '\n'.join(lines) if lines else text
         article2_keys = ('артикул2', 'article2', 'oem', 'oem номер', 'oem-номер')
         article2_value = ''
         cross_numbers = product.get_cross_numbers_list()
@@ -701,6 +716,7 @@ class PublicPartnerProductView(DetailView):
             if key_lower in article2_keys:
                 characteristics.append(('OEM', val.lstrip('/')))
             elif key_lower in ('кузов', 'body'):
+                val = _format_models_multiline(val)
                 characteristics.append(('Применимо для моделей', val))
                 if not first_model:
                     first_model = val

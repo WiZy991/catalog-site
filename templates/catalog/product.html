@@ -169,7 +169,7 @@
                             {% for key, value in characteristics %}
                             <div class="characteristics-item characteristics-item--stacked">
                                 <div class="characteristics-key">{{ key }}</div>
-                                <div class="characteristics-value">{{ value }}</div>
+                                <div class="characteristics-value">{{ value|linebreaksbr }}</div>
                             </div>
                             {% endfor %}
                         </div>

@@ -348,7 +348,7 @@
                         {% for key, value in characteristics %}
                         <div class="product-info__char-item">
                             <span class="product-info__char-key">{{ key }}</span>
-                            <span class="product-info__char-value">{{ value }}</span>
+                            <span class="product-info__char-value">{{ value|linebreaksbr }}</span>
                         </div>
                         {% endfor %}
                     </div>
