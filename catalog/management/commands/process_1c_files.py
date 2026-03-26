@@ -225,9 +225,13 @@ class Command(BaseCommand):
                     self.stdout.write(f'Пропускаем старый файл: {filename} (изменен {file_mtime.strftime("%Y-%m-%d %H:%M:%S")})')
                     continue
             
-            if not cleared_before_processing:
+            # ВАЖНО:
+            # Товары создаются из offers.xml (import.xml только парсится/логируется),
+            # поэтому очищаем 1С-товары только перед ПЕРВЫМ фактически обрабатываемым offers-файлом.
+            is_offers_file = 'offers' in filename.lower()
+            if is_offers_file and not cleared_before_processing:
                 self.stdout.write(self.style.WARNING(
-                    'Очищаем товары из 1С перед началом обмена: clear_1c_products --catalog-type all --yes'
+                    'Очищаем товары из 1С перед обработкой первого offers-файла: clear_1c_products --catalog-type all --yes'
                 ))
                 try:
                     from django.core.management import call_command
