@@ -2192,9 +2192,14 @@ def format_models_multiline(value: str) -> str:
     raw = str(value or '').strip()
     if not raw:
         return ''
-    # Пытаемся разбить на строки по началу "Марка Модель,"
-    # Пример: "Lexus GS300, ... Lexus GS350, ... Toyota Crown, ..."
-    chunks = re.split(r'(?=(?:[A-ZА-Я][a-zа-я]+(?:\s+[A-Za-zА-Яа-я0-9-]+)?,))', raw)
+    # Пытаемся разбить на строки по началу записи с БРЕНДОМ,
+    # чтобы не резать внутри модели "Toyota Crown Majesta".
+    brand_list = sorted({str(b).strip() for b in _DEFAULT_BRANDS if str(b).strip()}, key=len, reverse=True)
+    brand_pattern = '|'.join(re.escape(b) for b in brand_list)
+    chunks = []
+    if brand_pattern:
+        split_pattern = rf'(?=(?:{brand_pattern})\s+[A-Za-zА-Яа-я0-9-]+(?:\s+[A-Za-zА-Яа-я0-9-]+)*,\s*)'
+        chunks = re.split(split_pattern, raw)
     lines = [c.strip(' ,') for c in chunks if c and c.strip(' ,')]
     if lines:
         # Убираем дубли строк, сохраняя порядок.
