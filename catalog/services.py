@@ -2192,7 +2192,23 @@ def format_models_multiline(value: str) -> str:
     raw = str(value or '').strip()
     if not raw:
         return ''
-    # Разбиваем по основным разделителям перечней, включая разные варианты слеша.
+    # Пытаемся разбить на строки по началу "Марка Модель,"
+    # Пример: "Lexus GS300, ... Lexus GS350, ... Toyota Crown, ..."
+    chunks = re.split(r'(?=(?:[A-ZА-Я][a-zа-я]+(?:\s+[A-Za-zА-Яа-я0-9-]+)?,))', raw)
+    lines = [c.strip(' ,') for c in chunks if c and c.strip(' ,')]
+    if lines:
+        # Убираем дубли строк, сохраняя порядок.
+        out = []
+        seen = set()
+        for line in lines:
+            key = line.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(line)
+        return '\n'.join(out)
+
+    # Fallback: если не удалось выделить модельные строки — режем по разделителям.
     parts = re.split(r'[,/／\\|;\n\r\t]+', raw)
     out = []
     seen = set()
