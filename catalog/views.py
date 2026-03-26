@@ -8,6 +8,7 @@ from django.urls import reverse
 from django.conf import settings
 from .models import Category, Product
 from .filters import ProductFilter, get_brand_choices
+from .services import format_models_multiline
 
 
 class CatalogView(ListView):
@@ -356,13 +357,7 @@ class ProductView(DetailView):
         context = super().get_context_data(**kwargs)
         product = self.object
         def _format_models_multiline(v: str) -> str:
-            text = str(v or '').strip()
-            if not text:
-                return ''
-            # Разбиваем "Lexus GS300, ... Lexus GS350, ... Toyota ... " на отдельные строки по моделям.
-            chunks = re.split(r'(?=(?:[A-ZА-Я][a-zа-я]+(?:\s+[A-Za-zА-Яа-я0-9-]+)?,))', text)
-            lines = [c.strip(' ,') for c in chunks if c and c.strip(' ,')]
-            return '\n'.join(lines) if lines else text
+            return format_models_multiline(v)
         
         if product.category:
             context['breadcrumbs'] = product.category.get_ancestors(include_self=True)

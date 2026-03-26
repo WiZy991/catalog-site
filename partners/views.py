@@ -18,7 +18,7 @@ from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 
 from catalog.models import Category, Product
-from catalog.services import build_farpost_compact_name
+from catalog.services import build_farpost_compact_name, format_models_multiline
 from .models import PartnerRequest, Partner, PartnerSettings, PartnerOrder, PartnerOrderItem
 from .forms import PartnerRequestForm, PartnerLoginForm, PartnerProfileForm, PartnerPasswordChangeForm, PartnerPasswordResetForm, PartnerSetPasswordForm
 from django.http import JsonResponse
@@ -335,12 +335,7 @@ class PartnerProductView(PartnerRequiredMixin, DetailView):
         # Получаем характеристики в едином формате с розницей.
         all_characteristics = product.get_characteristics_list()
         def _format_models_multiline(v: str) -> str:
-            text = str(v or '').strip()
-            if not text:
-                return ''
-            chunks = re.split(r'(?=(?:[A-ZА-Я][a-zа-я]+(?:\s+[A-Za-zА-Яа-я0-9-]+)?,))', text)
-            lines = [c.strip(' ,') for c in chunks if c and c.strip(' ,')]
-            return '\n'.join(lines) if lines else text
+            return format_models_multiline(v)
         article2_keys = ('артикул2', 'article2', 'oem', 'oem номер', 'oem-номер')
         article2_value = ''
         cross_numbers = product.get_cross_numbers_list()
@@ -692,12 +687,7 @@ class PublicPartnerProductView(DetailView):
         product = self.object
         all_characteristics = product.get_characteristics_list()
         def _format_models_multiline(v: str) -> str:
-            text = str(v or '').strip()
-            if not text:
-                return ''
-            chunks = re.split(r'(?=(?:[A-ZА-Я][a-zа-я]+(?:\s+[A-Za-zА-Яа-я0-9-]+)?,))', text)
-            lines = [c.strip(' ,') for c in chunks if c and c.strip(' ,')]
-            return '\n'.join(lines) if lines else text
+            return format_models_multiline(v)
         article2_keys = ('артикул2', 'article2', 'oem', 'oem номер', 'oem-номер')
         article2_value = ''
         cross_numbers = product.get_cross_numbers_list()
