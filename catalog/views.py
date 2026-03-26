@@ -722,6 +722,26 @@ class ProductView(DetailView):
                 cleaned_characteristics.append((k, v))
             characteristics = cleaned_characteristics
 
+        # Если модели и двигатели совпадают — убираем строку двигателей как дубль.
+        def _norm_app_value(raw: str):
+            text = str(raw or '').strip().lower().replace('\n', ',')
+            parts = [' '.join(p.split()) for p in text.split(',') if p and p.strip()]
+            return tuple(parts)
+
+        model_values = {
+            _norm_app_value(v)
+            for k, v in characteristics
+            if str(k).strip().lower() == 'применимо для моделей' and _norm_app_value(v)
+        }
+        if model_values:
+            cleaned_characteristics = []
+            for k, v in characteristics:
+                k_norm = str(k).strip().lower()
+                if k_norm == 'применимо для двигателей' and _norm_app_value(v) in model_values:
+                    continue
+                cleaned_characteristics.append((k, v))
+            characteristics = cleaned_characteristics
+
         # Убираем полные дубли строк (одинаковый ключ + значение).
         unique_characteristics = []
         seen_pairs = set()

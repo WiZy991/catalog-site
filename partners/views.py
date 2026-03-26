@@ -387,6 +387,25 @@ class PartnerProductView(PartnerRequiredMixin, DetailView):
             else:
                 characteristics.append((key, value))
         
+        # Если модели и двигатели совпадают — убираем строку двигателей как дубль.
+        def _norm_app_value(raw: str):
+            text = str(raw or '').strip().lower().replace('\n', ',')
+            parts = [' '.join(p.split()) for p in text.split(',') if p and p.strip()]
+            return tuple(parts)
+
+        model_values = {
+            _norm_app_value(v)
+            for k, v in characteristics
+            if str(k).strip().lower() == 'применимо для моделей' and _norm_app_value(v)
+        }
+        if model_values:
+            cleaned_characteristics = []
+            for k, v in characteristics:
+                if str(k).strip().lower() == 'применимо для двигателей' and _norm_app_value(v) in model_values:
+                    continue
+                cleaned_characteristics.append((k, v))
+            characteristics = cleaned_characteristics
+
         # Добавляем вольтаж, если он есть в применимости
         voltage = product.get_voltage_from_applicability()
         if voltage:
@@ -734,6 +753,25 @@ class PublicPartnerProductView(DetailView):
                 characteristics.append(('Кросс-номера', val))
             else:
                 characteristics.append((key, value))
+
+        # Если модели и двигатели совпадают — убираем строку двигателей как дубль.
+        def _norm_app_value(raw: str):
+            text = str(raw or '').strip().lower().replace('\n', ',')
+            parts = [' '.join(p.split()) for p in text.split(',') if p and p.strip()]
+            return tuple(parts)
+
+        model_values = {
+            _norm_app_value(v)
+            for k, v in characteristics
+            if str(k).strip().lower() == 'применимо для моделей' and _norm_app_value(v)
+        }
+        if model_values:
+            cleaned_characteristics = []
+            for k, v in characteristics:
+                if str(k).strip().lower() == 'применимо для двигателей' and _norm_app_value(v) in model_values:
+                    continue
+                cleaned_characteristics.append((k, v))
+            characteristics = cleaned_characteristics
 
         voltage = product.get_voltage_from_applicability()
         if voltage:
