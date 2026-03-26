@@ -372,6 +372,11 @@ class PartnerProductView(PartnerRequiredMixin, DetailView):
                 characteristics.append(('Применимо для моделей', val))
                 if not first_model:
                     first_model = val
+            elif 'применимо для моделей' in key_lower:
+                val = _format_models_multiline(val)
+                characteristics.append(('Применимо для моделей', val))
+                if not first_model:
+                    first_model = val
             elif key_lower in ('двигатель', 'engine'):
                 characteristics.append(('Применимо для двигателей', val))
                 if not first_engine:
@@ -716,6 +721,11 @@ class PublicPartnerProductView(DetailView):
             if key_lower in article2_keys:
                 characteristics.append(('OEM', val.lstrip('/')))
             elif key_lower in ('кузов', 'body'):
+                val = _format_models_multiline(val)
+                characteristics.append(('Применимо для моделей', val))
+                if not first_model:
+                    first_model = val
+            elif 'применимо для моделей' in key_lower:
                 val = _format_models_multiline(val)
                 characteristics.append(('Применимо для моделей', val))
                 if not first_model:

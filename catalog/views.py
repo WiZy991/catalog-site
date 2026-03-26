@@ -597,6 +597,11 @@ class ProductView(DetailView):
                         value = _format_models_multiline(value)
                         if not first_model:
                             first_model = str(value).strip()
+                    elif 'применимо для моделей' in key_lower:
+                        out_key = 'Применимо для моделей'
+                        value = _format_models_multiline(value)
+                        if not first_model:
+                            first_model = str(value).strip()
                     elif key_lower in ('двигатель', 'engine'):
                         out_key = 'Применимо для двигателей'
                         if not first_engine:
