@@ -2709,6 +2709,21 @@ body > p:first-child:not(.header):not(.mobile-menu) {
     word-break: break-word;
 }
 
+.characteristics-item--stacked {
+    display: block;
+}
+
+.characteristics-item--stacked .characteristics-key {
+    display: block;
+    margin-bottom: 0.25rem;
+    margin-right: 0;
+}
+
+.characteristics-item--stacked .characteristics-value {
+    display: block;
+    line-height: 1.45;
+}
+
 /* Мобильная читаемость блока "Применимость и характеристики" */
 @media (max-width: 767px) {
     html,

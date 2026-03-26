@@ -167,9 +167,9 @@
                         {% if characteristics %}
                         <div class="characteristics-list">
                             {% for key, value in characteristics %}
-                            <div class="characteristics-item">
-                                <span class="characteristics-key">{{ key }}:</span>
-                                <span class="characteristics-value">{{ value }}</span>
+                            <div class="characteristics-item characteristics-item--stacked">
+                                <div class="characteristics-key">{{ key }}</div>
+                                <div class="characteristics-value">{{ value }}</div>
                             </div>
                             {% endfor %}
                         </div>
