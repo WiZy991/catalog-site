@@ -360,7 +360,7 @@ class ProductView(DetailView):
             if not text:
                 return ''
             # Разбиваем "Lexus GS300, ... Lexus GS350, ... Toyota ... " на отдельные строки по моделям.
-            chunks = re.split(r'(?=(?:[A-ZА-Я][a-zа-я]+(?:\s+[A-ZА-Я][a-zа-я0-9-]+)?,))', text)
+            chunks = re.split(r'(?=(?:[A-ZА-Я][a-zа-я]+(?:\s+[A-Za-zА-Яа-я0-9-]+)?,))', text)
             lines = [c.strip(' ,') for c in chunks if c and c.strip(' ,')]
             return '\n'.join(lines) if lines else text
         

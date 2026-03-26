@@ -338,7 +338,7 @@ class PartnerProductView(PartnerRequiredMixin, DetailView):
             text = str(v or '').strip()
             if not text:
                 return ''
-            chunks = re.split(r'(?=(?:[A-ZА-Я][a-zа-я]+(?:\s+[A-ZА-Я][a-zа-я0-9-]+)?,))', text)
+            chunks = re.split(r'(?=(?:[A-ZА-Я][a-zа-я]+(?:\s+[A-Za-zА-Яа-я0-9-]+)?,))', text)
             lines = [c.strip(' ,') for c in chunks if c and c.strip(' ,')]
             return '\n'.join(lines) if lines else text
         article2_keys = ('артикул2', 'article2', 'oem', 'oem номер', 'oem-номер')
@@ -695,7 +695,7 @@ class PublicPartnerProductView(DetailView):
             text = str(v or '').strip()
             if not text:
                 return ''
-            chunks = re.split(r'(?=(?:[A-ZА-Я][a-zа-я]+(?:\s+[A-ZА-Я][a-zа-я0-9-]+)?,))', text)
+            chunks = re.split(r'(?=(?:[A-ZА-Я][a-zа-я]+(?:\s+[A-Za-zА-Яа-я0-9-]+)?,))', text)
             lines = [c.strip(' ,') for c in chunks if c and c.strip(' ,')]
             return '\n'.join(lines) if lines else text
         article2_keys = ('артикул2', 'article2', 'oem', 'oem номер', 'oem-номер')
