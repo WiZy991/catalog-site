@@ -533,6 +533,43 @@ def detect_subcategory_info(text):
     return None
 
 
+def _sanitize_subcategory_name(raw_name: str) -> str:
+    """Нормализует название подкатегории перед созданием/сравнением."""
+    name = str(raw_name or '').strip()
+    if not name:
+        return ''
+    # Убираем служебные хвосты вида "(12)".
+    name = re.sub(r'\(\s*\d+\s*\)', '', name)
+    # Убираем крайние разделители/мусор.
+    name = name.strip(" \t\r\n,;:|/\\-_")
+    # Схлопываем пробелы.
+    name = re.sub(r'\s+', ' ', name).strip()
+    return name
+
+
+def _is_valid_subcategory_name(raw_name: str) -> bool:
+    """Фильтр от пустых/мусорных автоподкатегорий."""
+    name = _sanitize_subcategory_name(raw_name)
+    if not name:
+        return False
+
+    lowered = name.lower()
+    if lowered in FORBIDDEN_SUBCATEGORY_NAMES:
+        return False
+
+    # Не создаём слишком короткие и служебные значения.
+    stop_words = {'и', 'или', 'для', 'под', 'над', 'на', 'в', 'по', 'к', 'от', 'до'}
+    if lowered in stop_words:
+        return False
+    if len(lowered) < 3:
+        return False
+
+    # Должны присутствовать буквы (а не только цифры/знаки).
+    if not re.search(r'[а-яёa-z]', lowered, re.IGNORECASE):
+        return False
+    return True
+
+
 def sync_subcategories_from_keywords(parent_category: Category, *, deactivate_removed: bool = True):
     """
     Синхронизирует подкатегории (children) из ключевых слов родительской категории.
@@ -547,31 +584,27 @@ def sync_subcategories_from_keywords(parent_category: Category, *, deactivate_re
     if not parent_category:
         return (0, 0, 0)
 
+    # Источник истины — keywords в админке.
+    # Не добавляем "эталонные" ключи принудительно, иначе удалённые админом
+    # подкатегории будут возвращаться после каждого обмена.
     fixed_keywords_raw = FIXED_ROOT_SUBCATEGORIES.get((parent_category.name or '').strip(), [])
     manual_keywords_raw = [k.strip() for k in str(parent_category.keywords or '').split(',') if k and k.strip()]
 
-    # Объединяем "эталонные" + ручные ключевые слова (ручные не теряем).
+    # Используем только ручные (админские) ключевые слова.
     merged_keywords_raw = []
     seen_merged = set()
-    for kw in list(fixed_keywords_raw) + list(manual_keywords_raw):
-        kw_clean = str(kw).strip()
+    for kw in list(manual_keywords_raw):
+        kw_clean = _sanitize_subcategory_name(kw)
         if not kw_clean:
             continue
         kw_clean = CANONICAL_SUBCATEGORY_ALIASES.get(kw_clean.lower(), kw_clean)
-        if kw_clean.lower() in FORBIDDEN_SUBCATEGORY_NAMES:
+        if not _is_valid_subcategory_name(kw_clean):
             continue
         k_norm = kw_clean.lower()
         if k_norm in seen_merged:
             continue
         seen_merged.add(k_norm)
         merged_keywords_raw.append(kw_clean)
-
-    # Автозаполняем keywords в админке, чтобы эталонные подкатегории всегда были видны в корневых категориях.
-    if fixed_keywords_raw:
-        merged_keywords_text = ', '.join(merged_keywords_raw)
-        if (parent_category.keywords or '').strip() != merged_keywords_text:
-            parent_category.keywords = merged_keywords_text
-            parent_category.save(update_fields=['keywords', 'updated_at'])
 
     keywords = [k.lower() for k in merged_keywords_raw] if merged_keywords_raw else parent_category.get_keywords_list()
     # Не синхронизируем, если ключевых слов нет
@@ -663,11 +696,11 @@ def sync_subcategories_from_keywords(parent_category: Category, *, deactivate_re
     fixed_display_by_lower = {str(x).strip().lower(): str(x).strip() for x in fixed_keywords_raw}
     
     for kw in keywords:
-        kw_clean = (kw or '').strip()
+        kw_clean = _sanitize_subcategory_name(kw)
         if not kw_clean:
             continue
         kw_clean = CANONICAL_SUBCATEGORY_ALIASES.get(kw_clean.lower(), kw_clean)
-        if kw_clean.lower() in FORBIDDEN_SUBCATEGORY_NAMES:
+        if not _is_valid_subcategory_name(kw_clean):
             continue
         if not _is_cyrillic_keyword(kw_clean):
             continue
@@ -757,6 +790,9 @@ def sync_subcategories_from_keywords(parent_category: Category, *, deactivate_re
             deactivated += 1
 
     for name in desired_names:
+        name = _sanitize_subcategory_name(name)
+        if not _is_valid_subcategory_name(name):
+            continue
         key = name.strip().lower()
         normalized_key = _normalize_to_singular(key)
         
@@ -1414,7 +1450,17 @@ def get_category_for_product(product_name):
             
             if subcategory:
                 return subcategory
-            # Если подкатегория не найдена или неактивна, возвращаем основную категорию
+            # Если подкатегория не найдена — создаем ее автоматически (если валидна),
+            # чтобы новые товары из 1С сразу попадали в нужную подкатегорию.
+            clean_subcat_name = _sanitize_subcategory_name(subcat_name)
+            if _is_valid_subcategory_name(clean_subcat_name):
+                return Category.objects.create(
+                    name=capfirst(clean_subcat_name),
+                    parent=main_category,
+                    is_active=True,
+                    keywords=clean_subcat_name.lower(),
+                )
+            # Невалидное имя подкатегории — безопасно откатываемся к корневой.
             return main_category
     
     # Если подкатегория не определена, определяем основную категорию
@@ -1447,7 +1493,9 @@ def get_or_create_subcategory(product_name, parent_category):
     if not subcategory_name:
         return parent_category
     
-    subcategory_name_clean = subcategory_name.strip()
+    subcategory_name_clean = _sanitize_subcategory_name(subcategory_name)
+    if not _is_valid_subcategory_name(subcategory_name_clean):
+        return parent_category
     
     # Сначала ищем существующую подкатегорию (регистронезависимый поиск)
     existing = Category.objects.filter(
@@ -1460,9 +1508,10 @@ def get_or_create_subcategory(product_name, parent_category):
     
     # Создаём только если не нашли существующую
     subcategory = Category.objects.create(
-        name=subcategory_name_clean,
+        name=capfirst(subcategory_name_clean),
         parent=parent_category,
-        is_active=True
+        is_active=True,
+        keywords=subcategory_name_clean.lower(),
     )
     
     return subcategory

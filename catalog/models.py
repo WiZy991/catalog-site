@@ -126,6 +126,8 @@ class Category(MPTTModel):
             is_active=True,
             catalog_type='retail',  # Только товары из основного каталога
             quantity__gt=0  # Только товары с количеством больше 0
+        ).filter(
+            Q(availability='in_stock') | Q(availability='order')  # Как в CategoryView
         ).count()
         
         return count
