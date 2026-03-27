@@ -1801,6 +1801,74 @@ def get_category_for_product(product_name, use_db_subcategories: bool = True):
         # Минимальный порог, чтобы не класть товар в случайную подкатегорию.
         return best if best_score >= 2 else None
 
+    def _ensure_non_root_category(root_category: Category, raw_name: str):
+        """
+        Гарантирует, что товар не останется в корневой категории:
+        1) пытается подобрать существующую подкатегорию;
+        2) создает/переиспользует подкатегорию по названию товара (без "Прочее").
+        """
+        if not root_category:
+            return None
+        if root_category.parent_id is not None:
+            return root_category
+
+        # 1) Сначала пробуем подобрать наиболее подходящую существующую подкатегорию.
+        best_existing_child = _best_existing_child_for_name(root_category, raw_name)
+        if best_existing_child:
+            return best_existing_child
+
+        # 2) Формируем кандидат подкатегории из имени товара.
+        # Стараемся не отбрасывать товар в корень даже при "грязном" названии.
+        base = _sanitize_subcategory_name(clean_product_name(raw_name))
+        if ',' in base:
+            base = base.split(',', 1)[0].strip()
+        # Убираем токены брендов и токены с цифрами/кодами.
+        brand_tokens = {str(b).strip().lower() for b in KNOWN_BRANDS if str(b).strip()}
+        base_parts = []
+        for part in re.split(r'[\s/\\,;:()\-]+', base):
+            p = (part or '').strip()
+            if not p:
+                continue
+            if p.lower() in brand_tokens:
+                continue
+            if re.search(r'\d', p):
+                continue
+            if len(p) < 2:
+                continue
+            base_parts.append(p)
+        base_candidate = _sanitize_subcategory_name(' '.join(base_parts))
+
+        # Если после фильтрации пусто, пробуем смягчённую очистку исходного названия.
+        if not base_candidate:
+            fallback_raw = _sanitize_subcategory_name(str(raw_name or ''))
+            fallback_raw = re.sub(r'\d+', ' ', fallback_raw)
+            fallback_raw = re.sub(r'\s+', ' ', fallback_raw).strip()
+            fallback_parts = [
+                p for p in re.split(r'[\s/\\,;:()\-]+', fallback_raw)
+                if p and len(p) >= 2 and p.lower() not in brand_tokens
+            ]
+            base_candidate = _sanitize_subcategory_name(' '.join(fallback_parts[:4]))
+
+        # Если имя всё ещё спорное, оставляем только "буквенные" слова.
+        if base_candidate and not _is_valid_subcategory_name(base_candidate):
+            letter_parts = [
+                p for p in re.split(r'[\s/\\,;:()\-]+', base_candidate)
+                if p and re.search(r'[а-яёa-z]', p, re.IGNORECASE)
+            ]
+            base_candidate = _sanitize_subcategory_name(' '.join(letter_parts[:4]))
+
+        if base_candidate:
+            created_or_reused = _reuse_or_create_subcategory(root_category, base_candidate)
+            if isinstance(created_or_reused, Category) and created_or_reused.parent_id is not None:
+                return created_or_reused
+
+        # Последний шаг: если создать новую не удалось, оставляем лучший существующий child,
+        # иначе временно возвращаем корень (будет обработано командой перераспределения).
+        best_existing_child = _best_existing_child_for_name(root_category, raw_name)
+        if best_existing_child:
+            return best_existing_child
+        return root_category
+
     # 0) Приоритет явных правил/нормализации по типу детали.
     # Это должно срабатывать даже если текущая БД "кривая".
     preferred_root = None
@@ -1853,8 +1921,8 @@ def get_category_for_product(product_name, use_db_subcategories: bool = True):
             clean_subcat_name = _sanitize_subcategory_name(subcat_name)
             if _is_valid_subcategory_name(clean_subcat_name):
                 return _reuse_or_create_subcategory(main_category, clean_subcat_name)
-            # Невалидное имя подкатегории — безопасно откатываемся к корневой.
-            return main_category
+            # Невалидное имя подкатегории — не оставляем товар в корне.
+            return _ensure_non_root_category(main_category, product_name)
     
     # Если подкатегория не определена, определяем основную категорию.
     # При наличии preferred_root используем его как безопасный fallback, но
@@ -1905,14 +1973,12 @@ def get_category_for_product(product_name, use_db_subcategories: bool = True):
         except Exception:
             pass
 
-    # Fallback: если подкатегория по правилам не определилась, но есть подходящая
-    # существующая подкатегория в выбранном корне — используем её.
+    # Финальный этап: для корневой категории всегда выбираем/создаем подкатегорию.
+    # Это исключает "оседание" товаров в корне без подкатегории.
     if main_category and product_name:
-        best_existing_child = _best_existing_child_for_name(main_category, product_name)
-        if best_existing_child:
-            return best_existing_child
+        return _ensure_non_root_category(main_category, product_name)
 
-    return main_category
+    return _ensure_non_root_category(main_category, '') or main_category
 
 
 def get_or_create_subcategory(product_name, parent_category):

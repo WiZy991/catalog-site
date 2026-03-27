@@ -97,6 +97,10 @@ class CategoryView(ListView):
             raise Http404("Категория не найдена")
         
         descendants = self.category.get_descendants(include_self=True)
+        # Для категорий с подкатегориями показываем только товары из дочерних веток.
+        # Это выравнивает "Найдено" с суммой по подкатегориям.
+        if self.category.children.filter(is_active=True).exists():
+            descendants = descendants.exclude(id=self.category.id)
         queryset = Product.objects.filter(
             category__in=descendants,
             is_active=True,
@@ -235,6 +239,10 @@ class CatalogItemView(ListView):
         if hasattr(self, 'is_category') and self.is_category:
             category = self.category
             descendants = category.get_descendants(include_self=True)
+            # Для категорий с подкатегориями показываем только товары из дочерних веток.
+            # Это выравнивает "Найдено" с суммой по подкатегориям.
+            if category.children.filter(is_active=True).exists():
+                descendants = descendants.exclude(id=category.id)
             queryset = Product.objects.filter(
                 category__in=descendants,
                 is_active=True,
