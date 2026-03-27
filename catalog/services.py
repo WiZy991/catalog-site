@@ -1672,6 +1672,46 @@ def get_category_for_product(product_name, use_db_subcategories: bool = True):
             keywords=clean_name.lower(),
         )
 
+    def _best_existing_child_for_name(root_category: Category, raw_name: str):
+        """
+        Возвращает наиболее подходящую существующую подкатегорию под root_category
+        по пересечению токенов названия.
+        Нужен как fallback, чтобы товары не оседали в корне категории.
+        """
+        if not root_category:
+            return None
+        clean_name = _sanitize_subcategory_name(raw_name)
+        if not clean_name:
+            return None
+
+        name_tokens = {
+            t for t in re.split(r'[\s/\\,;:()\\-]+', clean_name.lower())
+            if t and len(t) >= 3 and not re.search(r'\d', t)
+        }
+        if not name_tokens:
+            return None
+
+        best = None
+        best_score = 0
+        for child in Category.objects.filter(parent=root_category, is_active=True):
+            child_name = _sanitize_subcategory_name(child.name or '')
+            child_tokens = {
+                t for t in re.split(r'[\s/\\,;:()\\-]+', child_name.lower())
+                if t and len(t) >= 3 and not re.search(r'\d', t)
+            }
+            if not child_tokens:
+                continue
+            score = len(name_tokens & child_tokens)
+            # Бонус за вхождение полного имени подкатегории в название товара.
+            if child_name and child_name.lower() in clean_name.lower():
+                score += 2
+            if score > best_score:
+                best_score = score
+                best = child
+
+        # Минимальный порог, чтобы не класть товар в случайную подкатегорию.
+        return best if best_score >= 2 else None
+
     # 0) Приоритет явных правил/нормализации по типу детали.
     # Это должно срабатывать даже если текущая БД "кривая".
     base_name = _sanitize_subcategory_name(clean_product_name(product_name))
@@ -1761,6 +1801,13 @@ def get_category_for_product(product_name, use_db_subcategories: bool = True):
                 return _reuse_or_create_subcategory(main_category, subcat_name)
         except Exception:
             pass
+
+    # Fallback: если подкатегория по правилам не определилась, но есть подходящая
+    # существующая подкатегория в выбранном корне — используем её.
+    if main_category and product_name:
+        best_existing_child = _best_existing_child_for_name(main_category, product_name)
+        if best_existing_child:
+            return best_existing_child
 
     return main_category
 

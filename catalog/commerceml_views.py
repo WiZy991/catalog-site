@@ -2445,7 +2445,7 @@ def process_offers_file_single_pass(root, namespaces, filename, request=None):
             try:
                 product = Product.objects.filter(external_id=product_id, catalog_type=catalog_type).first()
                 created = product is None
-                category = get_category_for_product(offer_name, use_db_subcategories=False)
+                category = get_category_for_product(offer_name, use_db_subcategories=True)
                 if not category:
                     category = Category.objects.filter(parent=None, is_active=True).first()
                 if created:
@@ -2890,7 +2890,7 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                     if offer_name:
                         try:
                             from .services import get_category_for_product
-                            category = get_category_for_product(offer_name, use_db_subcategories=False)
+                            category = get_category_for_product(offer_name, use_db_subcategories=True)
                         except Exception:
                             pass
                     
@@ -3327,7 +3327,7 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                     if not product.category.is_active:
                         from .services import get_category_for_product
                         # Только если категория неактивна, ищем активную
-                        new_category = get_category_for_product(product.name, use_db_subcategories=False)
+                        new_category = get_category_for_product(product.name, use_db_subcategories=True)
                         if new_category and new_category.is_active:
                             old_category = product.category
                             product.category = new_category
@@ -3631,7 +3631,7 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
         # так как в нём могут быть важные ключевые слова для определения категории
         # clean_name используется только для отображения (убирает лишние запятые)
         category_input = name if name and name.strip() else clean_name
-        category = get_category_for_product(category_input, use_db_subcategories=False)
+        category = get_category_for_product(category_input, use_db_subcategories=True)
         
         if process_product_from_commerceml._log_count <= 3:
             logger.info(f"  Категория определена по названию '{category_input[:50]}' -> '{category.name if category else 'НЕ НАЙДЕНА'}'")

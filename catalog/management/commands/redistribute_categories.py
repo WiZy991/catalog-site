@@ -113,7 +113,7 @@ class Command(BaseCommand):
                     try:
                         # Определяем категорию на основе названия товара
                         # Используем исходное название (name), так как в нём могут быть ключевые слова
-                        category = get_category_for_product(product.name, use_db_subcategories=False)
+                        category = get_category_for_product(product.name, use_db_subcategories=True)
                         
                         if not category:
                             self.stdout.write(self.style.ERROR(f'  ⚠ Товар {product.id} ({product.article}): не удалось определить категорию'))
