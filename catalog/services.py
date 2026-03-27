@@ -1072,6 +1072,83 @@ def sync_all_subcategories_from_keywords(*, root_only: bool = True, deactivate_r
     return totals
 
 
+def merge_duplicate_subcategories(*, dry_run: bool = True) -> dict:
+    """
+    Сливает дубли подкатегорий под одним родителем (регистронезависимо по имени).
+    Логика:
+    - выбирает "основную" категорию (больше товаров -> активная -> меньший id);
+    - переносит товары из дублей в основную;
+    - переносит дочерние категории дублей к основной;
+    - объединяет keywords;
+    - дубли деактивирует.
+    """
+    stats = {
+        'groups': 0,
+        'merged_categories': 0,
+        'moved_products': 0,
+        'moved_children': 0,
+        'deactivated': 0,
+    }
+
+    subcats = list(
+        Category.objects.filter(parent__isnull=False).select_related('parent').annotate(
+            products_count=Count('products')
+        )
+    )
+
+    grouped = {}
+    for cat in subcats:
+        key = (cat.parent_id, (cat.name or '').strip().lower())
+        grouped.setdefault(key, []).append(cat)
+
+    for (_parent_id, _name_key), cats in grouped.items():
+        if len(cats) < 2:
+            continue
+        stats['groups'] += 1
+
+        cats_sorted = sorted(
+            cats,
+            key=lambda c: (getattr(c, 'products_count', 0), int(bool(c.is_active)), -c.id),
+            reverse=True,
+        )
+        keeper = cats_sorted[0]
+        duplicates = cats_sorted[1:]
+
+        # Объединяем keywords в keeper.
+        keeper_keywords = {k.strip().lower() for k in str(keeper.keywords or '').split(',') if k and k.strip()}
+        for dup in duplicates:
+            dup_keywords = [k.strip().lower() for k in str(dup.keywords or '').split(',') if k and k.strip()]
+            keeper_keywords.update(dup_keywords)
+        merged_kw = ', '.join(sorted(keeper_keywords))
+        if merged_kw != (keeper.keywords or '').strip():
+            if not dry_run:
+                keeper.keywords = merged_kw
+                keeper.save(update_fields=['keywords', 'updated_at'])
+
+        for dup in duplicates:
+            moved_products = Product.objects.filter(category=dup).count()
+            moved_children = Category.objects.filter(parent=dup).exclude(id=keeper.id).count()
+
+            stats['moved_products'] += moved_products
+            stats['moved_children'] += moved_children
+            stats['merged_categories'] += 1
+
+            if dry_run:
+                continue
+
+            if moved_products:
+                Product.objects.filter(category=dup).update(category=keeper)
+            if moved_children:
+                Category.objects.filter(parent=dup).exclude(id=keeper.id).update(parent=keeper)
+
+            if dup.is_active:
+                dup.is_active = False
+                dup.save(update_fields=['is_active', 'updated_at'])
+                stats['deactivated'] += 1
+
+    return stats
+
+
 def detect_brand(text):
     """
     Автоматически определяет бренд по тексту.
