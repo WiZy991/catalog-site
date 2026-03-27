@@ -333,6 +333,8 @@ SUBCATEGORY_KEYWORDS = {
     'шрус': ('Трансмиссия и тормозная система', 'ШРУСы'),
     'кардан': ('Трансмиссия и тормозная система', 'Карданы'),
     'крестовина': ('Трансмиссия и тормозная система', 'Крестовины'),
+
+    'Запорная втулка': ('Трансмиссия и тормозная система', 'Втулка бронзовая'),
     'хаб': ('Трансмиссия и тормозная система', 'Лок/Хаб'),
     'лок хаб': ('Трансмиссия и тормозная система', 'Лок/Хаб'),
     'лок/хаб': ('Трансмиссия и тормозная система', 'Лок/Хаб'),
@@ -568,6 +570,15 @@ def _is_valid_subcategory_name(raw_name: str) -> bool:
     if lowered in stop_words:
         return False
     if len(lowered) < 3:
+        return False
+    if len(name) > 60:
+        return False
+    if ',' in name:
+        return False
+    if len(name.split()) > 4:
+        return False
+    # Отсекаем OEM/размеры/коды, чтобы не плодить "подкатегории-названия товаров".
+    if re.search(r'\d', name):
         return False
 
     # Должны присутствовать буквы (а не только цифры/знаки).
@@ -1488,6 +1499,8 @@ def get_category_for_product(product_name):
     if main_category and product_name:
         try:
             base_name = clean_product_name(product_name)
+            if ',' in base_name:
+                base_name = base_name.split(',', 1)[0].strip()
             subcat_name = _sanitize_subcategory_name(base_name)
             if _is_valid_subcategory_name(subcat_name):
                 existing_subcat = Category.objects.filter(
