@@ -259,6 +259,15 @@ ROOT_CATEGORY_TOKEN_RULES = {
     ],
 }
 
+# Явные правила (приоритет выше токенов): подкатегория -> корневая категория.
+# Используем для спорных/коротких названий, чтобы исключить неверное распределение.
+ROOT_CATEGORY_EXPLICIT_RULES = {
+    'втулка запорная': 'Трансмиссия и тормозная система',
+    'втулка рессоры': 'Детали подвески',
+    'газлифт': 'Детали подвески',
+    'гофра': 'Двигатель и выхлопная система',
+}
+
 
 def _build_root_category_token_rules() -> dict:
     """
@@ -654,6 +663,12 @@ def _detect_target_root_for_subcategory(subcategory_name: str) -> str | None:
     name_lower = str(subcategory_name or '').strip().lower()
     if not name_lower:
         return None
+
+    # 0) Сначала проверяем явные правила (самый высокий приоритет).
+    explicit_target = ROOT_CATEGORY_EXPLICIT_RULES.get(name_lower)
+    if explicit_target:
+        return explicit_target
+
     rules = _build_root_category_token_rules()
 
     # Считаем "вес" совпадений по каждому корню и выбираем самый сильный.
