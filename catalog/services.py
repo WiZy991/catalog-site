@@ -5,6 +5,7 @@ import re
 import os
 from django.core.files.base import ContentFile
 from django.db import transaction
+from django.db.models import Count
 from django.utils.text import capfirst
 from .models import Category, Product, ProductImage, Brand
 
@@ -899,9 +900,32 @@ def sync_subcategories_from_keywords(parent_category: Category, *, deactivate_re
     updated = 0
     deactivated = 0
 
-    # Существующие дети под этим родителем
-    # Создаем два индекса: по точному имени и по нормализованному
-    existing_children_by_name = {c.name.strip().lower(): c for c in Category.objects.filter(parent=parent_category)}
+    # Существующие дети под этим родителем.
+    # Создаем индексы и заранее схлопываем exact-дубли по имени.
+    existing_children = list(Category.objects.filter(parent=parent_category).annotate(products_count=Count('products')))
+    existing_children_by_name = {}
+    exact_duplicates_to_deactivate = []
+    for child in existing_children:
+        key = child.name.strip().lower()
+        if key not in existing_children_by_name:
+            existing_children_by_name[key] = child
+            continue
+        keeper = existing_children_by_name[key]
+        # Оставляем наиболее "ценную" категорию: больше товаров, активная, меньший id.
+        keeper_score = (getattr(keeper, 'products_count', 0), int(bool(keeper.is_active)), -keeper.id)
+        child_score = (getattr(child, 'products_count', 0), int(bool(child.is_active)), -child.id)
+        if child_score > keeper_score:
+            exact_duplicates_to_deactivate.append(keeper)
+            existing_children_by_name[key] = child
+        else:
+            exact_duplicates_to_deactivate.append(child)
+
+    for duplicate in exact_duplicates_to_deactivate:
+        if duplicate.is_active:
+            duplicate.is_active = False
+            duplicate.save(update_fields=['is_active', 'updated_at'])
+            deactivated += 1
+
     existing_children_by_normalized = {}
     duplicates_to_deactivate = []  # Список дубликатов для деактивации
     
@@ -1023,7 +1047,7 @@ def sync_subcategories_from_keywords(parent_category: Category, *, deactivate_re
     return (created, updated, deactivated)
 
 
-def sync_all_subcategories_from_keywords(*, root_only: bool = True):
+def sync_all_subcategories_from_keywords(*, root_only: bool = True, deactivate_removed: bool = False):
     """
     Синхронизирует подкатегории по keywords для всех категорий.
     Обычно вызывается перед/после обмена или при массовом обновлении.
@@ -1034,7 +1058,7 @@ def sync_all_subcategories_from_keywords(*, root_only: bool = True):
 
     totals = {'created': 0, 'updated': 0, 'deactivated': 0}
     for cat in qs:
-        c, u, d = sync_subcategories_from_keywords(cat, deactivate_removed=True)
+        c, u, d = sync_subcategories_from_keywords(cat, deactivate_removed=deactivate_removed)
         totals['created'] += c
         totals['updated'] += u
         totals['deactivated'] += d
@@ -1597,6 +1621,57 @@ def get_category_for_product(product_name, use_db_subcategories: bool = True):
     Возвращает объект Category (подкатегорию если найдена, иначе основную категорию).
     ВАЖНО: Возвращает только активные категории, чтобы товары не попадали в неактивные категории.
     """
+    def _reuse_or_create_subcategory(root_category: Category, raw_subcat_name: str):
+        """
+        Возвращает подкатегорию под нужным корнем без создания дублей:
+        - сначала ищет подкатегорию под целевым корнем (в т.ч. неактивную);
+        - затем переиспользует лучшего кандидата из любых корней (переносит в нужный);
+        - и только если ничего нет — создает новую.
+        """
+        clean_name = _sanitize_subcategory_name(raw_subcat_name)
+        if not root_category or not _is_valid_subcategory_name(clean_name):
+            return root_category
+
+        # 1) Уже существует под целевым корнем — просто активируем при необходимости.
+        existing_target = Category.objects.filter(
+            name__iexact=clean_name,
+            parent=root_category,
+        ).first()
+        if existing_target:
+            if not existing_target.is_active:
+                existing_target.is_active = True
+                existing_target.save(update_fields=['is_active', 'updated_at'])
+            return existing_target
+
+        # 2) Переиспользуем наиболее "весомый" дубль из других корней, а не создаем новый.
+        # Приоритет: больше товаров -> активная -> меньший id.
+        existing_any = Category.objects.filter(
+            name__iexact=clean_name,
+            parent__isnull=False,
+        ).exclude(parent=root_category).annotate(
+            products_count=Count('products')
+        ).order_by('-products_count', '-is_active', 'id').first()
+        if existing_any:
+            changed_fields = []
+            if existing_any.parent_id != root_category.id:
+                existing_any.parent = root_category
+                changed_fields.append('parent')
+            if not existing_any.is_active:
+                existing_any.is_active = True
+                changed_fields.append('is_active')
+            if changed_fields:
+                changed_fields.append('updated_at')
+                existing_any.save(update_fields=changed_fields)
+            return existing_any
+
+        # 3) Не нашли — создаем новую.
+        return Category.objects.create(
+            name=capfirst(clean_name),
+            parent=root_category,
+            is_active=True,
+            keywords=clean_name.lower(),
+        )
+
     # 0) Приоритет явных правил/нормализации по типу детали.
     # Это должно срабатывать даже если текущая БД "кривая".
     base_name = _sanitize_subcategory_name(clean_product_name(product_name))
@@ -1608,20 +1683,9 @@ def get_category_for_product(product_name, use_db_subcategories: bool = True):
             is_active=True
         ).first()
         if explicit_root:
-            existing_explicit_sub = Category.objects.filter(
-                name__iexact=base_name,
-                parent=explicit_root,
-                is_active=True
-            ).first()
-            if existing_explicit_sub:
+            existing_explicit_sub = _reuse_or_create_subcategory(explicit_root, base_name)
+            if isinstance(existing_explicit_sub, Category) and existing_explicit_sub.parent_id is not None:
                 return existing_explicit_sub
-            if _is_valid_subcategory_name(base_name):
-                return Category.objects.create(
-                    name=capfirst(base_name),
-                    parent=explicit_root,
-                    is_active=True,
-                    keywords=base_name.lower(),
-                )
             return explicit_root
 
     # 1) Пытаемся определить подкатегорию
@@ -1650,12 +1714,7 @@ def get_category_for_product(product_name, use_db_subcategories: bool = True):
             # чтобы новые товары из 1С сразу попадали в нужную подкатегорию.
             clean_subcat_name = _sanitize_subcategory_name(subcat_name)
             if _is_valid_subcategory_name(clean_subcat_name):
-                return Category.objects.create(
-                    name=capfirst(clean_subcat_name),
-                    parent=main_category,
-                    is_active=True,
-                    keywords=clean_subcat_name.lower(),
-                )
+                return _reuse_or_create_subcategory(main_category, clean_subcat_name)
             # Невалидное имя подкатегории — безопасно откатываемся к корневой.
             return main_category
     
@@ -1693,16 +1752,13 @@ def get_category_for_product(product_name, use_db_subcategories: bool = True):
                 existing_subcat = Category.objects.filter(
                     name__iexact=subcat_name,
                     parent=main_category,
-                    is_active=True
                 ).first()
                 if existing_subcat:
+                    if not existing_subcat.is_active:
+                        existing_subcat.is_active = True
+                        existing_subcat.save(update_fields=['is_active', 'updated_at'])
                     return existing_subcat
-                return Category.objects.create(
-                    name=capfirst(subcat_name),
-                    parent=main_category,
-                    is_active=True,
-                    keywords=subcat_name.lower(),
-                )
+                return _reuse_or_create_subcategory(main_category, subcat_name)
         except Exception:
             pass
 

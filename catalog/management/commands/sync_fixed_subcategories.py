@@ -9,8 +9,18 @@ class Command(BaseCommand):
         "добавляет их в keywords и создает/обновляет дочерние категории."
     )
 
+    def add_arguments(self, parser):
+        parser.add_argument(
+            '--deactivate-removed',
+            action='store_true',
+            help='Агрессивно деактивировать подкатегории, отсутствующие в keywords.',
+        )
+
     def handle(self, *args, **options):
-        totals = sync_all_subcategories_from_keywords(root_only=True)
+        totals = sync_all_subcategories_from_keywords(
+            root_only=True,
+            deactivate_removed=bool(options.get('deactivate_removed')),
+        )
         self.stdout.write(
             self.style.SUCCESS(
                 "Готово. "

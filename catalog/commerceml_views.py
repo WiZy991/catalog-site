@@ -685,7 +685,9 @@ def process_commerceml_file(file_path, filename, request=None):
         # Это нужно, чтобы изменения ключевых слов в админке начинали работать автоматически "после обмена".
         try:
             from catalog.services import sync_all_subcategories_from_keywords
-            sync_all_subcategories_from_keywords(root_only=True)
+            # Во время обмена не деактивируем подкатегории агрессивно:
+            # это может скрыть существующие рабочие ветки при неполных keywords.
+            sync_all_subcategories_from_keywords(root_only=True, deactivate_removed=False)
         except Exception:
             pass
 

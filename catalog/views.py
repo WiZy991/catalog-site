@@ -127,15 +127,14 @@ class CategoryView(ListView):
         context['found_count'] = paginator.count
         context['filter'] = self.filterset
 
-        # Показываем только те подкатегории, где есть видимые товары
-        # в поддереве (а не только товары, привязанные к самой подкатегории).
+        # Показываем ВСЕ активные дочерние подкатегории.
+        # Ранее жёсткая фильтрация по count>0 скрывала часть реальных подкатегорий.
         subcategories = []
         subcategories_qs = self.category.children.filter(is_active=True).order_by('name')
         for sub in subcategories_qs:
             visible_count = self._visible_products_count_for_branch(sub)
-            if visible_count > 0:
-                sub.visible_product_count = visible_count
-                subcategories.append(sub)
+            sub.visible_product_count = visible_count
+            subcategories.append(sub)
         context['subcategories'] = subcategories
         
         # Данные для фильтров
@@ -263,15 +262,14 @@ class CatalogItemView(ListView):
             context['found_count'] = paginator.count
             context['filter'] = self.filterset
 
-            # Показываем только те подкатегории, где есть видимые товары
-            # в поддереве (а не только товары, привязанные к самой подкатегории).
+            # Показываем ВСЕ активные дочерние подкатегории.
+            # Ранее жёсткая фильтрация по count>0 скрывала часть реальных подкатегорий.
             subcategories = []
             subcategories_qs = self.category.children.filter(is_active=True).order_by('name')
             for sub in subcategories_qs:
                 visible_count = self._visible_products_count_for_branch(sub)
-                if visible_count > 0:
-                    sub.visible_product_count = visible_count
-                    subcategories.append(sub)
+                sub.visible_product_count = visible_count
+                subcategories.append(sub)
             context['subcategories'] = subcategories
             
             # Данные для фильтров
