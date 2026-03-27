@@ -557,13 +557,14 @@ def detect_subcategory_info(text, use_db_subcategories: bool = True):
 
     if use_db_subcategories:
         # 0) Сначала проверяем подкатегории из БД (динамические, настраиваются в админке).
-        # Подкатегория = Category с parent != None и заполненными keywords.
+        # Подкатегория = Category с parent != None.
+        # ВАЖНО: не требуем заполненный keywords, иначе подкатегории без keywords
+        # вообще не участвуют в распределении и товары падают в корень.
         try:
             db_subcats = Category.objects.filter(
                 parent__isnull=False,
                 is_active=True,
-                keywords__isnull=False,
-            ).exclude(keywords='')
+            )
 
             # Собираем все (keyword -> (parent_name, subcat_name)), сортируем по длине keyword
             candidates = []
