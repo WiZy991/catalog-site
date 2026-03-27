@@ -47,6 +47,17 @@ class CategoryView(ListView):
     context_object_name = 'products'
     paginate_by = None
 
+    def _visible_products_count_for_branch(self, category):
+        descendants = category.get_descendants(include_self=True)
+        return Product.objects.filter(
+            category__in=descendants,
+            is_active=True,
+            catalog_type='retail',
+            quantity__gt=0
+        ).filter(
+            Q(availability='in_stock') | Q(availability='order')
+        ).count()
+
     def get_category(self):
         path = self.kwargs.get('path', '')
         if not path:
@@ -107,19 +118,25 @@ class CategoryView(ListView):
         
         context['category'] = self.category
         context['breadcrumbs'] = self.category.get_ancestors(include_self=True)
-        # Показываем на сайте только подкатегории, в которых есть товары.
-        # Подкатегории с 0 товаров не удаляем из БД, только скрываем в выдаче.
-        subcategories_qs = self.category.children.filter(is_active=True).order_by('name')
-        context['subcategories'] = [sub for sub in subcategories_qs if sub.product_count > 0]
-        context['found_count'] = sum(sub.product_count for sub in context['subcategories'])
-        context['filter'] = self.filterset
-        
         # Пагинация
         products = self.get_queryset()
         paginator = Paginator(products, getattr(settings, 'PRODUCTS_PER_PAGE', 24))
         page = self.request.GET.get('page', 1)
         context['products'] = paginator.get_page(page)
         context['paginator'] = paginator
+        context['found_count'] = paginator.count
+        context['filter'] = self.filterset
+
+        # Показываем только те подкатегории, где есть видимые товары
+        # в поддереве (а не только товары, привязанные к самой подкатегории).
+        subcategories = []
+        subcategories_qs = self.category.children.filter(is_active=True).order_by('name')
+        for sub in subcategories_qs:
+            visible_count = self._visible_products_count_for_branch(sub)
+            if visible_count > 0:
+                sub.visible_product_count = visible_count
+                subcategories.append(sub)
+        context['subcategories'] = subcategories
         
         # Данные для фильтров
         all_products = Product.objects.filter(
@@ -140,6 +157,17 @@ class CatalogItemView(ListView):
     template_name = 'catalog/category.html'
     context_object_name = 'products'
     paginate_by = None
+
+    def _visible_products_count_for_branch(self, category):
+        descendants = category.get_descendants(include_self=True)
+        return Product.objects.filter(
+            category__in=descendants,
+            is_active=True,
+            catalog_type='retail',
+            quantity__gt=0
+        ).filter(
+            Q(availability='in_stock') | Q(availability='order')
+        ).count()
     
     def dispatch(self, request, *args, **kwargs):
         """Определяем, что это - категория или товар."""
@@ -226,19 +254,25 @@ class CatalogItemView(ListView):
             context = super().get_context_data(**kwargs)
             context['category'] = self.category
             context['breadcrumbs'] = self.category.get_ancestors(include_self=True)
-            # Показываем на сайте только подкатегории, в которых есть товары.
-            # Подкатегории с 0 товаров не удаляем из БД, только скрываем в выдаче.
-            subcategories_qs = self.category.children.filter(is_active=True).order_by('name')
-            context['subcategories'] = [sub for sub in subcategories_qs if sub.product_count > 0]
-            context['found_count'] = sum(sub.product_count for sub in context['subcategories'])
-            context['filter'] = self.filterset
-            
             # Пагинация
             products = self.get_queryset()
             paginator = Paginator(products, getattr(settings, 'PRODUCTS_PER_PAGE', 24))
             page = self.request.GET.get('page', 1)
             context['products'] = paginator.get_page(page)
             context['paginator'] = paginator
+            context['found_count'] = paginator.count
+            context['filter'] = self.filterset
+
+            # Показываем только те подкатегории, где есть видимые товары
+            # в поддереве (а не только товары, привязанные к самой подкатегории).
+            subcategories = []
+            subcategories_qs = self.category.children.filter(is_active=True).order_by('name')
+            for sub in subcategories_qs:
+                visible_count = self._visible_products_count_for_branch(sub)
+                if visible_count > 0:
+                    sub.visible_product_count = visible_count
+                    subcategories.append(sub)
+            context['subcategories'] = subcategories
             
             # Данные для фильтров
             all_products = Product.objects.filter(
