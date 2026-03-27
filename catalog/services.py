@@ -547,58 +547,42 @@ def detect_category(text):
     return 'Двигатель и выхлопная система'
 
 
-def detect_subcategory_info(text):
+def detect_subcategory_info(text, use_db_subcategories: bool = True):
     """
     Определяет подкатегорию по ключевым словам.
     Возвращает кортеж (основная_категория, подкатегория) или None.
     """
     text_lower = text.lower()
 
-    # 0) Сначала проверяем подкатегории из БД (динамические, настраиваются в админке).
-    # Подкатегория = Category с parent != None и заполненными keywords.
-    try:
-        db_subcats = Category.objects.filter(
-            parent__isnull=False,
-            is_active=True,
-            keywords__isnull=False,
-        ).exclude(keywords='')
+    if use_db_subcategories:
+        # 0) Сначала проверяем подкатегории из БД (динамические, настраиваются в админке).
+        # Подкатегория = Category с parent != None и заполненными keywords.
+        try:
+            db_subcats = Category.objects.filter(
+                parent__isnull=False,
+                is_active=True,
+                keywords__isnull=False,
+            ).exclude(keywords='')
 
-        # Собираем все (keyword -> (parent_name, subcat_name)), сортируем по длине keyword
-        candidates = []
-        for subcat in db_subcats.select_related('parent'):
-            parent = subcat.parent
-            if not parent or not parent.is_active:
-                continue
-            for kw in subcat.get_keywords_list():
-                candidates.append((len(kw), kw, parent.name, subcat.name))
-            # Дополнительно: имя подкатегории тоже считаем ключевым словом (если keywords пустые/неполные)
-            name_kw = (subcat.name or '').strip().lower()
-            if name_kw:
-                candidates.append((len(name_kw), name_kw, parent.name, subcat.name))
-            
-            # ВАЖНО: Также проверяем нормализованные варианты имени подкатегории
-            # (единственное/множественное число) для лучшего поиска
-            if name_kw:
-                # Пробуем найти подкатегорию по имени в разных формах
-                # Например, если подкатегория "Радиатор", ищем "радиатор", "радиаторы", "радиатора" и т.д.
-                name_variants = [
-                    name_kw,
-                    name_kw + 'ы',  # множественное число
-                    name_kw + 'и',  # множественное число
-                    name_kw[:-1] if name_kw.endswith('ы') else None,  # единственное число
-                    name_kw[:-1] if name_kw.endswith('и') else None,  # единственное число
-                ]
-                for variant in name_variants:
-                    if variant and len(variant) > 2:
-                        candidates.append((len(variant), variant, parent.name, subcat.name))
+            # Собираем все (keyword -> (parent_name, subcat_name)), сортируем по длине keyword
+            candidates = []
+            for subcat in db_subcats.select_related('parent'):
+                parent = subcat.parent
+                if not parent or not parent.is_active:
+                    continue
+                for kw in subcat.get_keywords_list():
+                    candidates.append((len(kw), kw, parent.name, subcat.name))
+                name_kw = (subcat.name or '').strip().lower()
+                if name_kw:
+                    candidates.append((len(name_kw), name_kw, parent.name, subcat.name))
 
-        candidates.sort(key=lambda x: x[0], reverse=True)
-        for _len, kw, parent_name, subcat_name in candidates:
-            if kw and kw in text_lower:
-                return (parent_name, subcat_name)
-    except Exception:
-        # Если БД недоступна/ошибка — fallback на хардкод ниже
-        pass
+            candidates.sort(key=lambda x: x[0], reverse=True)
+            for _len, kw, parent_name, subcat_name in candidates:
+                if kw and kw in text_lower:
+                    return (parent_name, subcat_name)
+        except Exception:
+            # Если БД недоступна/ошибка — fallback на хардкод ниже
+            pass
     
     for keyword, (main_cat, subcat) in SUBCATEGORY_KEYWORDS.items():
         if keyword.lower() in text_lower:
@@ -1607,14 +1591,41 @@ def get_or_create_category(category_name, parent=None):
         return default
 
 
-def get_category_for_product(product_name):
+def get_category_for_product(product_name, use_db_subcategories: bool = True):
     """
     Определяет категорию и подкатегорию для товара по его названию.
     Возвращает объект Category (подкатегорию если найдена, иначе основную категорию).
     ВАЖНО: Возвращает только активные категории, чтобы товары не попадали в неактивные категории.
     """
-    # Сначала пытаемся определить подкатегорию
-    subcat_info = detect_subcategory_info(product_name)
+    # 0) Приоритет явных правил/нормализации по типу детали.
+    # Это должно срабатывать даже если текущая БД "кривая".
+    base_name = _sanitize_subcategory_name(clean_product_name(product_name))
+    explicit_root_name = _detect_target_root_for_subcategory(base_name)
+    if explicit_root_name:
+        explicit_root = Category.objects.filter(
+            name__iexact=explicit_root_name,
+            parent=None,
+            is_active=True
+        ).first()
+        if explicit_root:
+            existing_explicit_sub = Category.objects.filter(
+                name__iexact=base_name,
+                parent=explicit_root,
+                is_active=True
+            ).first()
+            if existing_explicit_sub:
+                return existing_explicit_sub
+            if _is_valid_subcategory_name(base_name):
+                return Category.objects.create(
+                    name=capfirst(base_name),
+                    parent=explicit_root,
+                    is_active=True,
+                    keywords=base_name.lower(),
+                )
+            return explicit_root
+
+    # 1) Пытаемся определить подкатегорию
+    subcat_info = detect_subcategory_info(product_name, use_db_subcategories=use_db_subcategories)
     
     if subcat_info:
         main_cat_name, subcat_name = subcat_info
