@@ -247,6 +247,63 @@ FORBIDDEN_SUBCATEGORY_NAMES = {
     'автономные отопители',
 }
 
+# Правила целевой корневой категории по названию подкатегории.
+# Нужны для исправления "исторически" неверного распределения, когда
+# тормозные/трансмиссионные подкатегории попадали в "Двигатель и выхлопная система".
+ROOT_CATEGORY_TOKEN_RULES = {
+    'Трансмиссия и тормозная система': [
+        'тормоз', 'колодк', 'суппорт', 'диск тормозн', 'шланг тормозн', 'цилиндр тормозн',
+        'главный тормозной', 'ручн', 'стояночн', 'abs', 'трос мкпп', 'сцеплен',
+        'кардан', 'кпп', 'коробка', 'шрус', 'ступичн', 'привод', 'полуось', 'редуктор',
+        'втулка бронз', 'втулка запор', 'хаб', 'лок/хаб', 'лок хаб',
+    ],
+}
+
+
+def _build_root_category_token_rules() -> dict:
+    """
+    Собирает полные правила распределения подкатегорий по корневым категориям
+    из нескольких источников: фиксированный список, keyword-mapping и ручные правила.
+    """
+    rules = {k: list(v) for k, v in ROOT_CATEGORY_TOKEN_RULES.items()}
+    stop_words = {'и', 'или', 'для', 'под', 'над', 'на', 'в', 'по', 'к', 'от', 'до'}
+    brand_tokens = {str(b).strip().lower() for b in KNOWN_BRANDS if str(b).strip()}
+
+    def _add(root_name: str, token: str):
+        tok = str(token or '').strip().lower()
+        if not tok:
+            return
+        if tok in stop_words:
+            return
+        if tok in brand_tokens:
+            return
+        if re.search(r'\d', tok):
+            return
+        bucket = rules.setdefault(root_name, [])
+        if tok not in bucket:
+            bucket.append(tok)
+
+    # 1) Эталонные подкатегории: добавляем полное имя + значимые слова.
+    for root_name, subcats in FIXED_ROOT_SUBCATEGORIES.items():
+        for sub_name in subcats:
+            clean = _sanitize_subcategory_name(sub_name)
+            if not clean:
+                continue
+            _add(root_name, clean)
+            for part in re.split(r'[\s/\\-]+', clean):
+                if len(part) >= 4:
+                    _add(root_name, part)
+
+    # 2) Словарь ключевых слов (наиболее точный источник бизнес-правил).
+    for kw, root_and_sub in SUBCATEGORY_KEYWORDS.items():
+        if not root_and_sub or len(root_and_sub) < 2:
+            continue
+        root_name, sub_name = root_and_sub
+        _add(root_name, kw)
+        _add(root_name, sub_name)
+
+    return rules
+
 # Маппинг ключевых слов на подкатегории (внутри основных категорий)
 SUBCATEGORY_KEYWORDS = {
     # Автоэлектрика
@@ -592,6 +649,91 @@ def _is_valid_subcategory_name(raw_name: str) -> bool:
     return True
 
 
+def _detect_target_root_for_subcategory(subcategory_name: str) -> str | None:
+    """Определяет целевую корневую категорию для подкатегории по полным правилам."""
+    name_lower = str(subcategory_name or '').strip().lower()
+    if not name_lower:
+        return None
+    rules = _build_root_category_token_rules()
+
+    # Считаем "вес" совпадений по каждому корню и выбираем самый сильный.
+    scores = {}
+    for root_name, tokens in rules.items():
+        score = 0
+        for token in tokens:
+            tok = str(token or '').strip().lower()
+            if not tok:
+                continue
+            if name_lower == tok:
+                score += 10  # полное совпадение имени — максимальный приоритет
+            elif tok in name_lower:
+                score += 2
+        if score > 0:
+            scores[root_name] = score
+
+    if not scores:
+        return None
+
+    # Если два корня с одинаковым score, ничего не меняем (избегаем спорных переносов).
+    best = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+    if len(best) > 1 and best[0][1] == best[1][1]:
+        return None
+    return best[0][0]
+
+
+def rebalance_subcategory_roots() -> dict:
+    """
+    Переносит подкатегории под корректные корневые категории по доменным правилам.
+    Если в целевой корневой уже есть подкатегория с тем же именем — переносит товары в неё
+    и деактивирует дубликат.
+    """
+    stats = {'moved': 0, 'merged': 0}
+    roots = {
+        c.name.strip().lower(): c
+        for c in Category.objects.filter(parent__isnull=True, is_active=True)
+    }
+    if not roots:
+        return stats
+
+    subcats = Category.objects.filter(parent__isnull=False).select_related('parent')
+    for child in subcats:
+        child_name = (child.name or '').strip()
+        if not child_name:
+            continue
+        target_root_name = _detect_target_root_for_subcategory(child_name)
+        if not target_root_name:
+            continue
+        target_root = roots.get(target_root_name.strip().lower())
+        if not target_root:
+            continue
+        if child.parent_id == target_root.id:
+            continue
+
+        # Если такая подкатегория уже существует под нужным корнем, объединяем.
+        target_same = Category.objects.filter(
+            parent=target_root,
+            name__iexact=child_name,
+        ).first()
+
+        if target_same and target_same.id != child.id:
+            Product.objects.filter(category=child).update(category=target_same)
+            if child.is_active:
+                child.is_active = False
+                child.save(update_fields=['is_active', 'updated_at'])
+            stats['merged'] += 1
+            continue
+
+        child.parent = target_root
+        if not child.is_active:
+            child.is_active = True
+            child.save(update_fields=['parent', 'is_active', 'updated_at'])
+        else:
+            child.save(update_fields=['parent', 'updated_at'])
+        stats['moved'] += 1
+
+    return stats
+
+
 def sync_subcategories_from_keywords(parent_category: Category, *, deactivate_removed: bool = True):
     """
     Синхронизирует подкатегории (children) из ключевых слов родительской категории.
@@ -897,6 +1039,12 @@ def sync_all_subcategories_from_keywords(*, root_only: bool = True):
         totals['created'] += c
         totals['updated'] += u
         totals['deactivated'] += d
+
+    # Дополнительно выравниваем корни у уже существующих подкатегорий
+    # по доменным правилам (особенно для тормозных/трансмиссионных).
+    rebalance_stats = rebalance_subcategory_roots()
+    totals['moved'] = rebalance_stats.get('moved', 0)
+    totals['merged'] = rebalance_stats.get('merged', 0)
     return totals
 
 
