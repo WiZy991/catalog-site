@@ -24,7 +24,10 @@
 {% block content %}
 <section class="page-section">
     <div class="container">
-        <h1 class="page-title">Согласие на обработку персональных данных (регистрация личного кабинета)</h1>
+        <h1 class="page-title consent-page-title">
+            Согласие на обработку персональных данных
+            <span class="consent-page-title__sub">(регистрация личного кабинета)</span>
+        </h1>
 
         <div class="consent-content">
             <p>Я, являясь посетителем Сайта и осуществляя отправку формы обратной связи в процессе регистрации личного кабинета на сайте <a href="https://onesimus25.ru/">https://onesimus25.ru/</a> (далее – Сайт), принимаю настоящее Согласие на обработку своих персональных данных (далее – Согласие).</p>
@@ -103,6 +106,13 @@
     .consent-content ul {
         margin-left: 1rem;
     }
+}
+
+.consent-page-title__sub {
+    display: block;
+    margin-top: 0.25rem;
+    font-size: 0.85em;
+    font-weight: 600;
 }
 </style>
 {% endblock %}
