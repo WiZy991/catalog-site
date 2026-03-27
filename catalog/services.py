@@ -580,6 +580,11 @@ def _is_valid_subcategory_name(raw_name: str) -> bool:
     # Отсекаем OEM/размеры/коды, чтобы не плодить "подкатегории-названия товаров".
     if re.search(r'\d', name):
         return False
+    # Отсекаем слова-бренды (KOYO, TOYOTA и т.п.) из названия подкатегорий.
+    brand_tokens = {str(b).strip().lower() for b in KNOWN_BRANDS if str(b).strip()}
+    name_tokens = {t.strip().lower() for t in re.split(r'[\s/\\-]+', name) if t and t.strip()}
+    if name_tokens.intersection(brand_tokens):
+        return False
 
     # Должны присутствовать буквы (а не только цифры/знаки).
     if not re.search(r'[а-яёa-z]', lowered, re.IGNORECASE):
@@ -1501,6 +1506,14 @@ def get_category_for_product(product_name):
             base_name = clean_product_name(product_name)
             if ',' in base_name:
                 base_name = base_name.split(',', 1)[0].strip()
+            # Убираем из base_name токены-бренды, чтобы не создавать
+            # подкатегории вида "Втулка рессоры TOYOTA".
+            brand_tokens = {str(b).strip().lower() for b in KNOWN_BRANDS if str(b).strip()}
+            filtered_parts = [
+                p for p in re.split(r'[\s]+', base_name)
+                if p and p.strip() and p.strip().lower() not in brand_tokens
+            ]
+            base_name = ' '.join(filtered_parts).strip()
             subcat_name = _sanitize_subcategory_name(base_name)
             if _is_valid_subcategory_name(subcat_name):
                 existing_subcat = Category.objects.filter(
