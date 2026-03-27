@@ -172,7 +172,7 @@
             <div class="catalog-content">
                 <div class="catalog-toolbar">
                     <div class="catalog-count">
-                        Найдено: <strong>{{ paginator.count }}</strong> товаров
+                        Найдено: <strong>{{ found_count|default:paginator.count }}</strong> товаров
                     </div>
                     <button class="filter-toggle" id="showFilters">
                         <i class="bi bi-funnel"></i> Фильтры

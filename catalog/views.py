@@ -122,6 +122,7 @@ class CategoryView(ListView):
         # Подкатегории с 0 товаров не удаляем из БД, только скрываем в выдаче.
         subcategories_qs = self.category.children.filter(is_active=True).order_by('name')
         context['subcategories'] = [sub for sub in subcategories_qs if sub.product_count > 0]
+        context['found_count'] = sum(sub.product_count for sub in context['subcategories'])
         context['filter'] = self.filterset
         
         # Пагинация
@@ -240,6 +241,7 @@ class CatalogItemView(ListView):
             # Подкатегории с 0 товаров не удаляем из БД, только скрываем в выдаче.
             subcategories_qs = self.category.children.filter(is_active=True).order_by('name')
             context['subcategories'] = [sub for sub in subcategories_qs if sub.product_count > 0]
+            context['found_count'] = sum(sub.product_count for sub in context['subcategories'])
             context['filter'] = self.filterset
             
             # Пагинация
