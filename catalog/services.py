@@ -1072,7 +1072,7 @@ def sync_all_subcategories_from_keywords(*, root_only: bool = True, deactivate_r
     return totals
 
 
-def merge_duplicate_subcategories(*, dry_run: bool = True) -> dict:
+def merge_duplicate_subcategories(*, dry_run: bool = True, delete_empty_duplicates: bool = False) -> dict:
     """
     Сливает дубли подкатегорий под одним родителем (регистронезависимо по имени).
     Логика:
@@ -1088,6 +1088,7 @@ def merge_duplicate_subcategories(*, dry_run: bool = True) -> dict:
         'moved_products': 0,
         'moved_children': 0,
         'deactivated': 0,
+        'deleted': 0,
     }
 
     subcats = list(
@@ -1098,7 +1099,8 @@ def merge_duplicate_subcategories(*, dry_run: bool = True) -> dict:
 
     grouped = {}
     for cat in subcats:
-        key = (cat.parent_id, (cat.name or '').strip().lower())
+        normalized_name = _sanitize_subcategory_name(cat.name or '').lower()
+        key = (cat.parent_id, normalized_name)
         grouped.setdefault(key, []).append(cat)
 
     for (_parent_id, _name_key), cats in grouped.items():
@@ -1145,6 +1147,15 @@ def merge_duplicate_subcategories(*, dry_run: bool = True) -> dict:
                 dup.is_active = False
                 dup.save(update_fields=['is_active', 'updated_at'])
                 stats['deactivated'] += 1
+
+            # Опционально удаляем полностью пустые дубли,
+            # чтобы они исчезли из админки и не путали операторов.
+            if delete_empty_duplicates:
+                has_products_after = Product.objects.filter(category=dup).exists()
+                has_children_after = Category.objects.filter(parent=dup).exists()
+                if (not has_products_after) and (not has_children_after):
+                    dup.delete()
+                    stats['deleted'] += 1
 
     return stats
 
