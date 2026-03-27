@@ -1857,6 +1857,29 @@ def get_category_for_product(product_name, use_db_subcategories: bool = True):
             ]
             base_candidate = _sanitize_subcategory_name(' '.join(letter_parts[:4]))
 
+        # Жесткий fallback: формируем "чистое" имя подкатегории напрямую из сырого названия.
+        # Никаких служебных "Прочее" — только из имени товара.
+        if not base_candidate or not _is_valid_subcategory_name(base_candidate):
+            raw_forced = _sanitize_subcategory_name(str(raw_name or ''))
+            forced_tokens = []
+            for token in re.split(r'[\s/\\,;:()\-]+', raw_forced):
+                tok = (token or '').strip()
+                if not tok:
+                    continue
+                if tok.lower() in brand_tokens:
+                    continue
+                # Оставляем только буквенную основу токена.
+                tok = re.sub(r'[^а-яёa-z]', '', tok, flags=re.IGNORECASE)
+                if len(tok) < 2:
+                    continue
+                forced_tokens.append(tok)
+                if len(forced_tokens) >= 4:
+                    break
+            if forced_tokens:
+                forced_name = _sanitize_subcategory_name(' '.join(forced_tokens))[:60].strip()
+                if _is_valid_subcategory_name(forced_name):
+                    base_candidate = forced_name
+
         if base_candidate:
             created_or_reused = _reuse_or_create_subcategory(root_category, base_candidate)
             if isinstance(created_or_reused, Category) and created_or_reused.parent_id is not None:
