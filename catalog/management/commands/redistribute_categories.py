@@ -13,7 +13,7 @@ import logging
 from django.core.management.base import BaseCommand
 from django.db.models import Q, Count
 from catalog.models import Product, Category
-from catalog.services import get_category_for_product
+from catalog.services import get_category_for_product, rebalance_subcategory_roots
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +34,11 @@ class Command(BaseCommand):
             action='store_true',
             help='Показать что будет изменено без сохранения в БД',
         )
+        parser.add_argument(
+            '--skip-rebalance-subcategories',
+            action='store_true',
+            help='Не выполнять предварительный ребаланс корневых категорий для подкатегорий',
+        )
 
     def handle(self, *args, **options):
         catalog_type = options['catalog_type']
@@ -45,6 +50,23 @@ class Command(BaseCommand):
         
         if dry_run:
             self.stdout.write(self.style.WARNING('РЕЖИМ ПРОСМОТРА (dry-run) - изменения не будут сохранены'))
+
+        # Сначала выравниваем корневые категории у самих подкатегорий.
+        # Это исправляет кейсы, когда товары "правильно" лежат в подкатегории,
+        # но сама подкатегория прикреплена к неверному корню.
+        if not options.get('skip_rebalance_subcategories'):
+            self.stdout.write('')
+            self.stdout.write('Ребаланс подкатегорий по корневым категориям...')
+            if dry_run:
+                self.stdout.write(self.style.WARNING('  dry-run: шаг ребаланса пропущен'))
+            else:
+                rebalance_stats = rebalance_subcategory_roots()
+                self.stdout.write(
+                    self.style.SUCCESS(
+                        f"  ✓ Подкатегорий перемещено: {rebalance_stats.get('moved', 0)}, "
+                        f"объединено дублей: {rebalance_stats.get('merged', 0)}"
+                    )
+                )
         
         # Определяем какие каталоги обрабатывать
         catalog_types = []
