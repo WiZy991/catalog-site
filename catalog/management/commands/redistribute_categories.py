@@ -35,9 +35,9 @@ class Command(BaseCommand):
             help='Показать что будет изменено без сохранения в БД',
         )
         parser.add_argument(
-            '--skip-rebalance-subcategories',
+            '--rebalance-subcategories',
             action='store_true',
-            help='Не выполнять предварительный ребаланс корневых категорий для подкатегорий',
+            help='Выполнить предварительный ребаланс корневых категорий для подкатегорий (осторожно)',
         )
 
     def handle(self, *args, **options):
@@ -54,7 +54,7 @@ class Command(BaseCommand):
         # Сначала выравниваем корневые категории у самих подкатегорий.
         # Это исправляет кейсы, когда товары "правильно" лежат в подкатегории,
         # но сама подкатегория прикреплена к неверному корню.
-        if not options.get('skip_rebalance_subcategories'):
+        if options.get('rebalance_subcategories'):
             self.stdout.write('')
             self.stdout.write('Ребаланс подкатегорий по корневым категориям...')
             if dry_run:
@@ -113,7 +113,7 @@ class Command(BaseCommand):
                     try:
                         # Определяем категорию на основе названия товара
                         # Используем исходное название (name), так как в нём могут быть ключевые слова
-                        category = get_category_for_product(product.name)
+                        category = get_category_for_product(product.name, use_db_subcategories=False)
                         
                         if not category:
                             self.stdout.write(self.style.ERROR(f'  ⚠ Товар {product.id} ({product.article}): не удалось определить категорию'))
