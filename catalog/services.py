@@ -1803,6 +1803,7 @@ def get_category_for_product(product_name, use_db_subcategories: bool = True):
 
     # 0) Приоритет явных правил/нормализации по типу детали.
     # Это должно срабатывать даже если текущая БД "кривая".
+    preferred_root = None
     base_name = _sanitize_subcategory_name(clean_product_name(product_name))
     explicit_root_name = _detect_target_root_for_subcategory(base_name)
     if explicit_root_name:
@@ -1812,10 +1813,10 @@ def get_category_for_product(product_name, use_db_subcategories: bool = True):
             is_active=True
         ).first()
         if explicit_root:
+            preferred_root = explicit_root
             existing_explicit_sub = _reuse_or_create_subcategory(explicit_root, base_name)
             if isinstance(existing_explicit_sub, Category) and existing_explicit_sub.parent_id is not None:
                 return existing_explicit_sub
-            return explicit_root
 
     # 1) Пытаемся определить подкатегорию
     subcat_info = detect_subcategory_info(product_name, use_db_subcategories=use_db_subcategories)
@@ -1847,13 +1848,18 @@ def get_category_for_product(product_name, use_db_subcategories: bool = True):
             # Невалидное имя подкатегории — безопасно откатываемся к корневой.
             return main_category
     
-    # Если подкатегория не определена, определяем основную категорию
-    main_cat_name = detect_category(product_name)
-    main_category = Category.objects.filter(
-        name__iexact=main_cat_name,
-        parent=None,
-        is_active=True  # ВАЖНО: Только активные категории
-    ).first()
+    # Если подкатегория не определена, определяем основную категорию.
+    # При наличии preferred_root используем его как безопасный fallback, но
+    # не прерываем основной пайплайн определения подкатегории раньше времени.
+    if preferred_root:
+        main_category = preferred_root
+    else:
+        main_cat_name = detect_category(product_name)
+        main_category = Category.objects.filter(
+            name__iexact=main_cat_name,
+            parent=None,
+            is_active=True  # ВАЖНО: Только активные категории
+        ).first()
     
     # Если основная категория не найдена, берем первую активную из корневых
     if not main_category:
