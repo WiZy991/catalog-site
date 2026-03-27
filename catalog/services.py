@@ -1480,7 +1480,32 @@ def get_category_for_product(product_name):
     # Если основная категория не найдена, берем первую активную из корневых
     if not main_category:
         main_category = Category.objects.filter(parent=None, is_active=True).first()
-    
+
+    # Fallback: если конкретная подкатегория не определилась по keywords,
+    # пробуем использовать "тип детали" из названия (до скобок):
+    # "Хаб (TOYOTA, ...)" -> "Хаб".
+    # Создаём подкатегорию только для валидных имен (без мусора/пустых значений).
+    if main_category and product_name:
+        try:
+            base_name = clean_product_name(product_name)
+            subcat_name = _sanitize_subcategory_name(base_name)
+            if _is_valid_subcategory_name(subcat_name):
+                existing_subcat = Category.objects.filter(
+                    name__iexact=subcat_name,
+                    parent=main_category,
+                    is_active=True
+                ).first()
+                if existing_subcat:
+                    return existing_subcat
+                return Category.objects.create(
+                    name=capfirst(subcat_name),
+                    parent=main_category,
+                    is_active=True,
+                    keywords=subcat_name.lower(),
+                )
+        except Exception:
+            pass
+
     return main_category
 
 
