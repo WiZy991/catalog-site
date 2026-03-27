@@ -27,25 +27,14 @@ class HomeView(TemplateView):
             is_active=True
         ).order_by('name')[:6]
         
-        # Для каждой категории считаем товары в ней и её подкатегориях
-        # ВАЖНО: НЕ используем кеширование - всегда получаем актуальные данные из БД
-        # Это гарантирует, что количество товаров всегда корректное
+        # Для главной считаем счетчик так же, как на странице категории:
+        # сумма отображаемых подкатегорий (только с product_count > 0).
+        # Это устраняет расхождения "карточка категории" vs "скобки подкатегорий".
         for category in categories:
-            descendants = category.get_descendants(include_self=True)
-            descendant_ids = list(descendants.values_list('id', flat=True))
-            if descendant_ids:
-                # Используем один запрос для подсчета товаров
-                # ВАЖНО: Всегда получаем актуальные данные из БД
-                count = Product.objects.filter(
-                    category_id__in=descendant_ids,
-                    is_active=True,
-                    catalog_type='retail',
-                    quantity__gt=0
-                ).count()
-                # Сохраняем в атрибут для использования в шаблоне
-                category._product_count = count
-            else:
-                category._product_count = 0
+            active_children = category.children.filter(is_active=True)
+            count = sum(child.product_count for child in active_children if child.product_count > 0)
+            category.home_product_count = count
+            category._product_count = count
         
         context['categories'] = categories
         # Защита от ошибки, если миграции не применены

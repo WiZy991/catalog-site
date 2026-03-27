@@ -30,19 +30,12 @@ class CatalogView(ListView):
         categories_with_products = []
         for category in context['categories']:
             category.active_children = category.children.filter(is_active=True)
-            # Проверяем, есть ли товары в категории или её подкатегориях (только retail)
-            descendants = category.get_descendants(include_self=True)
-            # Преобразуем QuerySet в список ID для более надежной работы
-            descendant_ids = list(descendants.values_list('id', flat=True))
-            if descendant_ids:
-                product_count = Product.objects.filter(
-                    category_id__in=descendant_ids,
-                    is_active=True,
-                    catalog_type='retail',
-                    quantity__gt=0  # Только товары с количеством больше 0
-                ).count()
-            else:
-                product_count = 0
+            # Единая логика счетчика: сумма отображаемых подкатегорий (product_count > 0).
+            product_count = sum(
+                child.product_count
+                for child in category.active_children
+                if child.product_count > 0
+            )
             if product_count > 0:
                 category.retail_product_count = product_count
                 categories_with_products.append(category)

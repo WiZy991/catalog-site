@@ -102,7 +102,7 @@
                     {% endif %}
                 </div>
                 <h3 class="category-card__title">{{ category.name }}</h3>
-                <span class="category-card__count">{{ category.product_count }} товаров</span>
+                <span class="category-card__count">{{ category.home_product_count|default:category.product_count }} товаров</span>
             </a>
             {% empty %}
             <p class="text-center">Категории пока не добавлены</p>
