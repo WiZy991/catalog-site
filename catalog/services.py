@@ -1831,6 +1831,14 @@ def get_category_for_product(product_name, use_db_subcategories: bool = True):
         ).first()
         
         if main_category:
+            # Если явные доменные правила уже определили другой целевой корень,
+            # отдаём приоритет ему, чтобы не уводить товар в "чужую" ветку
+            # из-за слишком общих keywords у подкатегорий.
+            if preferred_root and preferred_root.id != main_category.id:
+                clean_subcat_name = _sanitize_subcategory_name(subcat_name)
+                if _is_valid_subcategory_name(clean_subcat_name):
+                    return _reuse_or_create_subcategory(preferred_root, clean_subcat_name)
+                return preferred_root
             # Ищем подкатегорию (только активную)
             subcategory = Category.objects.filter(
                 name__iexact=subcat_name,

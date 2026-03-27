@@ -128,11 +128,13 @@ class CategoryView(ListView):
         context['filter'] = self.filterset
 
         # Показываем ВСЕ активные дочерние подкатегории.
-        # Ранее жёсткая фильтрация по count>0 скрывала часть реальных подкатегорий.
+        # ВАЖНО: считаем количество из уже отфильтрованного queryset,
+        # чтобы "Найдено" и суммы по подкатегориям были в одной логике.
         subcategories = []
         subcategories_qs = self.category.children.filter(is_active=True).order_by('name')
         for sub in subcategories_qs:
-            visible_count = self._visible_products_count_for_branch(sub)
+            sub_descendants = sub.get_descendants(include_self=True)
+            visible_count = products.filter(category__in=sub_descendants).count()
             sub.visible_product_count = visible_count
             subcategories.append(sub)
         context['subcategories'] = subcategories
@@ -263,11 +265,13 @@ class CatalogItemView(ListView):
             context['filter'] = self.filterset
 
             # Показываем ВСЕ активные дочерние подкатегории.
-            # Ранее жёсткая фильтрация по count>0 скрывала часть реальных подкатегорий.
+            # ВАЖНО: считаем количество из уже отфильтрованного queryset,
+            # чтобы "Найдено" и суммы по подкатегориям были в одной логике.
             subcategories = []
             subcategories_qs = self.category.children.filter(is_active=True).order_by('name')
             for sub in subcategories_qs:
-                visible_count = self._visible_products_count_for_branch(sub)
+                sub_descendants = sub.get_descendants(include_self=True)
+                visible_count = products.filter(category__in=sub_descendants).count()
                 sub.visible_product_count = visible_count
                 subcategories.append(sub)
             context['subcategories'] = subcategories
