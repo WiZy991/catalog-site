@@ -2443,10 +2443,10 @@ def process_offers_file_single_pass(root, namespaces, filename, request=None):
             try:
                 product = Product.objects.filter(external_id=product_id, catalog_type=catalog_type).first()
                 created = product is None
+                category = get_category_for_product(offer_name)
+                if not category:
+                    category = Category.objects.filter(parent=None, is_active=True).first()
                 if created:
-                    category = get_category_for_product(offer_name)
-                    if not category:
-                        category = Category.objects.filter(parent=None, is_active=True).first()
                     product = Product(
                         external_id=product_id,
                         article=article,
@@ -2471,6 +2471,8 @@ def process_offers_file_single_pass(root, namespaces, filename, request=None):
                 product.quantity = quantity
                 product.availability = 'in_stock' if quantity > 0 else 'out_of_stock'
                 product.is_active = quantity > 0
+                if category and (not product.category_id or product.category_id != category.id):
+                    product.category = category
                 if catalog_type == 'retail' and retail_price is not None:
                     product.price = retail_price
                 if catalog_type == 'wholesale' and wholesale_price is not None:
@@ -2480,7 +2482,7 @@ def process_offers_file_single_pass(root, namespaces, filename, request=None):
                     save_with_retry(product)
                     stats[catalog_type]['created'] += 1
                 else:
-                    fields = ['name', 'article', 'brand', 'characteristics', 'applicability', 'quantity', 'availability', 'is_active']
+                    fields = ['name', 'article', 'brand', 'characteristics', 'applicability', 'quantity', 'availability', 'is_active', 'category']
                     fields.append('price' if catalog_type == 'retail' else 'wholesale_price')
                     save_with_retry(product, update_fields=fields)
                     stats[catalog_type]['updated'] += 1
