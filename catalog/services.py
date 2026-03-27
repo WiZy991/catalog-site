@@ -1885,11 +1885,32 @@ def get_category_for_product(product_name, use_db_subcategories: bool = True):
             if isinstance(created_or_reused, Category) and created_or_reused.parent_id is not None:
                 return created_or_reused
 
-        # Последний шаг: если создать новую не удалось, оставляем лучший существующий child,
-        # иначе временно возвращаем корень (будет обработано командой перераспределения).
+        # Последний шаг: пытаемся выбрать любую существующую подкатегорию корня,
+        # чтобы товар не оставался в root.
         best_existing_child = _best_existing_child_for_name(root_category, raw_name)
         if best_existing_child:
             return best_existing_child
+
+        any_active_child = Category.objects.filter(
+            parent=root_category,
+            is_active=True,
+        ).order_by('id').first()
+        if any_active_child:
+            return any_active_child
+
+        # Если у корня нет детей (крайне редкий случай), пробуем создать из буквенных токенов.
+        raw_forced = _sanitize_subcategory_name(str(raw_name or ''))
+        forced_tokens = [
+            t for t in re.split(r'[\s/\\,;:()\-]+', raw_forced)
+            if t and re.search(r'[а-яёa-z]{3,}', t, re.IGNORECASE)
+        ]
+        if forced_tokens:
+            forced_name = _sanitize_subcategory_name(' '.join(forced_tokens[:3]))
+            if _is_valid_subcategory_name(forced_name):
+                created_or_reused = _reuse_or_create_subcategory(root_category, forced_name)
+                if isinstance(created_or_reused, Category) and created_or_reused.parent_id is not None:
+                    return created_or_reused
+
         return root_category
 
     # 0) Приоритет явных правил/нормализации по типу детали.
