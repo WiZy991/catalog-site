@@ -27,12 +27,10 @@ class HomeView(TemplateView):
             is_active=True
         ).order_by('name')[:6]
         
-        # Для главной считаем счетчик так же, как на странице категории:
-        # сумма отображаемых подкатегорий (только с product_count > 0).
-        # Это устраняет расхождения "карточка категории" vs "скобки подкатегорий".
+        # Для главной используем единый счетчик модели Category.product_count,
+        # чтобы не было расхождений между страницами.
         for category in categories:
-            active_children = category.children.filter(is_active=True)
-            count = sum(child.product_count for child in active_children if child.product_count > 0)
+            count = category.product_count
             category.home_product_count = count
             category._product_count = count
         

@@ -30,12 +30,8 @@ class CatalogView(ListView):
         categories_with_products = []
         for category in context['categories']:
             category.active_children = category.children.filter(is_active=True)
-            # Единая логика счетчика: сумма отображаемых подкатегорий (product_count > 0).
-            product_count = sum(
-                child.product_count
-                for child in category.active_children
-                if child.product_count > 0
-            )
+            # Единый источник правды для количества: Category.product_count.
+            product_count = category.product_count
             if product_count > 0:
                 category.retail_product_count = product_count
                 categories_with_products.append(category)
