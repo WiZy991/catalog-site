@@ -118,8 +118,10 @@ class CategoryView(ListView):
         
         context['category'] = self.category
         context['breadcrumbs'] = self.category.get_ancestors(include_self=True)
-        # Получаем подкатегории через related_name 'children'
-        context['subcategories'] = self.category.children.filter(is_active=True).order_by('name')
+        # Показываем на сайте только подкатегории, в которых есть товары.
+        # Подкатегории с 0 товаров не удаляем из БД, только скрываем в выдаче.
+        subcategories_qs = self.category.children.filter(is_active=True).order_by('name')
+        context['subcategories'] = [sub for sub in subcategories_qs if sub.product_count > 0]
         context['filter'] = self.filterset
         
         # Пагинация
@@ -234,7 +236,10 @@ class CatalogItemView(ListView):
             context = super().get_context_data(**kwargs)
             context['category'] = self.category
             context['breadcrumbs'] = self.category.get_ancestors(include_self=True)
-            context['subcategories'] = self.category.children.filter(is_active=True).order_by('name')
+            # Показываем на сайте только подкатегории, в которых есть товары.
+            # Подкатегории с 0 товаров не удаляем из БД, только скрываем в выдаче.
+            subcategories_qs = self.category.children.filter(is_active=True).order_by('name')
+            context['subcategories'] = [sub for sub in subcategories_qs if sub.product_count > 0]
             context['filter'] = self.filterset
             
             # Пагинация
