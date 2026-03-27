@@ -35,8 +35,8 @@ class Command(BaseCommand):
         parser.add_argument(
             "--limit",
             type=int,
-            default=300,
-            help="Максимум строк в детальном выводе.",
+            default=0,
+            help="Максимум строк в детальном выводе. 0 = без лимита (по умолчанию).",
         )
         parser.add_argument(
             "--all-statuses",
@@ -47,7 +47,8 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         catalog_type = options["catalog_type"]
         root_name = (options.get("root") or "").strip()
-        limit = max(1, int(options.get("limit") or 300))
+        limit = max(0, int(options.get("limit") or 0))
+        unlimited = limit == 0
         all_statuses = bool(options.get("all_statuses"))
 
         catalog_types = ["retail", "wholesale"] if catalog_type == "both" else [catalog_type]
@@ -65,7 +66,7 @@ class Command(BaseCommand):
         self.stdout.write("=" * 90)
         self.stdout.write(f"Каталоги: {', '.join(catalog_types)}")
         self.stdout.write(f"Корней в выборке: {len(roots)}")
-        self.stdout.write(f"Лимит детального вывода: {limit}")
+        self.stdout.write(f"Лимит детального вывода: {'без лимита' if unlimited else limit}")
         self.stdout.write(f"Режим по статусам: {'ВСЕ' if all_statuses else 'ТОЛЬКО ВИДИМЫЕ'}")
 
         total_root_products = 0
@@ -106,7 +107,12 @@ class Command(BaseCommand):
                 self.stdout.write("")
                 self.stdout.write(f"Root: {root.name} | товаров в root: {count_root}")
 
-                for product in qs.order_by("id")[: max(0, limit - total_lines_printed)]:
+                if unlimited:
+                    products_for_print = qs.order_by("id")
+                else:
+                    products_for_print = qs.order_by("id")[: max(0, limit - total_lines_printed)]
+
+                for product in products_for_print:
                     new_category = get_category_for_product(product.name, use_db_subcategories=True)
                     suggestion = "-"
                     is_child = False
@@ -125,10 +131,10 @@ class Command(BaseCommand):
                         f"name={str(product.name or '')[:90]} | suggest={suggestion}"
                     )
                     total_lines_printed += 1
-                    if total_lines_printed >= limit:
+                    if (not unlimited) and total_lines_printed >= limit:
                         break
 
-                if total_lines_printed >= limit:
+                if (not unlimited) and total_lines_printed >= limit:
                     self.stdout.write(self.style.WARNING(f"\nДостигнут лимит вывода: {limit} строк."))
                     break
 
@@ -137,7 +143,7 @@ class Command(BaseCommand):
                 f"Итог {ct.upper()}: товаров в root={ct_total_root_products}, "
                 f"из них классификатор уже предлагает child={ct_recommended_child}"
             )
-            if total_lines_printed >= limit:
+            if (not unlimited) and total_lines_printed >= limit:
                 break
 
         self.stdout.write("")
