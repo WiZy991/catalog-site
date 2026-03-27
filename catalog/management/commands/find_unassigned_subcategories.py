@@ -48,6 +48,11 @@ class Command(BaseCommand):
             action="store_true",
             help="Показать товары, которые лежат в неактивных подкатегориях выбранных корней.",
         )
+        parser.add_argument(
+            "--audit-category-page-counts",
+            action="store_true",
+            help="Аудит расхождения: 'Найдено' vs сумма по активным прямым подкатегориям.",
+        )
 
     def handle(self, *args, **options):
         catalog_type = options["catalog_type"]
@@ -56,6 +61,7 @@ class Command(BaseCommand):
         unlimited = limit == 0
         all_statuses = bool(options.get("all_statuses"))
         show_inactive_category_products = bool(options.get("show_inactive_category_products"))
+        audit_category_page_counts = bool(options.get("audit_category_page_counts"))
 
         catalog_types = ["retail", "wholesale"] if catalog_type == "both" else [catalog_type]
         roots_qs = Category.objects.filter(parent__isnull=True, is_active=True)
@@ -75,6 +81,19 @@ class Command(BaseCommand):
         self.stdout.write(f"Лимит детального вывода: {'без лимита' if unlimited else limit}")
         self.stdout.write(f"Режим по статусам: {'ВСЕ' if all_statuses else 'ТОЛЬКО ВИДИМЫЕ'}")
 
+        def _visible_qs(catalog: str):
+            qs_base = Product.objects.filter(catalog_type=catalog)
+            if all_statuses:
+                return qs_base
+            if catalog == "retail":
+                return qs_base.filter(
+                    is_active=True,
+                    quantity__gt=0,
+                ).filter(Q(availability="in_stock") | Q(availability="order"))
+            return qs_base.filter(
+                is_active=True,
+            ).filter(Q(quantity__gt=0) | Q(wholesale_price__gt=0) | Q(availability__in=["in_stock", "order"]))
+
         total_root_products = 0
         total_lines_printed = 0
         total_recommended_child = 0
@@ -89,21 +108,10 @@ class Command(BaseCommand):
             ct_total_root_products = 0
             ct_recommended_child = 0
             ct_inactive_category_products = 0
+            visible_qs = _visible_qs(ct)
 
             for root in roots:
-                qs = Product.objects.filter(category=root, catalog_type=ct)
-                if not all_statuses:
-                    if ct == "retail":
-                        qs = qs.filter(
-                            is_active=True,
-                            quantity__gt=0,
-                        ).filter(Q(availability="in_stock") | Q(availability="order"))
-                    else:
-                        qs = qs.filter(
-                            is_active=True,
-                        ).filter(
-                            Q(quantity__gt=0) | Q(wholesale_price__gt=0) | Q(availability__in=["in_stock", "order"])
-                        )
+                qs = visible_qs.filter(category=root)
 
                 count_root = qs.count()
                 if count_root == 0:
@@ -159,22 +167,9 @@ class Command(BaseCommand):
                     inactive_descendants = root.get_descendants(include_self=False).filter(is_active=False)
                     if not inactive_descendants.exists():
                         continue
-                    qs_inactive_cat = Product.objects.filter(
+                    qs_inactive_cat = visible_qs.filter(
                         category__in=inactive_descendants,
-                        catalog_type=ct,
                     )
-                    if not all_statuses:
-                        if ct == "retail":
-                            qs_inactive_cat = qs_inactive_cat.filter(
-                                is_active=True,
-                                quantity__gt=0,
-                            ).filter(Q(availability="in_stock") | Q(availability="order"))
-                        else:
-                            qs_inactive_cat = qs_inactive_cat.filter(
-                                is_active=True,
-                            ).filter(
-                                Q(quantity__gt=0) | Q(wholesale_price__gt=0) | Q(availability__in=["in_stock", "order"])
-                            )
 
                     inactive_count = qs_inactive_cat.count()
                     if inactive_count == 0:
@@ -210,6 +205,54 @@ class Command(BaseCommand):
                 self.stdout.write(
                     f"Итог по неактивным подкатегориям {ct.upper()}: {ct_inactive_category_products}"
                 )
+
+            if audit_category_page_counts:
+                self.stdout.write("")
+                self.stdout.write(f"Аудит счетчиков страницы категории ({ct.upper()})...")
+                for root in roots:
+                    descendants = root.get_descendants(include_self=True)
+                    has_active_direct = root.children.filter(is_active=True).exists()
+                    if has_active_direct:
+                        descendants = descendants.exclude(id=root.id)
+
+                    found_qs = visible_qs.filter(category__in=descendants)
+                    found_ids = set(found_qs.values_list("id", flat=True))
+                    found_count = len(found_ids)
+
+                    active_children = list(root.children.filter(is_active=True).order_by("name"))
+                    children_total = 0
+                    children_ids_union = set()
+                    for child in active_children:
+                        branch_ids = set(
+                            found_qs.filter(category__in=child.get_descendants(include_self=True)).values_list("id", flat=True)
+                        )
+                        if branch_ids:
+                            children_total += len(branch_ids)
+                            children_ids_union.update(branch_ids)
+
+                    diff_only_found = found_ids - children_ids_union
+                    diff_only_children = children_ids_union - found_ids
+                    self.stdout.write(
+                        f"  Root={root.name} | found={found_count} | sum_children={children_total} | "
+                        f"only_found={len(diff_only_found)} | only_children={len(diff_only_children)}"
+                    )
+
+                    # Печатаем проблемные товары: попали в found, но не попали в сумму активных direct-children.
+                    if diff_only_found:
+                        extra_qs = Product.objects.filter(id__in=diff_only_found).select_related("category").order_by("id")
+                        if not unlimited:
+                            extra_qs = extra_qs[: max(0, limit - total_lines_printed)]
+                        for product in extra_qs:
+                            self.stdout.write(
+                                f"    [ONLY_FOUND] id={product.id} | cat={product.category.name if product.category else '-'} | "
+                                f"art={product.article or '-'} | name={str(product.name or '')[:90]}"
+                            )
+                            total_lines_printed += 1
+                            if (not unlimited) and total_lines_printed >= limit:
+                                break
+                    if (not unlimited) and total_lines_printed >= limit:
+                        self.stdout.write(self.style.WARNING(f"\nДостигнут лимит вывода: {limit} строк."))
+                        break
             if (not unlimited) and total_lines_printed >= limit:
                 break
 
