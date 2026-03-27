@@ -124,20 +124,22 @@ class CategoryView(ListView):
         page = self.request.GET.get('page', 1)
         context['products'] = paginator.get_page(page)
         context['paginator'] = paginator
-        context['found_count'] = paginator.count
         context['filter'] = self.filterset
 
-        # Показываем ВСЕ активные дочерние подкатегории.
-        # ВАЖНО: считаем количество из уже отфильтрованного queryset,
-        # чтобы "Найдено" и суммы по подкатегориям были в одной логике.
+        # Показываем только активные дочерние подкатегории с товарами (>0).
+        # "Найдено" считаем строго как сумму отображаемых подкатегорий.
         subcategories = []
+        total_in_subcategories = 0
         subcategories_qs = self.category.children.filter(is_active=True).order_by('name')
         for sub in subcategories_qs:
             sub_descendants = sub.get_descendants(include_self=True)
             visible_count = products.filter(category__in=sub_descendants).count()
-            sub.visible_product_count = visible_count
-            subcategories.append(sub)
+            if visible_count > 0:
+                sub.visible_product_count = visible_count
+                subcategories.append(sub)
+                total_in_subcategories += visible_count
         context['subcategories'] = subcategories
+        context['found_count'] = total_in_subcategories if subcategories else paginator.count
         
         # Данные для фильтров
         all_products = Product.objects.filter(
@@ -261,20 +263,22 @@ class CatalogItemView(ListView):
             page = self.request.GET.get('page', 1)
             context['products'] = paginator.get_page(page)
             context['paginator'] = paginator
-            context['found_count'] = paginator.count
             context['filter'] = self.filterset
 
-            # Показываем ВСЕ активные дочерние подкатегории.
-            # ВАЖНО: считаем количество из уже отфильтрованного queryset,
-            # чтобы "Найдено" и суммы по подкатегориям были в одной логике.
+            # Показываем только активные дочерние подкатегории с товарами (>0).
+            # "Найдено" считаем строго как сумму отображаемых подкатегорий.
             subcategories = []
+            total_in_subcategories = 0
             subcategories_qs = self.category.children.filter(is_active=True).order_by('name')
             for sub in subcategories_qs:
                 sub_descendants = sub.get_descendants(include_self=True)
                 visible_count = products.filter(category__in=sub_descendants).count()
-                sub.visible_product_count = visible_count
-                subcategories.append(sub)
+                if visible_count > 0:
+                    sub.visible_product_count = visible_count
+                    subcategories.append(sub)
+                    total_in_subcategories += visible_count
             context['subcategories'] = subcategories
+            context['found_count'] = total_in_subcategories if subcategories else paginator.count
             
             # Данные для фильтров
             all_products = Product.objects.filter(

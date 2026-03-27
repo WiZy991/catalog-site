@@ -68,7 +68,7 @@
                 {% for sub in subcategories %}
                 <a href="{{ sub.get_absolute_url }}" class="subcategory-link">
                     <span class="subcategory-name">{{ sub.name }}</span>
-                    <span class="subcategory-count">({{ sub.visible_product_count|default:sub.product_count }})</span>
+                    <span class="subcategory-count">({{ sub.visible_product_count|default_if_none:sub.product_count }})</span>
                 </a>
                 {% endfor %}
             </div>
