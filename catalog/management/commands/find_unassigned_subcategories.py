@@ -43,6 +43,11 @@ class Command(BaseCommand):
             action="store_true",
             help="Не ограничивать только видимыми товарами (is_active/quantity/availability).",
         )
+        parser.add_argument(
+            "--show-inactive-category-products",
+            action="store_true",
+            help="Показать товары, которые лежат в неактивных подкатегориях выбранных корней.",
+        )
 
     def handle(self, *args, **options):
         catalog_type = options["catalog_type"]
@@ -50,6 +55,7 @@ class Command(BaseCommand):
         limit = max(0, int(options.get("limit") or 0))
         unlimited = limit == 0
         all_statuses = bool(options.get("all_statuses"))
+        show_inactive_category_products = bool(options.get("show_inactive_category_products"))
 
         catalog_types = ["retail", "wholesale"] if catalog_type == "both" else [catalog_type]
         roots_qs = Category.objects.filter(parent__isnull=True, is_active=True)
@@ -72,6 +78,7 @@ class Command(BaseCommand):
         total_root_products = 0
         total_lines_printed = 0
         total_recommended_child = 0
+        total_inactive_category_products = 0
 
         for ct in catalog_types:
             self.stdout.write("")
@@ -81,6 +88,7 @@ class Command(BaseCommand):
 
             ct_total_root_products = 0
             ct_recommended_child = 0
+            ct_inactive_category_products = 0
 
             for root in roots:
                 qs = Product.objects.filter(category=root, catalog_type=ct)
@@ -143,6 +151,65 @@ class Command(BaseCommand):
                 f"Итог {ct.upper()}: товаров в root={ct_total_root_products}, "
                 f"из них классификатор уже предлагает child={ct_recommended_child}"
             )
+
+            if show_inactive_category_products:
+                self.stdout.write("")
+                self.stdout.write(f"Проверка товаров в НЕАКТИВНЫХ подкатегориях ({ct.upper()})...")
+                for root in roots:
+                    inactive_descendants = root.get_descendants(include_self=False).filter(is_active=False)
+                    if not inactive_descendants.exists():
+                        continue
+                    qs_inactive_cat = Product.objects.filter(
+                        category__in=inactive_descendants,
+                        catalog_type=ct,
+                    )
+                    if not all_statuses:
+                        if ct == "retail":
+                            qs_inactive_cat = qs_inactive_cat.filter(
+                                is_active=True,
+                                quantity__gt=0,
+                            ).filter(Q(availability="in_stock") | Q(availability="order"))
+                        else:
+                            qs_inactive_cat = qs_inactive_cat.filter(
+                                is_active=True,
+                            ).filter(
+                                Q(quantity__gt=0) | Q(wholesale_price__gt=0) | Q(availability__in=["in_stock", "order"])
+                            )
+
+                    inactive_count = qs_inactive_cat.count()
+                    if inactive_count == 0:
+                        continue
+
+                    ct_inactive_category_products += inactive_count
+                    total_inactive_category_products += inactive_count
+                    self.stdout.write(
+                        f"  Root: {root.name} | товаров в неактивных подкатегориях: {inactive_count}"
+                    )
+
+                    if unlimited:
+                        products_for_print = qs_inactive_cat.select_related("category").order_by("id")
+                    else:
+                        products_for_print = qs_inactive_cat.select_related("category").order_by("id")[
+                            : max(0, limit - total_lines_printed)
+                        ]
+
+                    for product in products_for_print:
+                        self.stdout.write(
+                            f"    id={product.id} | art={product.article or '-'} | "
+                            f"cat={product.category.name if product.category else '-'} | "
+                            f"name={str(product.name or '')[:90]}"
+                        )
+                        total_lines_printed += 1
+                        if (not unlimited) and total_lines_printed >= limit:
+                            break
+
+                    if (not unlimited) and total_lines_printed >= limit:
+                        self.stdout.write(self.style.WARNING(f"\nДостигнут лимит вывода: {limit} строк."))
+                        break
+
+                self.stdout.write(
+                    f"Итог по неактивным подкатегориям {ct.upper()}: {ct_inactive_category_products}"
+                )
             if (not unlimited) and total_lines_printed >= limit:
                 break
 
@@ -151,7 +218,8 @@ class Command(BaseCommand):
         self.stdout.write(
             self.style.SUCCESS(
                 f"ВСЕГО найдено товаров в root: {total_root_products}; "
-                f"из них с предложением child: {total_recommended_child}"
+                f"из них с предложением child: {total_recommended_child}; "
+                f"товаров в неактивных подкатегориях: {total_inactive_category_products}"
             )
         )
         self.stdout.write("=" * 90)
