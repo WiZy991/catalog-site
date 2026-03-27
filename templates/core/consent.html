@@ -24,12 +24,7 @@
 {% block content %}
 <section class="page-section">
     <div class="container">
-        <article class="consent-document">
-        <h1 class="consent-title">
-            <span class="consent-title__line">СОГЛАСИЕ</span>
-            <span class="consent-title__line">на обработку персональных данных</span>
-            <span class="consent-title__line consent-title__line--sub">(регистрация личного кабинета)</span>
-        </h1>
+        <h1 class="page-title">Согласие на обработку персональных данных (регистрация личного кабинета)</h1>
 
         <div class="consent-content">
             <p>Я, являясь посетителем Сайта и осуществляя отправку формы обратной связи в процессе регистрации личного кабинета на сайте <a href="https://onesimus25.ru/">https://onesimus25.ru/</a> (далее – Сайт), принимаю настоящее Согласие на обработку своих персональных данных (далее – Согласие).</p>
@@ -65,107 +60,48 @@
 
             <p>Настоящее согласие действует со дня его подписания и ограничивается сроком 30 дней с момента принятия решения об отказе в регистрации личного кабинета либо до прекращения использования личного кабинета либо до дня отзыва согласия в письменной/электронной форме (в зависимости от того, что произойдет раньше).</p>
         </div>
-        </article>
     </div>
 </section>
 {% endblock %}
 
 {% block extra_css %}
 <style>
-.consent-document {
-    max-width: 960px;
-    margin: 0 auto;
-    background: #fff;
-    border: 1px solid var(--color-gray-200, #e5e7eb);
-    border-radius: 8px;
-    padding: 1.5rem 1.25rem;
-}
-
-.consent-title {
-    margin: 0 0 1.25rem;
-    text-align: center;
-    font-family: "Times New Roman", Times, serif;
-    color: #111827;
-    line-height: 1.2;
-}
-
-.consent-title__line {
-    display: block;
-    font-weight: 700;
-}
-
-.consent-title__line:first-child {
-    font-size: 2rem;
-    letter-spacing: 0.01em;
-}
-
-.consent-title__line:nth-child(2) {
-    margin-top: 0.15rem;
-    font-size: 1.75rem;
-}
-
-.consent-title__line--sub {
-    margin-top: 0.1rem;
-    font-size: 1.5rem;
-}
-
 .consent-content {
-    line-height: 1.55;
-    color: #111827;
-    font-family: "Times New Roman", Times, serif;
-    font-size: 1.12rem;
+    max-width: 980px;
+    margin: 0 auto;
+    line-height: 1.75;
+    color: var(--color-gray-700, #374151);
+    font-size: 1rem;
 }
 
 .consent-content p {
-    margin-bottom: 0.9rem;
+    margin-bottom: 1rem;
     text-align: left;
 }
 
 .consent-content ul {
-    margin: 0.75rem 0 1rem 0;
-    padding: 0;
-    list-style: none;
+    margin: 0.75rem 0 1.1rem 1.25rem;
+    padding: 0 0 0 0.15rem;
+    list-style: disc;
 }
 
 .consent-content li {
-    margin-bottom: 0.35rem;
-    padding-left: 1.1rem;
-    position: relative;
-}
-
-.consent-content li::before {
-    content: "-";
-    position: absolute;
-    left: 0;
-    top: 0;
+    margin-bottom: 0.45rem;
 }
 
 .consent-content a {
-    color: inherit;
+    color: var(--color-accent, #dc2626);
     text-decoration: underline;
-    text-underline-offset: 2px;
 }
 
 @media (max-width: 768px) {
-    .consent-document {
-        padding: 1rem 0.875rem;
-    }
-
-    .consent-title__line:first-child {
-        font-size: 1.5rem;
-    }
-
-    .consent-title__line:nth-child(2) {
-        font-size: 1.32rem;
-    }
-
-    .consent-title__line--sub {
-        font-size: 1.15rem;
-    }
-
     .consent-content {
-        font-size: 1rem;
-        line-height: 1.5;
+        font-size: 0.96rem;
+        line-height: 1.65;
+    }
+
+    .consent-content ul {
+        margin-left: 1rem;
     }
 }
 </style>
