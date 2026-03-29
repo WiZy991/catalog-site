@@ -2732,6 +2732,16 @@ def build_farpost_compact_name(product):
         return s.split('/')[0].strip()
     # Укорачиваем бренд/тип, если там перечисление через "/"
     title_base = _first_token_by_slash(title_base)
+    # Дополнительно ограничиваем первые слова до "Тип Бренд Артикул"
+    # чтобы не тащить длинные хвосты, пришедшие из 1С в первой секции до запятой.
+    try:
+        import re as _re
+        raw_tokens = [t for t in _re.split(r'\s+', title_base) if t]
+        if len(raw_tokens) > 3:
+            # Часто шаблон: "Амортизатор HONDA 331048 ..." — берём первые 3 токена.
+            title_base = ' '.join(raw_tokens[:3]).strip()
+    except Exception:
+        pass
 
     article = str(product.article or '').strip()
     oem = ''
