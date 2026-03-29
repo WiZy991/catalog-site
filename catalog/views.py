@@ -8,7 +8,7 @@ from django.urls import reverse
 from django.conf import settings
 from .models import Category, Product
 from .filters import ProductFilter, get_brand_choices
-from .services import format_models_multiline
+from .services import format_models_multiline, build_farpost_compact_name
 
 
 class CatalogView(ListView):
@@ -126,7 +126,14 @@ class CategoryView(ListView):
         products = self.get_queryset()
         paginator = Paginator(products, getattr(settings, 'PRODUCTS_PER_PAGE', 24))
         page = self.request.GET.get('page', 1)
-        context['products'] = paginator.get_page(page)
+        page_obj = paginator.get_page(page)
+        # Готовим компактные названия (как в партнёрском каталоге)
+        for p in page_obj:
+            try:
+                p.compact_name = build_farpost_compact_name(p)
+            except Exception:
+                p.compact_name = p.name
+        context['products'] = page_obj
         context['paginator'] = paginator
         context['filter'] = self.filterset
 
@@ -269,7 +276,13 @@ class CatalogItemView(ListView):
             products = self.get_queryset()
             paginator = Paginator(products, getattr(settings, 'PRODUCTS_PER_PAGE', 24))
             page = self.request.GET.get('page', 1)
-            context['products'] = paginator.get_page(page)
+            page_obj = paginator.get_page(page)
+            for p in page_obj:
+                try:
+                    p.compact_name = build_farpost_compact_name(p)
+                except Exception:
+                    p.compact_name = p.name
+            context['products'] = page_obj
             context['paginator'] = paginator
             context['filter'] = self.filterset
 

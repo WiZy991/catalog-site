@@ -22,7 +22,7 @@
             </div>
             
             <div class="product-card__content">
-                <h3 class="product-card__title" itemprop="name">{{ product.name|truncatechars:80 }}</h3>
+                <h3 class="product-card__title" itemprop="name">{{ product.compact_name|default:product.name|truncatechars:80 }}</h3>
                 
                 <div class="product-card__meta">
                     {% if product.article %}
