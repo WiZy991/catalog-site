@@ -898,6 +898,16 @@ def filter_products_ajax(request):
     # Пагинация
     paginator = Paginator(products, getattr(settings, 'PRODUCTS_PER_PAGE', 24))
     products_page = paginator.get_page(page)
+    # Компактные названия для плитки результатов поиска
+    try:
+        from .services import build_farpost_compact_name
+        for p in products_page:
+            try:
+                p.compact_name = build_farpost_compact_name(p)
+            except Exception:
+                p.compact_name = p.name
+    except Exception:
+        pass
     
     # Рендерим HTML
     html = render_to_string('catalog/includes/products_grid.html', {
