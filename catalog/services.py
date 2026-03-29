@@ -2771,9 +2771,7 @@ def build_farpost_compact_name(product):
         if not parts:
             return ''
         first = _first_token_by_slash(parts[0])
-        if len(parts) >= 2:
-            second = _first_token_by_slash(parts[1])
-            return f'{first}, {second}' if second else first
+        # Требование: выводим только ОДНУ модель (без перечислений).
         return first
 
     def _first_engine(raw: str) -> str:
