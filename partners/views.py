@@ -443,12 +443,12 @@ class PartnerProductView(PartnerRequiredMixin, DetailView):
             text = text.split('/')[0].strip()
             return text
 
-        base = [p.strip() for p in str(product.name or '').split(',') if p and p.strip()]
-        title_base = base[0] if base else str(product.name or '')
-        compact_model = _first_model_and_body(first_model)
-        compact_engine = _first_engine(first_engine)
-        title_parts = [x for x in [title_base, product.article or '', article2_value or '', compact_model, compact_engine, first_characteristic] if x]
-        context['display_name'] = ', '.join(title_parts) if title_parts else str(product.name or '')
+        # Единый компактный заголовок (как на плитках/рознице)
+        try:
+            from catalog.services import build_farpost_compact_name
+            context['display_name'] = build_farpost_compact_name(product)
+        except Exception:
+            context['display_name'] = str(product.name or '')
         
         # Похожие товары - ищем по кросс-номерам и категории
         similar_products = []
@@ -806,12 +806,12 @@ class PublicPartnerProductView(DetailView):
             text = text.split('/')[0].strip()
             return text
 
-        base = [p.strip() for p in str(product.name or '').split(',') if p and p.strip()]
-        title_base = base[0] if base else str(product.name or '')
-        compact_model = _first_model_and_body(first_model)
-        compact_engine = _first_engine(first_engine)
-        title_parts = [x for x in [title_base, product.article or '', article2_value or '', compact_model, compact_engine, first_characteristic] if x]
-        context['display_name'] = ', '.join(title_parts) if title_parts else str(product.name or '')
+        # Единый компактный заголовок (как на плитках/рознице)
+        try:
+            from catalog.services import build_farpost_compact_name
+            context['display_name'] = build_farpost_compact_name(product)
+        except Exception:
+            context['display_name'] = str(product.name or '')
         
         return context
 
