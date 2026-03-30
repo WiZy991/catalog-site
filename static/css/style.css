@@ -1010,8 +1010,8 @@ h1, h2, h3, h4, h5, h6 {
    Hero CTA Section
 ======================================== */
 .hero-cta {
-    /* Симметричный вертикальный отступ над и под кнопками */
-    padding: var(--space-xl) 0 var(--space-xl) 0;
+    /* Опускаем кнопки чуть ниже к инфо‑иконкам: больше сверху, меньше снизу */
+    padding: var(--space-2xl) 0 var(--space-xs) 0;
     background: var(--color-white);
     text-align: center;
 }
@@ -1055,8 +1055,8 @@ h1, h2, h3, h4, h5, h6 {
    Advantages Section
 ======================================== */
 .advantages {
-    /* Делаем отступ сверху таким же, как сверху над кнопками, для визуального баланса */
-    padding: var(--space-xl) 0 var(--space-3xl) 0;
+    /* Возвращаем прежний верхний отступ, чтобы иконки не уезжали */
+    padding: var(--space-md) 0 var(--space-3xl) 0;
     background: var(--color-white);
 }
 
