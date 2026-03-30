@@ -2748,8 +2748,8 @@ def build_farpost_compact_name(product):
     # отличный от артикула. Предпочтение токенам с дефисом/буквами.
     oem = ''
     try:
-    cross_list = product.get_cross_numbers_list()
-    if cross_list:
+        cross_list = product.get_cross_numbers_list()
+        if cross_list:
             article_norm = str(article or '').strip().lower()
             def is_oem_token(tok: str) -> bool:
                 t = str(tok or '').strip()
