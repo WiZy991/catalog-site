@@ -1639,8 +1639,17 @@ class PromotionAdminForm(forms.ModelForm):
         model = Promotion
         fields = '__all__'
         widgets = {
+            'image': forms.ClearableFileInput(attrs={'accept': 'image/*'}),
             'video': forms.ClearableFileInput(attrs={'accept': 'video/*'}),
         }
+    
+    def clean(self):
+        cleaned = super().clean()
+        image = cleaned.get('image')
+        video = cleaned.get('video')
+        if not image and not video:
+            raise forms.ValidationError('Загрузите изображение или видео. Достаточно одного.')
+        return cleaned
 
 
 @admin.register(Promotion)

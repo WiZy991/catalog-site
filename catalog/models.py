@@ -755,7 +755,7 @@ class FarpostAPISettings(models.Model):
 class Promotion(models.Model):
     """Акции и специальные предложения для главной страницы."""
     title = models.CharField('Заголовок', max_length=200, blank=True, help_text='Необязательно. Если не указан, будет использовано изображение.')
-    image = models.ImageField('Изображение', upload_to='promotions/')
+    image = models.ImageField('Изображение', upload_to='promotions/', blank=True, null=True)
     video = models.FileField('Видео-ролик', upload_to='promotions/videos/', blank=True, null=True, help_text='Необязательно. Если загружено видео — на сайте будет показано видео вместо изображения.')
     link = models.URLField('Ссылка', blank=True, help_text='Куда ведёт акция (необязательно)')
     description = models.TextField('Описание', blank=True)
