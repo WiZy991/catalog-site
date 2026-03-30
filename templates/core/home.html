@@ -120,6 +120,32 @@
 {% if promotions %}
 <section class="promotions-section">
     <div class="container">
+        <style>
+        .promotions-carousel__image-wrapper { position: relative; }
+        .promotions-carousel__sound-toggle {
+            position: absolute;
+            right: 12px;
+            bottom: 12px;
+            width: 40px;
+            height: 40px;
+            display: grid;
+            place-items: center;
+            border: none;
+            border-radius: 9999px;
+            background: rgba(0,0,0,0.55);
+            color: #fff;
+            cursor: pointer;
+            z-index: 5;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+        }
+        .promotions-carousel__sound-toggle.is-unmuted {
+            background: rgba(220, 38, 38, 0.8); /* красный при включенном звуке */
+        }
+        .promotions-carousel__sound-toggle i {
+            font-size: 18px;
+            line-height: 1;
+        }
+        </style>
         <div class="promotions-carousel" id="promotionsCarousel">
             <div class="promotions-carousel__wrapper">
                 <div class="promotions-carousel__track">
@@ -222,6 +248,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 v.muted = true;
                 const b = v.closest('.promotions-carousel__image-wrapper')?.querySelector('.promotions-carousel__sound-toggle');
                 if (b) b.classList.remove('is-unmuted');
+                if (b) b.innerHTML = '<i class="bi bi-volume-mute"></i>';
             }
         });
 
@@ -231,8 +258,10 @@ document.addEventListener('DOMContentLoaded', function () {
         if (wantUnmute) {
             video.play().catch(() => {});
             btn.classList.add('is-unmuted');
+            btn.innerHTML = '<i class="bi bi-volume-up"></i>';
         } else {
             btn.classList.remove('is-unmuted');
+            btn.innerHTML = '<i class="bi bi-volume-mute"></i>';
         }
     }, { passive: true });
 });
