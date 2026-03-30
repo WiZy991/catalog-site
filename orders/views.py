@@ -9,6 +9,7 @@ import json
 from .models import Order, OrderItem
 from .forms import OrderForm
 from catalog.models import Product
+from catalog.services import build_farpost_compact_name
 
 
 def get_cart(request):
@@ -97,6 +98,11 @@ def cart_view(request):
     for product_id, item_data in cart.items():
         try:
             product = Product.objects.get(id=int(product_id), is_active=True)
+            # Чтобы в корзине заголовок был таким же компактным, как в карточке товара
+            try:
+                product.compact_name = build_farpost_compact_name(product)
+            except Exception:
+                product.compact_name = product.name
             quantity = item_data['quantity']
             price = float(item_data['price'])
             item_total = quantity * price
@@ -228,6 +234,11 @@ def order_create(request):
     for product_id, item_data in cart.items():
         try:
             product = Product.objects.get(id=int(product_id), is_active=True)
+            # Чтобы в "Состав заказа" заголовок совпадал с карточкой товара
+            try:
+                product.compact_name = build_farpost_compact_name(product)
+            except Exception:
+                product.compact_name = product.name
             quantity = item_data['quantity']
             price = float(item_data['price'])
             item_total = quantity * price

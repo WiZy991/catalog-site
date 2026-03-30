@@ -32,18 +32,66 @@
     .product-gallery__main {
         background: #f8f9fa;
         border-radius: 12px;
-        padding: 2rem;
         display: flex;
         align-items: center;
         justify-content: center;
-        min-height: 400px;
+        aspect-ratio: 1 / 1;
+        min-height: 0;
         border: 1px solid #e9ecef;
+        overflow: hidden;
+        cursor: zoom-in;
+        user-select: none;
     }
     
     .product-gallery__main img {
-        max-width: 100%;
-        max-height: 350px;
+        width: 100%;
+        height: 100%;
         object-fit: contain;
+        display: block;
+    }
+
+    /* Модальное окно для просмотра фото */
+    .image-modal {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.82);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        z-index: 9999;
+    }
+    .image-modal.is-open { display: flex; }
+    .image-modal__content {
+        width: min(1100px, 96vw);
+        height: min(82vh, 900px);
+        background: #111;
+        border-radius: 16px;
+        overflow: hidden;
+        position: relative;
+        box-shadow: 0 30px 80px rgba(0,0,0,0.45);
+    }
+    .image-modal__img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        background: #111;
+        display: block;
+    }
+    .image-modal__close {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        width: 42px;
+        height: 42px;
+        border-radius: 999px;
+        border: 1px solid rgba(255,255,255,0.25);
+        background: rgba(0,0,0,0.45);
+        color: #fff;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
     }
     
     .product-gallery__placeholder {
@@ -369,6 +417,16 @@
     </div>
 </section>
 
+<!-- Modal: просмотр фото -->
+<div class="image-modal" id="imageModal" aria-hidden="true">
+    <div class="image-modal__content" role="dialog" aria-modal="true" aria-label="Просмотр изображения">
+        <button class="image-modal__close" type="button" id="imageModalClose" aria-label="Закрыть">
+            <i class="bi bi-x-lg"></i>
+        </button>
+        <img class="image-modal__img" id="imageModalImg" alt="">
+    </div>
+</div>
+
 <script>
 function changeImage(url, thumb) {
     const mainImage = document.getElementById('mainImage');
@@ -380,5 +438,45 @@ function changeImage(url, thumb) {
     });
     thumb.classList.add('is-active');
 }
+
+// Lightbox / модалка для фото
+(function() {
+    const mainImage = document.getElementById('mainImage');
+    const modal = document.getElementById('imageModal');
+    const modalImg = document.getElementById('imageModalImg');
+    const closeBtn = document.getElementById('imageModalClose');
+
+    function openModal(src, alt) {
+        if (!modal || !modalImg) return;
+        modalImg.src = src || '';
+        modalImg.alt = alt || '';
+        modal.classList.add('is-open');
+        modal.setAttribute('aria-hidden', 'false');
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closeModal() {
+        if (!modal) return;
+        modal.classList.remove('is-open');
+        modal.setAttribute('aria-hidden', 'true');
+        document.body.style.overflow = '';
+    }
+
+    if (mainImage) {
+        mainImage.addEventListener('click', function() {
+            openModal(mainImage.src, mainImage.alt);
+        });
+    }
+
+    if (closeBtn) closeBtn.addEventListener('click', closeModal);
+    if (modal) {
+        modal.addEventListener('click', function(e) {
+            if (e.target === modal) closeModal();
+        });
+    }
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') closeModal();
+    });
+})();
 </script>
 {% endblock %}
