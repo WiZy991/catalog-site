@@ -245,7 +245,7 @@
                             </label>
                         </div>
 
-                        <button type="submit" class="btn-submit">
+                        <button type="submit" class="btn-submit" id="partner-submit-btn" disabled>
                             <i class="bi bi-send"></i> Отправить заявку
                         </button>
                     </form>
@@ -255,7 +255,7 @@
                 <script>
                 document.addEventListener('DOMContentLoaded', function() {
                     // Блокировка кнопки отправки до согласия
-                    const submitBtn = document.querySelector('.btn-submit');
+                    const submitBtn = document.getElementById('partner-submit-btn');
                     const checkbox = document.getElementById('agree_pp');
                     function toggleSubmit() {
                         if (submitBtn && checkbox) {
@@ -265,6 +265,15 @@
                     if (checkbox && submitBtn) {
                         toggleSubmit();
                         checkbox.addEventListener('change', toggleSubmit);
+                        const formEl = document.querySelector('.register-form form') || document.querySelector('form');
+                        if (formEl) {
+                            formEl.addEventListener('submit', function(e) {
+                                if (!checkbox.checked) {
+                                    e.preventDefault();
+                                    toggleSubmit();
+                                }
+                            });
+                        }
                     }
                     // Маска для телефона
                     const phoneInput = document.getElementById('id_phone');

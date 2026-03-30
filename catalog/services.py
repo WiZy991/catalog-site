@@ -2779,6 +2779,17 @@ def build_farpost_compact_name(product):
         except Exception:
             pass
 
+    # Устраняем дубли: если article уже присутствует в title_base — не добавляем его повторно.
+    def _norm(s: str) -> str:
+        return re.sub(r'[\s,]+', '', str(s or '').strip().lower())
+    title_norm = _norm(title_base)
+    article_norm = _norm(article)
+    if article and article_norm and article_norm in title_norm:
+        article = ''
+    # Если OEM уже содержится в title_base — не дублируем.
+    if oem and _norm(oem) in title_norm:
+        oem = ''
+
     model_raw = ''
     engine_raw = ''
     characteristic_raw = ''
