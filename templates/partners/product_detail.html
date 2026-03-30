@@ -116,7 +116,7 @@
     .product-gallery__main img {
         width: 100%;
         height: 100%;
-        object-fit: contain; /* чтобы фото всегда было ровно в квадрате */
+        object-fit: cover; /* чтобы не оставались белые поля внутри квадрата */
         display: block;
     }
 
@@ -382,7 +382,7 @@
                 <div class="product-gallery__main">
                     {% with main_image=product.get_main_image %}
                         {% if main_image %}
-                            <img src="{{ main_image.image.url }}" alt="{{ product.name }}" id="mainImage">
+                            <img src="{{ main_image.image.url }}" alt="{{ product.name }}" id="mainImage" onclick="onesimusOpenImageModal(this.src, this.alt)">
                         {% else %}
                             <i class="bi bi-image" style="font-size: 5rem; color: #ccc;"></i>
                         {% endif %}
@@ -488,46 +488,65 @@ function changeImage(url, thumb) {
         t.classList.remove('product-gallery__thumb--active');
     });
     thumb.classList.add('product-gallery__thumb--active');
-}
 
-// Lightbox / модалка для фото
-(function() {
-    const mainImage = document.getElementById('mainImage');
+    // Если модалка открыта — обновляем изображение внутри нее тоже
     const modal = document.getElementById('imageModal');
     const modalImg = document.getElementById('imageModalImg');
+    if (modal && modal.classList.contains('is-open') && modalImg) {
+        const thumbImg = thumb ? thumb.querySelector('img') : null;
+        const alt = (thumbImg && thumbImg.alt) ? thumbImg.alt : '';
+        modalImg.src = url;
+        modalImg.alt = alt;
+    }
+}
+
+// Lightbox / модалка для фото (глобально, чтобы клик работал гарантированно)
+function onesimusOpenImageModal(src, alt) {
+    const modal = document.getElementById('imageModal');
+    const modalImg = document.getElementById('imageModalImg');
+    if (!modal || !modalImg) return;
+
+    modalImg.src = src || '';
+    modalImg.alt = alt || '';
+    modal.classList.add('is-open');
+    modal.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+}
+
+function onesimusCloseImageModal() {
+    const modal = document.getElementById('imageModal');
+    if (!modal) return;
+
+    modal.classList.remove('is-open');
+    modal.setAttribute('aria-hidden', 'true');
+    document.body.style.overflow = '';
+}
+
+(function() {
     const closeBtn = document.getElementById('imageModalClose');
+    const modal = document.getElementById('imageModal');
+    const mainWrap = document.querySelector('.product-gallery__main');
+    const mainImage = document.getElementById('mainImage');
 
-    function openModal(src, alt) {
-        if (!modal || !modalImg) return;
-        modalImg.src = src || '';
-        modalImg.alt = alt || '';
-        modal.classList.add('is-open');
-        modal.setAttribute('aria-hidden', 'false');
-        document.body.style.overflow = 'hidden';
+    if (closeBtn) {
+        closeBtn.addEventListener('click', onesimusCloseImageModal);
     }
-
-    function closeModal() {
-        if (!modal) return;
-        modal.classList.remove('is-open');
-        modal.setAttribute('aria-hidden', 'true');
-        document.body.style.overflow = '';
-    }
-
-    if (mainImage) {
-        mainImage.addEventListener('click', function() {
-            openModal(mainImage.src, mainImage.alt);
-        });
-    }
-
-    if (closeBtn) closeBtn.addEventListener('click', closeModal);
     if (modal) {
         modal.addEventListener('click', function(e) {
-            if (e.target === modal) closeModal();
+            if (e.target === modal) onesimusCloseImageModal();
         });
     }
     document.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape') closeModal();
+        if (e.key === 'Escape') onesimusCloseImageModal();
     });
+
+    // Запасной вариант: клик по контейнеру тоже открывает модалку
+    if (mainWrap && mainImage) {
+        mainWrap.addEventListener('click', function(e) {
+            if (e && e.target === mainImage) return; // mainImage уже имеет onclick
+            onesimusOpenImageModal(mainImage.src, mainImage.alt);
+        });
+    }
 })();
 
 // Скрываем ТОЛЬКО секции "Применимость" с полями ввода (input/textarea)
