@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Согласие на обработку персональных данных (оформление заказа) - {{ SITE_NAME }}{% endblock %}
+{% block meta_description %}Согласие на обработку персональных данных при оформлении заказа на сайте {{ SITE_NAME }}.{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="breadcrumbs" aria-label="Хлебные крошки">
+    <div class="container">
+        <ol class="breadcrumbs__list" itemscope itemtype="https://schema.org/BreadcrumbList">
+            <li class="breadcrumbs__item" itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
+                <a href="{% url 'core:home' %}" itemprop="item"><span itemprop="name">Главная</span></a>
+                <meta itemprop="position" content="1">
+            </li>
+            <li class="breadcrumbs__item breadcrumbs__item--active" itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
+                <span itemprop="name">Согласие на обработку персональных данных (оформление заказа)</span>
+                <meta itemprop="position" content="2">
+            </li>
+        </ol>
+    </div>
+{% endblock %}
+
+{% block content %}
+<section class="page-section">
+    <div class="container">
+        <h1 class="page-title">Согласие на обработку персональных данных (оформление заказа)</h1>
+
+        <div class="page-content policy-content">
+            {% if consent_text %}
+                <pre style="white-space: pre-wrap; font-family: inherit; line-height: 1.6;">{{ consent_text }}</pre>
+            {% else %}
+                <p>Текст согласия будет опубликован в ближайшее время.</p>
+            {% endif %}
+        </div>
+    </div>
+</section>
+{% endblock %}

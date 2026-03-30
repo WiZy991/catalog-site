@@ -2744,10 +2744,28 @@ def build_farpost_compact_name(product):
         pass
 
     article = str(product.article or '').strip()
+    # Определяем OEM: берём первый "похожий на OEM" из кросс-номеров,
+    # отличный от артикула. Предпочтение токенам с дефисом/буквами.
     oem = ''
-    cross_list = product.get_cross_numbers_list()
-    if cross_list:
-        oem = str(cross_list[0]).strip().lstrip('/')
+    try:
+        cross_list = product.get_cross_numbers_list()
+        if cross_list:
+            article_norm = str(article or '').strip().lower()
+            def is_oem_token(tok: str) -> bool:
+                t = str(tok or '').strip()
+                if not t:
+                    return False
+                tl = t.lower()
+                if article_norm and tl == article_norm:
+                    return False
+                # OEM обычно содержит дефис или буквы (в отличие от чисто цифровых артикулов)
+                return ('-' in t) or bool(re.search(r'[A-Za-z]', t))
+            for token in cross_list:
+                if is_oem_token(token):
+                    oem = str(token).strip().lstrip('/')
+                    break
+    except Exception:
+        pass
 
     model_raw = ''
     engine_raw = ''

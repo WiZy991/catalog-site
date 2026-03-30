@@ -135,6 +135,27 @@ class ConsentView(TemplateView):
         return context
 
 
+class OrderConsentView(TemplateView):
+    """Согласие на обработку ПД при оформлении заказа (розница и опт)."""
+    template_name = 'core/order_consent.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        # Пытаемся прочитать текст согласия из файла politic.txt в корне проекта
+        from django.conf import settings
+        import os
+        consent_text = ''
+        try:
+            file_path = os.path.join(settings.BASE_DIR, 'politic.txt')
+            if os.path.exists(file_path):
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    consent_text = f.read()
+        except Exception:
+            consent_text = ''
+        context['consent_text'] = consent_text
+        return context
+
+
 class RecommendationsView(TemplateView):
     """Страница Правила применения рекомендательных технологий."""
     template_name = 'core/recommendations.html'
