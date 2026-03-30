@@ -870,7 +870,7 @@ class SyncLogAdmin(admin.ModelAdmin):
 @admin.register(Promotion)
 class PromotionAdmin(admin.ModelAdmin):
     """Админка для акций и специальных предложений."""
-    list_display = ['image_preview', 'title', 'is_active', 'order', 'created_at']
+    list_display = ['media_preview', 'title', 'is_active', 'order', 'created_at']
     list_display_links = ['title']
     list_editable = ['is_active', 'order']
     list_filter = ['is_active', 'created_at']
@@ -879,18 +879,23 @@ class PromotionAdmin(admin.ModelAdmin):
     
     fieldsets = (
         ('Основное', {
-            'fields': ('title', 'image', 'link', 'description')
+            'fields': ('title', 'image', 'video', 'link', 'description')
         }),
         ('Настройки', {
             'fields': ('is_active', 'order')
         }),
     )
     
-    def image_preview(self, obj):
+    def media_preview(self, obj):
+        if getattr(obj, 'video', None):
+            try:
+                return format_html('<video src="{}" style="max-height: 50px;" muted playsinline></video>', obj.video.url)
+            except Exception:
+                pass
         if obj.image:
             return format_html('<img src="{}" style="max-height: 50px;"/>', obj.image.url)
         return '-'
-    image_preview.short_description = 'Превью'
+    media_preview.short_description = 'Превью'
 
 
 # Настройка заголовка админки

@@ -131,7 +131,11 @@
                         <div class="promotions-carousel__link">
                         {% endif %}
                             <div class="promotions-carousel__image-wrapper">
-                                <img src="{{ promotion.image.url }}" alt="{{ promotion.title|default:'Акция' }}" class="promotions-carousel__image">
+                                {% if promotion.video %}
+                                    <video class="promotions-carousel__image" {% if promotion.image %}poster="{{ promotion.image.url }}"{% endif %} src="{{ promotion.video.url }}" playsinline muted loop autoplay></video>
+                                {% else %}
+                                    <img src="{{ promotion.image.url }}" alt="{{ promotion.title|default:'Акция' }}" class="promotions-carousel__image">
+                                {% endif %}
                             </div>
                             {% if promotion.title or promotion.description %}
                             <div class="promotions-carousel__content">

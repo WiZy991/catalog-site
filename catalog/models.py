@@ -756,6 +756,7 @@ class Promotion(models.Model):
     """Акции и специальные предложения для главной страницы."""
     title = models.CharField('Заголовок', max_length=200, blank=True, help_text='Необязательно. Если не указан, будет использовано изображение.')
     image = models.ImageField('Изображение', upload_to='promotions/')
+    video = models.FileField('Видео-ролик', upload_to='promotions/videos/', blank=True, null=True, help_text='Необязательно. Если загружено видео — на сайте будет показано видео вместо изображения.')
     link = models.URLField('Ссылка', blank=True, help_text='Куда ведёт акция (необязательно)')
     description = models.TextField('Описание', blank=True)
     is_active = models.BooleanField('Активна', default=True)
@@ -770,6 +771,9 @@ class Promotion(models.Model):
 
     def __str__(self):
         return self.title or f'Акция #{self.pk}'
+
+    def has_video(self) -> bool:
+        return bool(self.video)
 
 
 class WholesaleProduct(Product):
