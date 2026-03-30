@@ -867,6 +867,18 @@ class SyncLogAdmin(admin.ModelAdmin):
         return False
 
 
+from django import forms
+
+
+class PromotionAdminForm(forms.ModelForm):
+    class Meta:
+        model = Promotion
+        fields = '__all__'
+        widgets = {
+            'video': forms.ClearableFileInput(attrs={'accept': 'video/*'}),
+        }
+
+
 @admin.register(Promotion)
 class PromotionAdmin(admin.ModelAdmin):
     """Админка для акций и специальных предложений."""
@@ -876,6 +888,7 @@ class PromotionAdmin(admin.ModelAdmin):
     list_filter = ['is_active', 'created_at']
     search_fields = ['title', 'description']
     ordering = ['order', '-created_at']
+    form = PromotionAdminForm
     
     fieldsets = (
         ('Основное', {
