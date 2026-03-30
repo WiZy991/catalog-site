@@ -547,6 +547,13 @@ function onesimusCloseImageModal() {
             onesimusOpenImageModal(mainImage.src, mainImage.alt);
         });
     }
+
+    // Надежный fallback: делегирование клика (если прямой обработчик перехватывается слоями)
+    document.addEventListener('click', function(e) {
+        const imgEl = e.target.closest('#mainImage, .product-gallery__main img');
+        if (!imgEl) return;
+        onesimusOpenImageModal(imgEl.src, imgEl.alt || '');
+    }, true);
 })();
 
 // Скрываем ТОЛЬКО секции "Применимость" с полями ввода (input/textarea)
