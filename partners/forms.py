@@ -14,6 +14,11 @@ from .models import PartnerRequest, Partner
 
 class PartnerRequestForm(forms.ModelForm):
     """Форма заявки на партнёрство."""
+    personal_data_consent = forms.BooleanField(
+        required=True,
+        label='Согласие на обработку персональных данных',
+        error_messages={'required': 'Необходимо дать согласие на обработку персональных данных'}
+    )
     
     class Meta:
         model = PartnerRequest

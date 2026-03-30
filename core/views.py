@@ -150,6 +150,15 @@ class OrderConsentView(TemplateView):
             if os.path.exists(file_path):
                 with open(file_path, 'r', encoding='utf-8') as f:
                     consent_text = f.read()
+                    # Удаляем дублирующий заголовок "СОГЛАСИЕ ..." в начале файла
+                    lines = [ln.rstrip('\r') for ln in consent_text.splitlines()]
+                    if lines and 'СОГЛАСИЕ' in lines[0].upper():
+                        # Если вторая строка тоже про "на обработку персональных данных" — удаляем обе
+                        if len(lines) > 1 and 'ОБРАБОТКУ ПЕРСОНАЛЬНЫХ ДАННЫХ' in lines[1].upper():
+                            lines = lines[2:]
+                        else:
+                            lines = lines[1:]
+                    consent_text = '\n'.join(lines).strip()
         except Exception:
             consent_text = ''
         context['consent_text'] = consent_text
