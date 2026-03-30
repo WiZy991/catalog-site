@@ -303,6 +303,25 @@
 
 {% block extra_js %}
 <script>
+function onesimusOpenImageModal(src, alt) {
+    const modal = document.getElementById('imageModal');
+    const modalImg = document.getElementById('imageModalImg');
+    if (!modal || !modalImg) return;
+    modalImg.src = src || '';
+    modalImg.alt = alt || '';
+    modal.classList.add('is-open');
+    modal.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+}
+
+function onesimusCloseImageModal() {
+    const modal = document.getElementById('imageModal');
+    if (!modal) return;
+    modal.classList.remove('is-open');
+    modal.setAttribute('aria-hidden', 'true');
+    document.body.style.overflow = '';
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     // Галерея
     const thumbs = document.querySelectorAll('.product-gallery__thumb');
@@ -310,32 +329,15 @@ document.addEventListener('DOMContentLoaded', function() {
     const modal = document.getElementById('imageModal');
     const modalImg = document.getElementById('imageModalImg');
 
-    // Lightbox / модалка
-    window.onesimusOpenImageModal = function(src, alt) {
-        if (!modal || !modalImg) return;
-        modalImg.src = src || '';
-        modalImg.alt = alt || '';
-        modal.classList.add('is-open');
-        modal.setAttribute('aria-hidden', 'false');
-        document.body.style.overflow = 'hidden';
-    };
-
-    window.onesimusCloseImageModal = function() {
-        if (!modal) return;
-        modal.classList.remove('is-open');
-        modal.setAttribute('aria-hidden', 'true');
-        document.body.style.overflow = '';
-    };
-
     const closeBtn = document.getElementById('imageModalClose');
-    if (closeBtn) closeBtn.addEventListener('click', window.onesimusCloseImageModal);
+    if (closeBtn) closeBtn.addEventListener('click', onesimusCloseImageModal);
     if (modal) {
         modal.addEventListener('click', function(e) {
-            if (e.target === modal) window.onesimusCloseImageModal();
+            if (e.target === modal) onesimusCloseImageModal();
         });
     }
     document.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape') window.onesimusCloseImageModal();
+        if (e.key === 'Escape') onesimusCloseImageModal();
     });
     
     thumbs.forEach(function(thumb) {
@@ -358,7 +360,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Если клик по картинке не сработал (например, из-за наложений) — ставим обработчик тут тоже
     if (mainImage) {
         mainImage.addEventListener('click', function() {
-            window.onesimusOpenImageModal(mainImage.src, mainImage.alt);
+            onesimusOpenImageModal(mainImage.src, mainImage.alt);
         });
     }
 });
