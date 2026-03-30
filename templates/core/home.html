@@ -132,7 +132,10 @@
                         {% endif %}
                             <div class="promotions-carousel__image-wrapper">
                                 {% if promotion.video %}
-                                    <video class="promotions-carousel__image" {% if promotion.image %}poster="{{ promotion.image.url }}"{% endif %} src="{{ promotion.video.url }}" playsinline muted loop autoplay></video>
+                                    <video class="promotions-carousel__image" data-promo-video="1" {% if promotion.image %}poster="{{ promotion.image.url }}"{% endif %} src="{{ promotion.video.url }}" playsinline muted loop autoplay></video>
+                                    <button type="button" class="promotions-carousel__sound-toggle" aria-label="Включить звук" title="Включить звук">
+                                        <i class="bi bi-volume-mute"></i>
+                                    </button>
                                 {% else %}
                                     <img src="{{ promotion.image.url }}" alt="{{ promotion.title|default:'Акция' }}" class="promotions-carousel__image">
                                 {% endif %}
@@ -173,6 +176,68 @@
     </div>
 </section>
 {% endif %}
+
+{% block extra_js %}
+<script>
+// Звук у видео-акций: по умолчанию без звука; включаем звук только по клику пользователя
+document.addEventListener('DOMContentLoaded', function () {
+    const slides = document.querySelectorAll('.promotions-carousel__slide');
+    const videos = document.querySelectorAll('video[data-promo-video]');
+
+    // Пауза/проигрывание в зависимости от видимости
+    if ('IntersectionObserver' in window) {
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                const video = entry.target.querySelector('video[data-promo-video]');
+                if (!video) return;
+                if (entry.isIntersecting && entry.intersectionRatio >= 0.5) {
+                    // Если видео видно - играем (по умолчанию без звука)
+                    if (video.paused) {
+                        video.play().catch(() => {});
+                    }
+                } else {
+                    // Вне экрана — останавливаем звук и паузим
+                    video.muted = true;
+                    video.pause();
+                    const btn = entry.target.querySelector('.promotions-carousel__sound-toggle');
+                    if (btn) btn.classList.remove('is-unmuted');
+                }
+            });
+        }, { threshold: [0, 0.5, 1] });
+
+        slides.forEach(slide => observer.observe(slide));
+    }
+
+    // Кнопка включения/выключения звука
+    document.body.addEventListener('click', function (e) {
+        const btn = e.target.closest('.promotions-carousel__sound-toggle');
+        if (!btn) return;
+        const wrap = btn.closest('.promotions-carousel__image-wrapper');
+        const video = wrap ? wrap.querySelector('video[data-promo-video]') : null;
+        if (!video) return;
+
+        // Глушим все остальные видео
+        videos.forEach(v => {
+            if (v !== video) {
+                v.muted = true;
+                const b = v.closest('.promotions-carousel__image-wrapper')?.querySelector('.promotions-carousel__sound-toggle');
+                if (b) b.classList.remove('is-unmuted');
+            }
+        });
+
+        // Тоггл звука для текущего
+        const wantUnmute = video.muted;
+        video.muted = !wantUnmute ? true : false;
+        if (wantUnmute) {
+            video.play().catch(() => {});
+            btn.classList.add('is-unmuted');
+        } else {
+            btn.classList.remove('is-unmuted');
+        }
+    }, { passive: true });
+});
+</script>
+{% endblock %}
 
 <!-- Featured Products -->
 {% if featured_products %}
