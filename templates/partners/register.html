@@ -235,12 +235,15 @@
                             <p class="form-help">Информация о компании, сфера деятельности и т.д.</p>
                         </div>
                         
-                        <p class="privacy-notice">
-                            Отправляя заявку, вы соглашаетесь с 
-                            <a href="{% url 'core:privacy_policy' %}" target="_blank">политикой конфиденциальности</a> 
-                            и даёте 
-                            <a href="{% url 'core:consent' %}" target="_blank">согласие на обработку персональных данных</a>.
-                        </p>
+                        <div class="privacy-notice" style="margin: 16px 0;">
+                            <label style="cursor:pointer;">
+                                <input type="checkbox" id="agree_pp" required>
+                                Я принимаю 
+                                <a href="{% url 'core:privacy_policy' %}" target="_blank">Политику конфиденциальности</a>
+                                и даю 
+                                <a href="{% url 'core:consent' %}" target="_blank">Согласие на обработку персональных данных</a>
+                            </label>
+                        </div>
 
                         <button type="submit" class="btn-submit">
                             <i class="bi bi-send"></i> Отправить заявку
