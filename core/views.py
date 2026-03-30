@@ -159,6 +159,20 @@ class OrderConsentView(TemplateView):
                         else:
                             lines = lines[1:]
                     consent_text = '\n'.join(lines).strip()
+                    # Удаляем "квадраты"/служебные маркеры из исходного текста
+                    # (часто приходят из Word как private-use символы или спец-иконки списка).
+                    bad_chars = {
+                        '\uf0a7': '',  # private use bullet
+                        '\uf0ad': '',  # private use square
+                        '\uf0b7': '',  # private use dot
+                        '□': '',
+                        '■': '',
+                        '☐': '',
+                        '▢': '',
+                        '▪': '',
+                        '▫': '',
+                    }
+                    consent_text = consent_text.translate(str.maketrans(bad_chars))
         except Exception:
             consent_text = ''
         context['consent_text'] = consent_text
