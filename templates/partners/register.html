@@ -13,6 +13,14 @@
         background: var(--color-gray-100);
     }
     
+    /* Визуально неактивная кнопка отправки (как при оформлении заказа) */
+    #partner-submit-btn[disabled],
+    .btn-submit--disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+        pointer-events: none;
+    }
+    
     .register-container {
         max-width: 600px;
         margin: 0 auto;
@@ -262,7 +270,15 @@
                     const checkbox = document.getElementById('agree_pp');
                     function toggleSubmit() {
                         if (submitBtn && checkbox) {
-                            submitBtn.disabled = !checkbox.checked;
+                            const disabled = !checkbox.checked;
+                            submitBtn.disabled = disabled;
+                            if (disabled) {
+                                submitBtn.classList.add('btn-submit--disabled');
+                                submitBtn.setAttribute('aria-disabled', 'true');
+                            } else {
+                                submitBtn.classList.remove('btn-submit--disabled');
+                                submitBtn.removeAttribute('aria-disabled');
+                            }
                         }
                     }
                     if (checkbox && submitBtn) {
