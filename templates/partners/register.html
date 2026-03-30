@@ -254,6 +254,18 @@
                 {% block extra_js %}
                 <script>
                 document.addEventListener('DOMContentLoaded', function() {
+                    // Блокировка кнопки отправки до согласия
+                    const submitBtn = document.querySelector('.btn-submit');
+                    const checkbox = document.getElementById('agree_pp');
+                    function toggleSubmit() {
+                        if (submitBtn && checkbox) {
+                            submitBtn.disabled = !checkbox.checked;
+                        }
+                    }
+                    if (checkbox && submitBtn) {
+                        toggleSubmit();
+                        checkbox.addEventListener('change', toggleSubmit);
+                    }
                     // Маска для телефона
                     const phoneInput = document.getElementById('id_phone');
                     

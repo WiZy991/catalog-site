@@ -2766,6 +2766,18 @@ def build_farpost_compact_name(product):
                     break
     except Exception:
         pass
+    # Если OEM не нашли в кросс-номерах — пытаемся вытащить его из характеристик (OEM/oem/Артикул2)
+    if not oem:
+        try:
+            for k, v in product.get_characteristics_list():
+                key = str(k).strip().lower()
+                if key in ('oem', 'oem номер', 'oem-номер', 'артикул2', 'article2'):
+                    val = str(v or '').strip().lstrip('/')
+                    if val and val.lower() != str(article or '').strip().lower():
+                        oem = val
+                        break
+        except Exception:
+            pass
 
     model_raw = ''
     engine_raw = ''
