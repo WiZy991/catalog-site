@@ -177,6 +177,27 @@ class OrderConsentView(TemplateView):
                     # На случай других символов из Private Use Area (часто из Word),
                     # которые в браузере отображаются как пустые квадраты.
                     consent_text = re.sub(r'[\uE000-\uF8FF]', '', consent_text)
+
+                    # Форматируем бывшие пункты списков (где были квадраты):
+                    # делаем отступ/красную строку и визуально сдвигаем вправо.
+                    lines = consent_text.splitlines()
+                    list_prefixes = (
+                        'фамилия',
+                        'номер телефона',
+                        'адрес электронной почты',
+                        'город',
+                        'с положениями',
+                        'с политикой',
+                    )
+                    formatted_lines = []
+                    for ln in lines:
+                        stripped = ln.lstrip()
+                        lower = stripped.lower()
+                        if stripped and lower.startswith(list_prefixes):
+                            formatted_lines.append(f'    {stripped}')
+                        else:
+                            formatted_lines.append(ln)
+                    consent_text = '\n'.join(formatted_lines)
         except Exception:
             consent_text = ''
         context['consent_text'] = consent_text
