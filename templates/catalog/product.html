@@ -51,6 +51,83 @@
 </script>
 {% endblock %}
 
+{% block extra_css %}
+<style>
+    /* Ровный квадрат главного фото */
+    .product-gallery__main {
+        padding: 0 !important;
+        width: 100% !important;
+        aspect-ratio: 1 / 1 !important;
+        min-height: 0 !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        overflow: hidden !important;
+        background: #f8f9fa;
+    }
+
+    .product-gallery__main img {
+        width: 100% !important;
+        height: 100% !important;
+        object-fit: cover !important; /* заполняем квадрат без пустых полей */
+        object-position: center;
+        display: block !important;
+        cursor: zoom-in;
+    }
+
+    /* Модальное окно (lightbox) */
+    .image-modal {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.82);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        z-index: 9999;
+    }
+
+    .image-modal.is-open {
+        display: flex;
+    }
+
+    .image-modal__content {
+        width: min(1100px, 96vw);
+        height: min(82vh, 900px);
+        background: #111;
+        border-radius: 16px;
+        overflow: hidden;
+        position: relative;
+        box-shadow: 0 30px 80px rgba(0,0,0,0.45);
+    }
+
+    .image-modal__img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        background: #111;
+        display: block;
+    }
+
+    .image-modal__close {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        width: 42px;
+        height: 42px;
+        border-radius: 999px;
+        border: 1px solid rgba(255,255,255,0.25);
+        background: rgba(0,0,0,0.45);
+        color: #fff;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        z-index: 1;
+    }
+</style>
+{% endblock %}
+
 {% block breadcrumbs %}
 <nav class="breadcrumbs" aria-label="Хлебные крошки">
     <div class="container">
@@ -87,7 +164,8 @@
                 <div class="product-gallery__main">
                     {% with main_image=product.get_main_image %}
                     {% if main_image %}
-                    <img src="{{ main_image.image.url }}" alt="{{ main_image.alt|default:product.name }}" id="mainImage" class="product-gallery__image">
+                    <img src="{{ main_image.image.url }}" alt="{{ main_image.alt|default:product.name }}" id="mainImage" class="product-gallery__image"
+                         onclick="onesimusOpenImageModal(this.src, this.alt)">
                     {% else %}
                     <div class="product-gallery__placeholder">
                         <i class="bi bi-image"></i>
@@ -213,12 +291,52 @@
 </section>
 {% endblock %}
 
+<!-- Modal: просмотр фото -->
+<div class="image-modal" id="imageModal" aria-hidden="true">
+    <div class="image-modal__content" role="dialog" aria-modal="true" aria-label="Просмотр изображения">
+        <button class="image-modal__close" type="button" id="imageModalClose" aria-label="Закрыть">
+            <i class="bi bi-x-lg"></i>
+        </button>
+        <img class="image-modal__img" id="imageModalImg" alt="">
+    </div>
+</div>
+
 {% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // Галерея
     const thumbs = document.querySelectorAll('.product-gallery__thumb');
     const mainImage = document.getElementById('mainImage');
+    const modal = document.getElementById('imageModal');
+    const modalImg = document.getElementById('imageModalImg');
+
+    // Lightbox / модалка
+    window.onesimusOpenImageModal = function(src, alt) {
+        if (!modal || !modalImg) return;
+        modalImg.src = src || '';
+        modalImg.alt = alt || '';
+        modal.classList.add('is-open');
+        modal.setAttribute('aria-hidden', 'false');
+        document.body.style.overflow = 'hidden';
+    };
+
+    window.onesimusCloseImageModal = function() {
+        if (!modal) return;
+        modal.classList.remove('is-open');
+        modal.setAttribute('aria-hidden', 'true');
+        document.body.style.overflow = '';
+    };
+
+    const closeBtn = document.getElementById('imageModalClose');
+    if (closeBtn) closeBtn.addEventListener('click', window.onesimusCloseImageModal);
+    if (modal) {
+        modal.addEventListener('click', function(e) {
+            if (e.target === modal) window.onesimusCloseImageModal();
+        });
+    }
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') window.onesimusCloseImageModal();
+    });
     
     thumbs.forEach(function(thumb) {
         thumb.addEventListener('click', function() {
@@ -228,8 +346,21 @@ document.addEventListener('DOMContentLoaded', function() {
                 mainImage.src = this.dataset.image;
                 mainImage.alt = this.dataset.alt;
             }
+
+            // Если модалка уже открыта — обновляем фото внутри нее
+            if (modal && modal.classList.contains('is-open') && modalImg) {
+                modalImg.src = this.dataset.image || '';
+                modalImg.alt = this.dataset.alt || '';
+            }
         });
     });
+
+    // Если клик по картинке не сработал (например, из-за наложений) — ставим обработчик тут тоже
+    if (mainImage) {
+        mainImage.addEventListener('click', function() {
+            window.onesimusOpenImageModal(mainImage.src, mainImage.alt);
+        });
+    }
 });
 </script>
 {% endblock %}
