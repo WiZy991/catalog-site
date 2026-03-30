@@ -1974,12 +1974,12 @@ def get_category_for_product(product_name, use_db_subcategories: bool = True):
     if preferred_root:
         main_category = preferred_root
     else:
-        main_cat_name = detect_category(product_name)
-        main_category = Category.objects.filter(
-            name__iexact=main_cat_name,
-            parent=None,
-            is_active=True  # ВАЖНО: Только активные категории
-        ).first()
+    main_cat_name = detect_category(product_name)
+    main_category = Category.objects.filter(
+        name__iexact=main_cat_name,
+        parent=None,
+        is_active=True  # ВАЖНО: Только активные категории
+    ).first()
     
     # Если основная категория не найдена, берем первую активную из корневых
     if not main_category:
@@ -2748,8 +2748,8 @@ def build_farpost_compact_name(product):
     # отличный от артикула. Предпочтение токенам с дефисом/буквами.
     oem = ''
     try:
-        cross_list = product.get_cross_numbers_list()
-        if cross_list:
+    cross_list = product.get_cross_numbers_list()
+    if cross_list:
             article_norm = str(article or '').strip().lower()
             def is_oem_token(tok: str) -> bool:
                 t = str(tok or '').strip()

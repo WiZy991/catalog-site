@@ -254,6 +254,9 @@
                 {% block extra_js %}
                 <script>
                 document.addEventListener('DOMContentLoaded', function() {
+                    // Инициализируем кнопку как disabled на всякий случай
+                    const submitBtnInit = document.getElementById('partner-submit-btn');
+                    if (submitBtnInit) submitBtnInit.disabled = true;
                     // Блокировка кнопки отправки до согласия
                     const submitBtn = document.getElementById('partner-submit-btn');
                     const checkbox = document.getElementById('agree_pp');
@@ -271,6 +274,7 @@
                                 if (!checkbox.checked) {
                                     e.preventDefault();
                                     toggleSubmit();
+                                    try { checkbox.focus(); } catch (err) {}
                                 }
                             });
                         }

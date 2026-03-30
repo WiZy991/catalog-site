@@ -12,7 +12,7 @@
                 <meta itemprop="position" content="1">
             </li>
             <li class="breadcrumbs__item breadcrumbs__item--active" itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
-                <span itemprop="name">Согласие на обработку персональных данных (оформление заказа)</span>
+                <span itemprop="name">Согласие на обработку персональных данных</span>
                 <meta itemprop="position" content="2">
             </li>
         </ol>
@@ -22,11 +22,11 @@
 {% block content %}
 <section class="page-section">
     <div class="container">
-        <h1 class="page-title">Согласие на обработку персональных данных (оформление заказа)</h1>
+        <h1 class="page-title">Согласие на обработку персональных данных</h1>
 
         <div class="page-content policy-content">
             {% if consent_text %}
-                <pre style="white-space: pre-wrap; font-family: inherit; line-height: 1.6;">{{ consent_text }}</pre>
+                <pre style="white-space: pre-wrap; font-family: inherit; line-height: 1.6; margin-top: 0;">{{ consent_text }}</pre>
             {% else %}
                 <p>Текст согласия будет опубликован в ближайшее время.</p>
             {% endif %}
