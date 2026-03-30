@@ -125,6 +125,26 @@
         cursor: pointer;
         z-index: 1;
     }
+
+    .image-modal__nav {
+        position: absolute;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 44px;
+        height: 44px;
+        border-radius: 999px;
+        border: 1px solid rgba(255,255,255,0.25);
+        background: rgba(0,0,0,0.45);
+        color: #fff;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        z-index: 1;
+    }
+
+    .image-modal__nav--prev { left: 10px; }
+    .image-modal__nav--next { right: 10px; }
 </style>
 {% endblock %}
 
@@ -288,18 +308,24 @@
         </div>
         {% endif %}
     </div>
+
+    <!-- Modal: просмотр фото -->
+    <div class="image-modal" id="imageModal" aria-hidden="true">
+        <div class="image-modal__content" role="dialog" aria-modal="true" aria-label="Просмотр изображения">
+            <button class="image-modal__close" type="button" id="imageModalClose" aria-label="Закрыть">
+                <i class="bi bi-x-lg"></i>
+            </button>
+            <button class="image-modal__nav image-modal__nav--prev" type="button" id="imageModalPrev" aria-label="Предыдущее фото">
+                <i class="bi bi-chevron-left"></i>
+            </button>
+            <button class="image-modal__nav image-modal__nav--next" type="button" id="imageModalNext" aria-label="Следующее фото">
+                <i class="bi bi-chevron-right"></i>
+            </button>
+            <img class="image-modal__img" id="imageModalImg" alt="">
+        </div>
+    </div>
 </section>
 {% endblock %}
-
-<!-- Modal: просмотр фото -->
-<div class="image-modal" id="imageModal" aria-hidden="true">
-    <div class="image-modal__content" role="dialog" aria-modal="true" aria-label="Просмотр изображения">
-        <button class="image-modal__close" type="button" id="imageModalClose" aria-label="Закрыть">
-            <i class="bi bi-x-lg"></i>
-        </button>
-        <img class="image-modal__img" id="imageModalImg" alt="">
-    </div>
-</div>
 
 {% block extra_js %}
 <script>
@@ -328,6 +354,45 @@ document.addEventListener('DOMContentLoaded', function() {
     const mainImage = document.getElementById('mainImage');
     const modal = document.getElementById('imageModal');
     const modalImg = document.getElementById('imageModalImg');
+    const prevBtn = document.getElementById('imageModalPrev');
+    const nextBtn = document.getElementById('imageModalNext');
+    const galleryImages = Array.from(thumbs).map(t => ({
+        src: t.dataset.image || '',
+        alt: t.dataset.alt || '',
+    }));
+    if (galleryImages.length === 0 && mainImage) {
+        galleryImages.push({ src: mainImage.src || '', alt: mainImage.alt || '' });
+    }
+    let currentImageIndex = 0;
+
+    function findImageIndexBySrc(src) {
+        const idx = galleryImages.findIndex(i => i.src === src);
+        return idx >= 0 ? idx : 0;
+    }
+
+    function setActiveThumbByIndex(index) {
+        thumbs.forEach((t, i) => t.classList.toggle('is-active', i === index));
+    }
+
+    function syncMainFromIndex(index) {
+        const item = galleryImages[index];
+        if (!item) return;
+        if (mainImage) {
+            mainImage.src = item.src;
+            mainImage.alt = item.alt;
+        }
+        setActiveThumbByIndex(index);
+    }
+
+    function showModalImageByIndex(index) {
+        if (!modalImg || galleryImages.length === 0) return;
+        const total = galleryImages.length;
+        currentImageIndex = (index + total) % total;
+        const item = galleryImages[currentImageIndex];
+        modalImg.src = item.src;
+        modalImg.alt = item.alt;
+        syncMainFromIndex(currentImageIndex);
+    }
 
     const closeBtn = document.getElementById('imageModalClose');
     if (closeBtn) closeBtn.addEventListener('click', onesimusCloseImageModal);
@@ -337,7 +402,17 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     document.addEventListener('keydown', function(e) {
+        if (!modal || !modal.classList.contains('is-open')) return;
         if (e.key === 'Escape') onesimusCloseImageModal();
+        if (e.key === 'ArrowLeft') showModalImageByIndex(currentImageIndex - 1);
+        if (e.key === 'ArrowRight') showModalImageByIndex(currentImageIndex + 1);
+    });
+
+    if (prevBtn) prevBtn.addEventListener('click', function() {
+        showModalImageByIndex(currentImageIndex - 1);
+    });
+    if (nextBtn) nextBtn.addEventListener('click', function() {
+        showModalImageByIndex(currentImageIndex + 1);
     });
     
     thumbs.forEach(function(thumb) {
@@ -348,11 +423,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 mainImage.src = this.dataset.image;
                 mainImage.alt = this.dataset.alt;
             }
+            currentImageIndex = findImageIndexBySrc(this.dataset.image || '');
 
             // Если модалка уже открыта — обновляем фото внутри нее
             if (modal && modal.classList.contains('is-open') && modalImg) {
-                modalImg.src = this.dataset.image || '';
-                modalImg.alt = this.dataset.alt || '';
+                showModalImageByIndex(currentImageIndex);
             }
         });
     });
@@ -360,7 +435,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // Если клик по картинке не сработал (например, из-за наложений) — ставим обработчик тут тоже
     if (mainImage) {
         mainImage.addEventListener('click', function() {
+            currentImageIndex = findImageIndexBySrc(mainImage.src || '');
             onesimusOpenImageModal(mainImage.src, mainImage.alt);
+            showModalImageByIndex(currentImageIndex);
         });
     }
 
@@ -368,7 +445,9 @@ document.addEventListener('DOMContentLoaded', function() {
     document.addEventListener('click', function(e) {
         const imgEl = e.target.closest('#mainImage, .product-gallery__main img');
         if (!imgEl) return;
+        currentImageIndex = findImageIndexBySrc(imgEl.src || '');
         onesimusOpenImageModal(imgEl.src, imgEl.alt || '');
+        showModalImageByIndex(currentImageIndex);
     }, true);
 });
 </script>

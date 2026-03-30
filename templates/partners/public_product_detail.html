@@ -93,6 +93,26 @@
         justify-content: center;
         cursor: pointer;
     }
+
+    .image-modal__nav {
+        position: absolute;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 44px;
+        height: 44px;
+        border-radius: 999px;
+        border: 1px solid rgba(255,255,255,0.25);
+        background: rgba(0,0,0,0.45);
+        color: #fff;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        z-index: 1;
+    }
+
+    .image-modal__nav--prev { left: 10px; }
+    .image-modal__nav--next { right: 10px; }
     
     .product-gallery__placeholder {
         display: flex;
@@ -423,6 +443,12 @@
         <button class="image-modal__close" type="button" id="imageModalClose" aria-label="Закрыть">
             <i class="bi bi-x-lg"></i>
         </button>
+        <button class="image-modal__nav image-modal__nav--prev" type="button" id="imageModalPrev" aria-label="Предыдущее фото">
+            <i class="bi bi-chevron-left"></i>
+        </button>
+        <button class="image-modal__nav image-modal__nav--next" type="button" id="imageModalNext" aria-label="Следующее фото">
+            <i class="bi bi-chevron-right"></i>
+        </button>
         <img class="image-modal__img" id="imageModalImg" alt="">
     </div>
 </div>
@@ -476,6 +502,32 @@ function onesimusCloseImageModal() {
     const modal = document.getElementById('imageModal');
     const mainWrap = document.querySelector('.product-gallery__main');
     const mainImage = document.getElementById('mainImage');
+    const prevBtn = document.getElementById('imageModalPrev');
+    const nextBtn = document.getElementById('imageModalNext');
+    const thumbs = Array.from(document.querySelectorAll('.product-gallery__thumb'));
+    const galleryImages = thumbs.map(t => {
+        const img = t.querySelector('img');
+        return { src: img ? img.src : '', alt: img ? img.alt : '' };
+    }).filter(i => i.src);
+    if (galleryImages.length === 0 && mainImage) {
+        galleryImages.push({ src: mainImage.src || '', alt: mainImage.alt || '' });
+    }
+    let currentImageIndex = 0;
+
+    function findImageIndexBySrc(src) {
+        const idx = galleryImages.findIndex(i => i.src === src);
+        return idx >= 0 ? idx : 0;
+    }
+
+    function showModalImageByIndex(index) {
+        const modalImg = document.getElementById('imageModalImg');
+        if (!modalImg || galleryImages.length === 0) return;
+        const total = galleryImages.length;
+        currentImageIndex = (index + total) % total;
+        const item = galleryImages[currentImageIndex];
+        modalImg.src = item.src;
+        modalImg.alt = item.alt;
+    }
 
     if (closeBtn) {
         closeBtn.addEventListener('click', onesimusCloseImageModal);
@@ -486,7 +538,16 @@ function onesimusCloseImageModal() {
         });
     }
     document.addEventListener('keydown', function(e) {
+        if (!modal || !modal.classList.contains('is-open')) return;
         if (e.key === 'Escape') onesimusCloseImageModal();
+        if (e.key === 'ArrowLeft') showModalImageByIndex(currentImageIndex - 1);
+        if (e.key === 'ArrowRight') showModalImageByIndex(currentImageIndex + 1);
+    });
+    if (prevBtn) prevBtn.addEventListener('click', function() {
+        showModalImageByIndex(currentImageIndex - 1);
+    });
+    if (nextBtn) nextBtn.addEventListener('click', function() {
+        showModalImageByIndex(currentImageIndex + 1);
     });
 
     // Запасной вариант: клик по контейнеру тоже открывает модалку
@@ -501,7 +562,9 @@ function onesimusCloseImageModal() {
     document.addEventListener('click', function(e) {
         const imgEl = e.target.closest('#mainImage, .product-gallery__main img');
         if (!imgEl) return;
+        currentImageIndex = findImageIndexBySrc(imgEl.src || '');
         onesimusOpenImageModal(imgEl.src, imgEl.alt || '');
+        showModalImageByIndex(currentImageIndex);
     }, true);
 })();
 </script>
