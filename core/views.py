@@ -5,6 +5,7 @@ from django.db import OperationalError
 from django.conf import settings
 from catalog.models import Category, Product, Promotion
 from .models import Page
+import re
 
 
 class HomeView(TemplateView):
@@ -173,6 +174,9 @@ class OrderConsentView(TemplateView):
                         '▫': '',
                     }
                     consent_text = consent_text.translate(str.maketrans(bad_chars))
+                    # На случай других символов из Private Use Area (часто из Word),
+                    # которые в браузере отображаются как пустые квадраты.
+                    consent_text = re.sub(r'[\uE000-\uF8FF]', '', consent_text)
         except Exception:
             consent_text = ''
         context['consent_text'] = consent_text
