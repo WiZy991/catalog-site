@@ -87,7 +87,7 @@
                 <div class="order-items">
                     {% for item in cart_items %}
                     <div class="order-item">
-                        <div class="order-item__name">{{ item.product.name }}</div>
+                        <div class="order-item__name">{{ item.product.compact_name|default:item.product.name|truncatechars:80 }}</div>
                         <div class="order-item__details">
                             <span>{{ item.quantity }} шт. × {{ item.price|floatformat:0 }} ₽</span>
                             <strong>{{ item.total|floatformat:0 }} ₽</strong>

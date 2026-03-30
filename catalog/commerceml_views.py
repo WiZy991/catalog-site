@@ -699,19 +699,10 @@ def process_commerceml_file(file_path, filename, request=None):
         logger.info(f"Содержит 'offers': {'offers' in filename.lower()}")
         logger.info("=" * 80)
 
-        # ЛОГИКА "КАЖДЫЙ ОБМЕН = ПОЛНАЯ ПЕРЕСБОРКА"
-        # Всегда очищаем 1С-товары перед обработкой ЛЮБОГО файла обмена (import/offers).
-        # Это соответствует требованию: при каждом обмене чистить и пересоздавать заново.
-        filename_lower = (filename or '').lower()
-        is_exchange_file = ('import' in filename_lower) or ('offers' in filename_lower)
-        if request is not None and is_exchange_file:
-            try:
-                logger.warning("Файл обмена получен — очищаем 1С-товары перед обработкой (inline)")
-                stats = _clear_1c_products_inline(catalog_type='all')
-                logger.info(f"✓ Очистка завершена: удалено товаров={stats.get('deleted_products', 0)}, изображений={stats.get('deleted_images', 0)}")
-            except Exception as e:
-                logger.error(f"Ошибка inline-очистки 1С-товаров перед обработкой: {e}", exc_info=True)
-                return {'status': 'failure', 'error': f'Ошибка очистки 1С-товаров: {str(e)}'}
+        # ВАЖНО:
+        # Не удаляем товары и изображения перед обработкой (иначе фото теряются,
+        # т.к. `ProductImage` связан с `Product` через FK и удаляется каскадно).
+        # Логика "пропавших из обмена товаров" реализована ниже через `products_to_hide.update(is_active=False, ...)`.
         
         # Проверяем, не ZIP ли это
         xml_file_path = file_path
@@ -771,6 +762,7 @@ def process_commerceml_file(file_path, filename, request=None):
         # Определяем тип каталога (retail или wholesale)
         # Сначала проверяем по имени файла
         catalog_type = 'retail'  # По умолчанию розница
+        filename_lower = (filename or '').lower()
         
         # Проверяем различные варианты имен файлов (включая файлы с цифрами)
         # Файлы могут называться: Import0_1.xml, Import1.xml, offers0_1.xml, offers1.xml и т.д.

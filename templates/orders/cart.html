@@ -44,7 +44,7 @@
                     
                     <div class="cart-item__info">
                         <h3 class="cart-item__title">
-                            <a href="{{ item.product.get_absolute_url }}">{{ item.product.name }}</a>
+                            <a href="{{ item.product.get_absolute_url }}">{{ item.product.compact_name|default:item.product.name|truncatechars:80 }}</a>
                         </h3>
                         {% if item.product.article %}
                         <div class="cart-item__article">Кросс-номер: {{ item.product.article }}</div>

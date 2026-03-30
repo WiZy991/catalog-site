@@ -17,7 +17,6 @@ import logging
 import time
 from datetime import datetime, timedelta
 from django.core.management.base import BaseCommand
-from django.core.management import call_command
 from django.conf import settings
 from catalog.commerceml_views import EXCHANGE_DIR, process_commerceml_file
 
@@ -149,13 +148,9 @@ class Command(BaseCommand):
             cutoff_time = datetime.now() - timedelta(minutes=recent_minutes)
             self.stdout.write(f'Обрабатываем файлы, измененные за последние {recent_minutes} минут')
         
-        # ВАЖНО:
-        # Не очищаем товары заранее. Иначе возможен сценарий:
-        # 1) очистили товары
-        # 2) все файлы пропущены по маркерам/фильтрам
-        # => на сайте 0 товаров.
-        # Очищаем только перед фактической обработкой ПЕРВОГО файла.
-        cleared_before_processing = False
+        # Не очищаем товары перед обработкой.
+        # Иначе удаляются связи `Product -> ProductImage`, и фото пропадают,
+        # даже если сами товары потом пересоздаются/обновляются.
 
         for filename in target_files:  # Обрабатываем в правильном порядке
             file_path = os.path.join(EXCHANGE_DIR, filename)
@@ -225,22 +220,6 @@ class Command(BaseCommand):
                     self.stdout.write(f'Пропускаем старый файл: {filename} (изменен {file_mtime.strftime("%Y-%m-%d %H:%M:%S")})')
                     continue
             
-            # ВАЖНО:
-            # Товары создаются из offers.xml (import.xml только парсится/логируется),
-            # поэтому очищаем 1С-товары только перед ПЕРВЫМ фактически обрабатываемым offers-файлом.
-            is_offers_file = 'offers' in filename.lower()
-            if is_offers_file and not cleared_before_processing:
-                self.stdout.write(self.style.WARNING(
-                    'Очищаем товары из 1С перед обработкой первого offers-файла: clear_1c_products --catalog-type all --yes'
-                ))
-                try:
-                    from django.core.management import call_command
-                    call_command('clear_1c_products', catalog_type='all', yes=True)
-                    cleared_before_processing = True
-                except Exception as e:
-                    self.stdout.write(self.style.ERROR(f'Ошибка очистки 1С-товаров: {e}'))
-                    return
-
             self.stdout.write(f'Обработка файла: {filename}...')
             
             try:
