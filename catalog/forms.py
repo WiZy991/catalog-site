@@ -47,6 +47,12 @@ class BulkImageUploadForm(forms.Form):
         initial=False,
         help_text='Если товар не найден по артикулу, создать новый товар из имени файла'
     )
+    apply_single_to_all = forms.BooleanField(
+        label='Применить одно фото ко всем товарам',
+        required=False,
+        initial=False,
+        help_text='Если включено, первое загруженное изображение будет добавлено во все активные товары'
+    )
 
 
 class BulkProductImportForm(forms.Form):

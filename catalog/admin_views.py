@@ -3,10 +3,13 @@
 """
 import csv
 import io
+import os
 from django.shortcuts import render, redirect
 from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib import messages
 from django.http import HttpResponse
+from django.core.files.base import ContentFile
+from django.db.models import Max
 import openpyxl
 import xlrd
 
@@ -28,6 +31,39 @@ def bulk_image_upload(request):
         if form.is_valid():
             files = request.FILES.getlist('images')
             create_products = form.cleaned_data['create_products']
+            apply_single_to_all = form.cleaned_data.get('apply_single_to_all', False)
+
+            if apply_single_to_all:
+                if not files:
+                    messages.error(request, 'Не выбрано изображение для массового применения.')
+                    return redirect(request.path)
+
+                source_file = files[0]
+                source_bytes = source_file.read()
+                source_name = source_file.name or 'shared.jpg'
+                base_name, ext = os.path.splitext(source_name)
+                ext = ext or '.jpg'
+
+                active_products = Product.objects.filter(is_active=True).only('id', 'article', 'brand')
+                updated_count = 0
+
+                for product in active_products.iterator():
+                    order = (product.images.aggregate(max_order=Max('order')).get('max_order') or 0) + 1
+                    file_name = f'{product.article or product.pk}_shared{ext}'
+                    ProductImage.objects.create(
+                        product=product,
+                        image=ContentFile(source_bytes, name=file_name),
+                        is_main=not product.images.exists(),
+                        order=order,
+                        alt=f'Фото {product.article} {product.brand}'.strip()
+                    )
+                    updated_count += 1
+
+                if len(files) > 1:
+                    messages.info(request, 'Использовано только первое изображение из списка для применения ко всем товарам.')
+
+                messages.success(request, f'✅ Одно фото добавлено в {updated_count} активных товаров.')
+                return redirect('admin:catalog_product_changelist')
             
             # Собираем изображения
             images = []

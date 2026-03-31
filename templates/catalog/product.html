@@ -53,11 +53,11 @@
 
 {% block extra_css %}
 <style>
-    /* Ровный квадрат главного фото */
+    /* Главный блок фото: прямоугольник без искажения */
     .product-gallery__main {
         padding: 0 !important;
         width: 100% !important;
-        aspect-ratio: 1 / 1 !important;
+        aspect-ratio: 4 / 3 !important;
         min-height: 0 !important;
         display: flex !important;
         align-items: center !important;
@@ -69,7 +69,7 @@
     .product-gallery__main img {
         width: 100% !important;
         height: 100% !important;
-        object-fit: cover !important; /* заполняем квадрат без пустых полей */
+        object-fit: contain !important;
         object-position: center;
         display: block !important;
         cursor: zoom-in;
@@ -250,6 +250,17 @@
                 <div class="product-info__condition">
                     <strong>Состояние:</strong> {{ product.get_condition_display }}
                 </div>
+
+                <div class="product-info__actions" style="margin: 1rem 0 1.25rem 0;">
+                    {% if product.availability == 'in_stock' %}
+                    <button class="btn btn--primary btn--lg btn-add-cart" type="button" data-product-id="{{ product.id }}">
+                        <i class="bi bi-cart-plus"></i> В корзину
+                    </button>
+                    {% endif %}
+                    <a href="tel:{{ SITE_PHONE }}" class="btn btn--outline btn--lg">
+                        <i class="bi bi-telephone"></i> Позвонить
+                    </a>
+                </div>
                 
                 {% if product.short_description %}
                 <div class="product-info__short-desc">
@@ -278,21 +289,13 @@
                     
                 </div>
                 
+                {% if product.farpost_url %}
                 <div class="product-info__actions">
-                    {% if product.availability == 'in_stock' %}
-                    <button class="btn btn--primary btn--lg btn-add-cart" type="button" data-product-id="{{ product.id }}">
-                        <i class="bi bi-cart-plus"></i> В корзину
-                    </button>
-                    {% endif %}
-                    {% if product.farpost_url %}
                     <a href="{{ product.farpost_url }}" target="_blank" rel="noopener noreferrer" class="btn btn--outline btn--lg btn--farpost">
                         <i class="bi bi-box-arrow-up-right"></i> Перейти на Farpost
                     </a>
-                    {% endif %}
-                    <a href="tel:{{ SITE_PHONE }}" class="btn btn--outline btn--lg">
-                        <i class="bi bi-telephone"></i> Позвонить
-                    </a>
                 </div>
+                {% endif %}
             </div>
         </div>
         

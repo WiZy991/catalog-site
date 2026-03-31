@@ -39,6 +39,16 @@
                 </div>
                 <small class="form-text text-muted">{{ form.create_products.help_text }}</small>
             </div>
+
+            <div class="form-group mb-3">
+                <div class="form-check">
+                    {{ form.apply_single_to_all }}
+                    <label class="form-check-label" for="id_apply_single_to_all">
+                        {{ form.apply_single_to_all.label }}
+                    </label>
+                </div>
+                <small class="form-text text-muted">{{ form.apply_single_to_all.help_text }}</small>
+            </div>
             
             <div class="form-group">
                 <button type="submit" class="btn btn-primary">
