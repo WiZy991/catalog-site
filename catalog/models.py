@@ -414,9 +414,10 @@ class Product(models.Model):
 
 def product_image_path(instance, filename):
     """Генерация пути для изображений товара."""
+    from django.utils.text import get_valid_filename
     ext = filename.split('.')[-1]
-    filename = f'{instance.product.article or instance.product.pk}_{instance.pk or "new"}.{ext}'
-    return os.path.join('products', str(instance.product.pk), filename)
+    safe_name = get_valid_filename(f'{instance.product.article or instance.product.pk}_{instance.pk or "new"}.{ext}')
+    return os.path.join('products', str(instance.product.pk), safe_name)
 
 
 class ProductImage(models.Model):

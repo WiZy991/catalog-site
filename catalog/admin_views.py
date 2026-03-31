@@ -10,6 +10,7 @@ from django.contrib import messages
 from django.http import HttpResponse
 from django.core.files.base import ContentFile
 from django.db.models import Max
+from django.utils.text import get_valid_filename
 import openpyxl
 import xlrd
 
@@ -49,7 +50,7 @@ def bulk_image_upload(request):
 
                 for product in active_products.iterator():
                     order = (product.images.aggregate(max_order=Max('order')).get('max_order') or 0) + 1
-                    file_name = f'{product.article or product.pk}_shared{ext}'
+                    file_name = get_valid_filename(f'{product.article or product.pk}_shared{ext}')
                     ProductImage.objects.create(
                         product=product,
                         image=ContentFile(source_bytes, name=file_name),
