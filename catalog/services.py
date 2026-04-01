@@ -2811,9 +2811,13 @@ def build_farpost_compact_name(product):
         parts = [p.strip() for p in str(raw or '').replace('\n', ' ').split(',') if p and p.strip()]
         if not parts:
             return ''
-        first = _first_token_by_slash(parts[0])
-        # Требование: выводим только ОДНУ модель (без перечислений).
-        return first
+        first = parts[0].strip()
+        slash_parts = [p.strip() for p in first.split('/') if p.strip()]
+        if not slash_parts:
+            return first
+        if len(slash_parts) >= 2 and ' ' in slash_parts[0]:
+            return f'{slash_parts[0]} {slash_parts[1]}'
+        return slash_parts[0]
 
     def _first_engine(raw: str) -> str:
         text = str(raw or '').replace('\n', ' ').strip()
