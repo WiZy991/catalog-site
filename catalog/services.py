@@ -2812,6 +2812,10 @@ def build_farpost_compact_name(product):
         if not parts:
             return ''
         first = parts[0].strip()
+        if len(parts) >= 2 and ' ' in first:
+            body = parts[1].strip()
+            if body and ' ' not in body:
+                return f'{first} {body}'
         slash_parts = [p.strip() for p in first.split('/') if p.strip()]
         if not slash_parts:
             return first
