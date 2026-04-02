@@ -7,6 +7,7 @@ import os
 from django.shortcuts import render, redirect
 from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib import messages
+from django.db import transaction
 from django.http import HttpResponse
 from django.core.files.base import ContentFile
 from django.db.models import Max
@@ -45,20 +46,28 @@ def bulk_image_upload(request):
                 base_name, ext = os.path.splitext(source_name)
                 ext = ext or '.jpg'
 
-                active_products = Product.objects.filter(is_active=True).only('id', 'article', 'brand')
+                active_products = list(
+                    Product.objects.filter(is_active=True)
+                    .only('id', 'article', 'brand')
+                    .order_by('id')
+                )
                 updated_count = 0
+                BATCH_SIZE = 50
 
-                for product in active_products.iterator():
-                    order = (product.images.aggregate(max_order=Max('order')).get('max_order') or 0) + 1
-                    file_name = get_valid_filename(f'{product.article or product.pk}_shared{ext}')
-                    ProductImage.objects.create(
-                        product=product,
-                        image=ContentFile(source_bytes, name=file_name),
-                        is_main=not product.images.exists(),
-                        order=order,
-                        alt=f'Фото {product.article} {product.brand}'.strip()
-                    )
-                    updated_count += 1
+                for i in range(0, len(active_products), BATCH_SIZE):
+                    batch = active_products[i:i + BATCH_SIZE]
+                    with transaction.atomic():
+                        for product in batch:
+                            order = (product.images.aggregate(max_order=Max('order')).get('max_order') or 0) + 1
+                            file_name = get_valid_filename(f'{product.article or product.pk}_shared{ext}')
+                            ProductImage.objects.create(
+                                product=product,
+                                image=ContentFile(source_bytes, name=file_name),
+                                is_main=not product.images.exists(),
+                                order=order,
+                                alt=f'Фото {product.article} {product.brand}'.strip()
+                            )
+                            updated_count += 1
 
                 if len(files) > 1:
                     messages.info(request, 'Использовано только первое изображение из списка для применения ко всем товарам.')
