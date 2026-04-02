@@ -2436,6 +2436,12 @@ def process_offers_file_single_pass(root, namespaces, filename, request=None):
         for catalog_type in ('retail', 'wholesale'):
             try:
                 product = Product.objects.filter(external_id=product_id, catalog_type=catalog_type).first()
+                if not product and article:
+                    product = Product.objects.filter(
+                        article=article, catalog_type=catalog_type
+                    ).first()
+                    if product:
+                        product.external_id = product_id
                 created = product is None
                 category = get_category_for_product(offer_name, use_db_subcategories=True)
                 if not category:

@@ -2105,7 +2105,7 @@ def process_bulk_import(data_rows, auto_category=True, auto_brand=True):
                     article = parsed['article']
                 
                 # OEM номер (Артикул2) → добавляем в кросс-номера
-                oem_number = str(row.get('oem_number', '')).strip()
+                oem_number = str(row.get('oem_number', '')).strip().lstrip('/')
                 
                 # Определяем бренд (из колонки Марка или автоопределение)
                 if auto_brand:
@@ -2187,6 +2187,10 @@ def process_bulk_import(data_rows, auto_category=True, auto_brand=True):
                         except (ValueError, TypeError):
                             quantity_value = 0
                 
+                # Нормализуем артикул: убираем ведущие слэши
+                if article:
+                    article = article.lstrip('/')
+
                 # Проверяем существует ли товар ТОЛЬКО в основном каталоге
                 # Приоритет: external_id > article > name
                 product = None
@@ -2195,19 +2199,19 @@ def process_bulk_import(data_rows, auto_category=True, auto_brand=True):
                 if external_id:
                     product = Product.objects.filter(
                         external_id=external_id,
-                        catalog_type='retail'  # ТОЛЬКО основной каталог!
+                        catalog_type='retail'
                     ).first()
                 
                 if not product and article:
                     product = Product.objects.filter(
                         article=article,
-                        catalog_type='retail'  # ТОЛЬКО основной каталог!
+                        catalog_type='retail'
                     ).first()
                 
                 if not product:
                     product = Product.objects.filter(
                         name=name,
-                        catalog_type='retail'  # ТОЛЬКО основной каталог!
+                        catalog_type='retail'
                     ).first()
                 
                 # Формируем применимость из полей: двигатель, кузов, модель
@@ -3257,20 +3261,17 @@ def process_bulk_import_wholesale(data_rows, auto_category=True, auto_brand=True
                 parsed = parse_product_name(name)
                 
                 # Определяем артикул
-                # ЛОГИКА: 
-                # - Если есть фирменный артикул в parsed - используем его
-                # - Если нет фирменного артикула, но есть OEM - используем OEM как артикул
-                # - Если артикул явно указан в данных - используем его
                 article = str(row.get('article', '')).strip()
                 if not article and parsed['article']:
                     article = parsed['article']
+                # Нормализуем артикул: убираем ведущие слэши
+                if article:
+                    article = article.lstrip('/')
                 
                 # Определяем OEM номер для cross_numbers
-                # OEM номер сохраняем в cross_numbers, если есть фирменный артикул
-                # Если нет фирменного артикула, OEM уже используется как article
-                oem_number = str(row.get('oem_number', '')).strip()
+                oem_number = str(row.get('oem_number', '')).strip().lstrip('/')
                 if not oem_number and parsed.get('oem_number'):
-                    oem_number = parsed['oem_number']
+                    oem_number = parsed['oem_number'].lstrip('/')
                 
                 # Определяем применимость
                 applicability = str(row.get('applicability', '')).strip()

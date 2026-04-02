@@ -10,7 +10,7 @@ from django.contrib import messages
 from django.db import transaction
 from django.http import HttpResponse
 from django.core.files.base import ContentFile
-from django.db.models import Max
+from django.db.models import Count, Max
 from django.utils.text import get_valid_filename
 import openpyxl
 import xlrd
@@ -46,8 +46,11 @@ def bulk_image_upload(request):
                 base_name, ext = os.path.splitext(source_name)
                 ext = ext or '.jpg'
 
+                # Только товары без ни одного изображения — не трогаем карточки, у которых фото уже есть
                 active_products = list(
                     Product.objects.filter(is_active=True)
+                    .annotate(_img_cnt=Count('images'))
+                    .filter(_img_cnt=0)
                     .only('id', 'article', 'brand')
                     .order_by('id')
                 )
@@ -58,13 +61,12 @@ def bulk_image_upload(request):
                     batch = active_products[i:i + BATCH_SIZE]
                     with transaction.atomic():
                         for product in batch:
-                            order = (product.images.aggregate(max_order=Max('order')).get('max_order') or 0) + 1
                             file_name = get_valid_filename(f'{product.article or product.pk}_shared{ext}')
                             ProductImage.objects.create(
                                 product=product,
                                 image=ContentFile(source_bytes, name=file_name),
-                                is_main=not product.images.exists(),
-                                order=order,
+                                is_main=True,
+                                order=1,
                                 alt=f'Фото {product.article} {product.brand}'.strip()
                             )
                             updated_count += 1
@@ -72,7 +74,16 @@ def bulk_image_upload(request):
                 if len(files) > 1:
                     messages.info(request, 'Использовано только первое изображение из списка для применения ко всем товарам.')
 
-                messages.success(request, f'✅ Одно фото добавлено в {updated_count} активных товаров.')
+                if updated_count:
+                    messages.success(
+                        request,
+                        f'✅ Одно фото добавлено в {updated_count} товаров без изображений.',
+                    )
+                else:
+                    messages.warning(
+                        request,
+                        'Нет активных товаров без фотографий — изображение никуда не добавлено.',
+                    )
                 return redirect('admin:catalog_product_changelist')
             
             # Собираем изображения
