@@ -60,7 +60,7 @@ class Command(BaseCommand):
             except OperationalError as e:
                 err = str(e).lower()
                 if 'locked' in err and attempt < max_attempts - 1:
-                    connection.close()
+                    # Не вызываем connection.close(): иначе ломается внешний iterator() по QuerySet
                     time.sleep(min(3.0, 0.1 * (2 ** min(attempt, 8))))
                     continue
                 raise
@@ -104,17 +104,25 @@ class Command(BaseCommand):
                     break
                 except OperationalError as e:
                     if 'locked' in str(e).lower() and attempt < 14:
-                        connection.close()
                         time.sleep(0.2 * (attempt + 1))
                         continue
                     raise
 
     def _handle_by_content(self, dry_run, verbose):
-        products = Product.objects.filter(images__isnull=False).distinct()
+        # Список PK в памяти — без server-side cursor, чтобы retry при locked не конфликтовали с iterator()
+        pks = list(
+            Product.objects.filter(images__isnull=False)
+            .distinct()
+            .values_list('pk', flat=True)
+        )
         total_deleted = 0
         products_affected = 0
 
-        for product in products.iterator(chunk_size=100):
+        for pk in pks:
+            try:
+                product = Product.objects.get(pk=pk)
+            except Product.DoesNotExist:
+                continue
             images = list(product.images.all().order_by('id'))
             if len(images) <= 1:
                 continue
@@ -156,7 +164,10 @@ class Command(BaseCommand):
                 total_deleted += deleted_here
                 products_affected += 1
                 if not dry_run:
-                    self._ensure_one_main(product, dry_run=False)
+                    self._ensure_one_main(
+                        Product.objects.get(pk=pk),
+                        dry_run=False,
+                    )
 
         if dry_run:
             self.stdout.write(
