@@ -8,9 +8,12 @@
 import hashlib
 import os
 import re
+import time
 from collections import defaultdict
 
 from django.core.management.base import BaseCommand
+from django.db import connection, transaction
+from django.db.utils import OperationalError
 
 from catalog.models import Product, ProductImage
 
@@ -30,6 +33,38 @@ def _image_content_hash(img):
 
 class Command(BaseCommand):
     help = 'Удаляет дубликаты изображений у товаров'
+
+    def _prepare_sqlite(self):
+        if connection.vendor != 'sqlite':
+            return
+        try:
+            with connection.cursor() as c:
+                c.execute('PRAGMA busy_timeout=60000')
+        except Exception:
+            pass
+
+    def _delete_product_image_with_retry(self, img, success_message=None, max_attempts=25):
+        """Удаление одной записи в короткой транзакции + retry при database is locked (SQLite)."""
+        img_pk = img.pk
+        for attempt in range(max_attempts):
+            try:
+                with transaction.atomic():
+                    row = ProductImage.objects.filter(pk=img_pk).first()
+                    if row is None:
+                        return True
+                    row.delete()
+                if success_message:
+                    self.stdout.write(self.style.SUCCESS(success_message))
+                time.sleep(0.02)
+                return True
+            except OperationalError as e:
+                err = str(e).lower()
+                if 'locked' in err and attempt < max_attempts - 1:
+                    connection.close()
+                    time.sleep(min(3.0, 0.1 * (2 ** min(attempt, 8))))
+                    continue
+                raise
+        return False
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -62,7 +97,17 @@ class Command(BaseCommand):
             )
         else:
             keeper.is_main = True
-            keeper.save(update_fields=['is_main'])
+            for attempt in range(15):
+                try:
+                    with transaction.atomic():
+                        keeper.save(update_fields=['is_main'])
+                    break
+                except OperationalError as e:
+                    if 'locked' in str(e).lower() and attempt < 14:
+                        connection.close()
+                        time.sleep(0.2 * (attempt + 1))
+                        continue
+                    raise
 
     def _handle_by_content(self, dry_run, verbose):
         products = Product.objects.filter(images__isnull=False).distinct()
@@ -99,13 +144,12 @@ class Command(BaseCommand):
                             f'удалить дубликат ID={img.pk} ({fn}), оставить ID={keeper.pk}'
                         )
                     else:
-                        img.delete()
-                        if verbose:
-                            self.stdout.write(
-                                self.style.SUCCESS(
-                                    f'✓ Товар ID={product.pk}: удалён дубликат ID={img.pk} ({fn})'
-                                )
-                            )
+                        msg = (
+                            f'✓ Товар ID={product.pk}: удалён дубликат ID={img.pk} ({fn})'
+                            if verbose
+                            else None
+                        )
+                        self._delete_product_image_with_retry(img, success_message=msg)
                     deleted_here += 1
 
             if deleted_here:
@@ -135,6 +179,7 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         dry_run = options['dry_run']
         verbose = options.get('verbose', False)
+        self._prepare_sqlite()
 
         if options.get('by_content'):
             return self._handle_by_content(dry_run, verbose)
@@ -211,11 +256,12 @@ class Command(BaseCommand):
                                 f'у товара "{product.name}" (ID: {product.pk}) - дубликат {photo_info} ({file_size} байт)'
                             )
                         else:
-                            img.delete()
-                            self.stdout.write(
-                                self.style.SUCCESS(
-                                    f'✓ Удалено изображение "{filename}" у товара "{product.name}" (дубликат {photo_info})'
-                                )
+                            self._delete_product_image_with_retry(
+                                img,
+                                success_message=(
+                                    f'✓ Удалено изображение "{filename}" у товара "{product.name}" '
+                                    f'(дубликат {photo_info})'
+                                ),
                             )
 
                     deleted_in_product += len(to_delete)
