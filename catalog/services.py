@@ -2602,16 +2602,16 @@ def match_image_to_product(filename):
     return None
 
 
-def _normalize_bulk_image_basename(basename_no_ext: str) -> str:
+def _normalize_bulk_image_basename_for_dedupe(basename_no_ext: str) -> str:
     """
-    Имя файла без расширения для сравнения при массовой загрузке фото.
-    Убирает суффикс уникальности Django (_AbCdEfGh), копию « (2)», индекс _1.._9999.
-    Не срезает чисто цифровое имя целиком (кросс-номер в имени файла).
+    Ключ для проверки «тот же файл уже загружен» при массовой загрузке.
+    Убирает только суффикс уникальности Django (_AbCdEfGh) и копию « (2)».
+    Суффикс ракурса _1, _2, _3 НЕ убираем — иначе вторые/третьи фото одного артикула
+    ошибочно считаются дубликатом первого.
     """
     s = (basename_no_ext or '').strip()
     s = re.sub(r'_[A-Za-z0-9]{7,8}$', '', s)
     s = re.sub(r'\s*\(\d+\)\s*$', '', s, flags=re.IGNORECASE)
-    s = re.sub(r'_\d{1,4}$', '', s, flags=re.IGNORECASE)
     return s.lower()
 
 
@@ -2659,13 +2659,14 @@ def process_bulk_images(images, create_products=False):
             stats['created_products'] += 1
         
         if product:
-            base_filename = _normalize_bulk_image_basename(_bulk_image_basename_for_match(filename))
+            incoming_stem = os.path.splitext(os.path.basename((filename or '').strip()))[0].strip()
+            base_filename = _normalize_bulk_image_basename_for_dedupe(incoming_stem)
             new_digest = hashlib.md5(file_content).hexdigest()
 
             existing_images = product.images.all()
             is_duplicate = False
             for existing_img in existing_images:
-                stored_bn = _normalize_bulk_image_basename(
+                stored_bn = _normalize_bulk_image_basename_for_dedupe(
                     os.path.splitext(os.path.basename(existing_img.image.name))[0]
                 )
                 if base_filename and stored_bn == base_filename:
