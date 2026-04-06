@@ -16,8 +16,8 @@
 <p>{% trans 'Вы уверены, что хотите удалить выбранные' %} {{ objects_name }}? {% trans 'Все следующие объекты и связанные элементы будут удалены:' %}</p>
 
         {% if select_across %}
-            <p><strong style="color: red; font-size: 1.2em;">⚠️ ВНИМАНИЕ: Будет удалено ВСЕ {{ total_count }} товаров из базы данных!</strong></p>
-            <p><em>{% trans 'Показаны первые 100 товаров из' %} {{ total_count }}. {% trans 'Все товары будут удалены' %}.</em></p>
+            <p><strong style="color: #b45309; font-size: 1.1em;">⚠️ Будет удалено <strong>{{ total_count }}</strong> товаров — ровно те, что попадают под текущий список (фильтры, поиск, категория), на всех страницах списка.</strong></p>
+            <p><em>{% trans 'Показаны первые 100 из' %} {{ total_count }}. {% trans 'Удалены будут все выбранные по фильтру' %}.</em></p>
         {% elif total_count %}
             <p><strong>{% trans 'Всего выбрано товаров' %}: {{ total_count }}</strong></p>
             {% if total_count > 100 %}
@@ -31,6 +31,9 @@
                 <div>
                     <input type="hidden" name="post" value="yes">
                     <input type="hidden" name="action" value="delete_selected">
+                    {% if changelist_filters_qs %}
+                    <input type="hidden" name="_changelist_filters" value="{{ changelist_filters_qs }}">
+                    {% endif %}
                     {% if select_across %}
                         <input type="hidden" name="select_across" value="1">
                     {% endif %}

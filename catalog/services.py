@@ -1,6 +1,7 @@
 """
 Сервисы автоматизации для каталога товаров.
 """
+import hashlib
 import re
 import os
 from django.core.files.base import ContentFile
@@ -2554,6 +2555,17 @@ def match_image_to_product(filename):
     return None
 
 
+def _normalize_bulk_image_basename(basename_no_ext: str) -> str:
+    """
+    Имя файла без расширения для сравнения при массовой загрузке фото.
+    Убирает суффикс уникальности Django (_AbCdEfGh) и хвост _1, _2.
+    """
+    s = (basename_no_ext or '').strip()
+    s = re.sub(r'_[A-Za-z0-9]{7,8}$', '', s)
+    s = re.sub(r'[_-]?\d+$', '', s)
+    return s.lower()
+
+
 def process_bulk_images(images, create_products=False):
     """
     Массовая загрузка изображений с автоматической привязкой к товарам.
@@ -2596,21 +2608,26 @@ def process_bulk_images(images, create_products=False):
             stats['created_products'] += 1
         
         if product:
-            # Проверяем, нет ли уже такого изображения (по имени файла)
-            # Убираем расширение и номер для сравнения (например, image_1.jpg и image_2.jpg - это одно изображение)
-            base_filename = os.path.splitext(filename)[0]
-            base_filename = re.sub(r'[_-]?\d+$', '', base_filename)  # Убираем _1, _2 в конце
-            
-            # Проверяем существующие изображения товара
+            base_filename = _normalize_bulk_image_basename(os.path.splitext(filename)[0])
+            new_digest = hashlib.md5(file_content).hexdigest()
+
             existing_images = product.images.all()
             is_duplicate = False
             for existing_img in existing_images:
-                existing_name = os.path.splitext(os.path.basename(existing_img.image.name))[0]
-                existing_name = re.sub(r'[_-]?\d+$', '', existing_name)
-                if existing_name.lower() == base_filename.lower():
+                stored_bn = _normalize_bulk_image_basename(
+                    os.path.splitext(os.path.basename(existing_img.image.name))[0]
+                )
+                if base_filename and stored_bn == base_filename:
                     is_duplicate = True
                     break
-            
+                try:
+                    with existing_img.image.open('rb') as ef:
+                        if hashlib.md5(ef.read()).hexdigest() == new_digest:
+                            is_duplicate = True
+                            break
+                except Exception:
+                    pass
+
             if is_duplicate:
                 # Пропускаем дубликат
                 stats['duplicates'] += 1

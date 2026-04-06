@@ -19,6 +19,8 @@ class ProductImageInline(admin.TabularInline):
     """Инлайн для изображений товара."""
     model = ProductImage
     extra = 1
+    can_delete = True
+    show_change_link = True
     fields = ['image', 'is_main', 'alt', 'order', 'image_preview']
     readonly_fields = ['image_preview']
 
@@ -582,6 +584,26 @@ class ProductAdmin(ImportExportModelAdmin, FarpostExportMixin, admin.ModelAdmin)
         # Избегаем prefetch_related('images') для списка - это замедляет загрузку
         # Images будут загружены только при просмотре конкретного товара
         return qs
+
+    def _changelist_filtered_queryset(self, request):
+        """
+        Те же товары, что видны в списке с учётом фильтров/поиска/категории.
+        Нужно для «Выбрать всё на всех страницах» (select_across): иначе
+        get_queryset() без ChangeList даёт не тот набор и кажется, что удаляют «всю базу».
+        """
+        try:
+            cl = self.get_changelist_instance(request)
+            return cl.get_queryset(request)
+        except Exception:
+            return self.get_queryset(request)
+
+    def _apply_changelist_filters_from_post(self, request):
+        """Восстановить query string списка из скрытого поля (второй POST подтверждения удаления)."""
+        raw = (request.POST.get('_changelist_filters') or '').strip()
+        if not raw:
+            return
+        from django.http import QueryDict
+        request.GET = QueryDict(raw, mutable=True)
     
     def _check_table_exists(self):
         """Проверяет существование таблицы catalog_productcharacteristic."""
@@ -625,13 +647,13 @@ class ProductAdmin(ImportExportModelAdmin, FarpostExportMixin, admin.ModelAdmin)
         # Django admin передает select_across как строку "1" или "0"
         select_across = request.POST.get('select_across', '0')
         if select_across == '1' or select_across is True:
-            # Пользователь выбрал "Выбрать все" - получаем ВСЕ товары из базы
-            # ВАЖНО: Игнорируем queryset, так как он содержит только товары с текущей страницы
-            queryset = self.get_queryset(request)
-            # Логируем для отладки
+            queryset = self._changelist_filtered_queryset(request)
             import logging
             logger = logging.getLogger(__name__)
-            logger.info(f'DEBUG response_action: select_across={select_across}, queryset.count()={queryset.count()}')
+            logger.info(
+                f'DEBUG response_action: select_across={select_across}, '
+                f'filtered queryset.count()={queryset.count()}'
+            )
         
         # Если действие - удаление, ВСЕГДА обрабатываем через наш метод, не вызывая super()
         # Это гарантирует, что мы не обратимся к несуществующей таблице
@@ -675,9 +697,10 @@ class ProductAdmin(ImportExportModelAdmin, FarpostExportMixin, admin.ModelAdmin)
             # ВАЖНО: При select_across=1 Django admin может передавать selected с товарами только с текущей страницы
             # Поэтому мы ИГНОРИРУЕМ selected и получаем ВСЕ товары
             if select_across:
-                # Пользователь выбрал "Выбрать все" - получаем ВСЕ товары из базы
-                queryset = self.get_queryset(request)
-                logger.info(f'DEBUG changelist_view: select_across=1, получаем ВСЕ товары. Всего: {queryset.count()}')
+                queryset = self._changelist_filtered_queryset(request)
+                logger.info(
+                    f'DEBUG changelist_view: select_across=1, filtered queryset. Всего: {queryset.count()}'
+                )
             elif selected:
                 # Выбраны конкретные товары
                 queryset = self.get_queryset(request).filter(pk__in=selected)
@@ -883,6 +906,8 @@ class ProductAdmin(ImportExportModelAdmin, FarpostExportMixin, admin.ModelAdmin)
         from django.db import connection, transaction
         from django.shortcuts import redirect
         from django.urls import reverse
+
+        self._apply_changelist_filters_from_post(request)
         
         # Проверяем существование таблицы ProductCharacteristic
         table_exists = self._check_table_exists()
@@ -892,13 +917,13 @@ class ProductAdmin(ImportExportModelAdmin, FarpostExportMixin, admin.ModelAdmin)
         select_across_str = request.POST.get('select_across', '0') or request.GET.get('select_across', '0')
         select_across = select_across_str == '1' or select_across_str is True
         if select_across:
-            # Пользователь выбрал "Выбрать все" - получаем ВСЕ товары из базы
-            # ВАЖНО: Игнорируем переданный queryset, так как он содержит только товары с текущей страницы
-            queryset = self.get_queryset(request)
-            # Логируем для отладки
+            queryset = self._changelist_filtered_queryset(request)
             import logging
             logger = logging.getLogger(__name__)
-            logger.info(f'DEBUG delete_selected: select_across={select_across_str}, queryset.count()={queryset.count()}')
+            logger.info(
+                f'DEBUG delete_selected: select_across={select_across_str}, '
+                f'filtered.count()={queryset.count()}'
+            )
         
         # Если это подтверждение удаления - удаляем сразу
         if request.POST.get('post') == 'yes':
@@ -908,13 +933,13 @@ class ProductAdmin(ImportExportModelAdmin, FarpostExportMixin, admin.ModelAdmin)
             select_across_confirm = select_across_confirm_str == '1' or select_across_confirm_str is True
             
             if select_across_confirm:
-                # Пользователь выбрал "Выбрать все" - используем полный queryset ВСЕХ товаров
-                # ВАЖНО: Игнорируем selected_ids, так как они содержат только товары с текущей страницы
-                full_queryset = self.get_queryset(request)
-                # Логируем для отладки
+                full_queryset = self._changelist_filtered_queryset(request)
                 import logging
                 logger = logging.getLogger(__name__)
-                logger.info(f'DEBUG delete_selected confirm: select_across={select_across_confirm_str}, удаляем ВСЕ товары. Всего: {full_queryset.count()}')
+                logger.info(
+                    f'DEBUG delete_selected confirm: select_across=1, '
+                    f'filtered.count()={full_queryset.count()}'
+                )
             else:
                 # Получаем выбранные элементы из POST
                 from django.contrib.admin import helpers
@@ -1025,12 +1050,13 @@ class ProductAdmin(ImportExportModelAdmin, FarpostExportMixin, admin.ModelAdmin)
         logger.info(f'DEBUG delete_selected (confirmation page): select_across={select_across_str}, queryset.count()={queryset.count()}')
         
         if select_across:
-            # Пользователь выбрал "Выбрать все" - получаем ВСЕ товары
-            # ВАЖНО: Игнорируем переданный queryset, так как он содержит только товары с текущей страницы
-            full_queryset = self.get_queryset(request)
-            selected_ids = []  # Не передаем ID, так как удаляем все
+            full_queryset = self._changelist_filtered_queryset(request)
+            selected_ids = []
             total_count = full_queryset.count()
-            logger.info(f'DEBUG delete_selected (confirmation page): select_across=1, получаем ВСЕ товары. Всего: {total_count}')
+            logger.info(
+                f'DEBUG delete_selected (confirm page): select_across=1, '
+                f'filtered total_count={total_count}'
+            )
         else:
             # Получаем выбранные ID из POST
             selected_ids = request.POST.getlist(helpers.ACTION_CHECKBOX_NAME)
@@ -1055,6 +1081,7 @@ class ProductAdmin(ImportExportModelAdmin, FarpostExportMixin, admin.ModelAdmin)
                 full_queryset = queryset
             total_count = len(selected_ids) if selected_ids else full_queryset.count()
         
+        changelist_filters_qs = request.GET.urlencode()
         # Создаём простой контекст БЕЗ model_count
         context = {
             **site_context,
@@ -1065,6 +1092,7 @@ class ProductAdmin(ImportExportModelAdmin, FarpostExportMixin, admin.ModelAdmin)
             'selected_ids': selected_ids,  # Передаем все ID для скрытых полей
             'total_count': total_count,  # Общее количество выбранных
             'select_across': select_across,  # Передаем флаг "выбрать все"
+            'changelist_filters_qs': changelist_filters_qs,
             'opts': opts,
             'action_checkbox_name': helpers.ACTION_CHECKBOX_NAME,
             'media': self.media,
