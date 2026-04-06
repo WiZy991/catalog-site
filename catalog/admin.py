@@ -1294,12 +1294,68 @@ class ProductImageAdmin(admin.ModelAdmin):
     list_editable = ['is_main', 'order']
     search_fields = ['product__name', 'product__article']
     autocomplete_fields = ['product']
+    actions = ['delete_all_product_images']
 
     def image_preview(self, obj):
         if obj.image:
             return format_html('<img src="{}" style="max-height: 50px;"/>', obj.image.url)
         return '-'
     image_preview.short_description = 'Превью'
+
+    def delete_all_product_images(self, request, queryset):
+        """
+        Удалить все изображения товаров (записи ProductImage и файлы на диске).
+        Товары не удаляются. Выбор галочками не влияет — всегда очищается вся таблица.
+        """
+        from django.template.response import TemplateResponse
+        from django.shortcuts import redirect
+        from django.urls import reverse
+        import time
+
+        total = ProductImage.objects.count()
+        if total == 0:
+            self.message_user(request, 'Нет изображений для удаления.', messages.WARNING)
+            return redirect(reverse('admin:catalog_productimage_changelist'))
+
+        if request.POST.get('confirm_delete_all_images') == 'yes':
+            deleted_files = 0
+            batch_size = 100
+            while ProductImage.objects.exists():
+                batch_ids = list(
+                    ProductImage.objects.order_by('pk').values_list('pk', flat=True)[:batch_size]
+                )
+                if not batch_ids:
+                    break
+                for pk in batch_ids:
+                    try:
+                        img = ProductImage.objects.get(pk=pk)
+                        img.delete()
+                        deleted_files += 1
+                    except ProductImage.DoesNotExist:
+                        pass
+                time.sleep(0.02)
+            self.message_user(
+                request,
+                f'Удалено изображений: {deleted_files}. Товары в каталоге сохранены.',
+                messages.SUCCESS,
+            )
+            return redirect(reverse('admin:catalog_productimage_changelist'))
+
+        opts = self.model._meta
+        context = {
+            **self.admin_site.each_context(request),
+            'title': 'Удалить все изображения',
+            'opts': opts,
+            'total_count': total,
+            'sample': list(ProductImage.objects.select_related('product').order_by('-pk')[:15]),
+        }
+        return TemplateResponse(
+            request,
+            'admin/catalog/productimage_delete_all_confirmation.html',
+            context,
+        )
+
+    delete_all_product_images.short_description = '⚠ Удалить ВСЕ изображения'
 
 
 @admin.register(Brand)

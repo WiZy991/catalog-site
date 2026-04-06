@@ -1,0 +1,39 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls static %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+<a href="{% url 'admin:index' %}">{% trans 'Home' %}</a>
+&rsaquo; <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_config.verbose_name }}</a>
+&rsaquo; <a href="{% url 'admin:catalog_productimage_changelist' %}">{{ opts.verbose_name_plural|capfirst }}</a>
+&rsaquo; Удалить все изображения
+</div>
+{% endblock %}
+
+{% block content %}
+<h1>Удалить все изображения товаров?</h1>
+
+<p>Будут удалены <strong>все</strong> записи в «Изображениях товаров» и файлы на диске. Сами <strong>товары не удаляются</strong>.</p>
+<p><strong>Всего изображений: {{ total_count }}</strong></p>
+
+{% if sample %}
+<p>Примеры (последние 15):</p>
+<ul>
+    {% for obj in sample %}
+    <li>#{{ obj.pk }} — {{ obj.product }} {% if obj.image %}({{ obj.image.name }}){% endif %}</li>
+    {% endfor %}
+</ul>
+{% endif %}
+
+{# Повторный POST как у стандартного действия админки, иначе Django не вызовет action снова #}
+<form method="post" action="{% url 'admin:catalog_productimage_changelist' %}">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="delete_all_product_images">
+    <input type="hidden" name="select_across" value="1">
+    <input type="hidden" name="confirm_delete_all_images" value="yes">
+    <p>
+        <input type="submit" value="Да, удалить все изображения" class="default" style="background:#ba2121;color:#fff;padding:10px 20px;border:none;cursor:pointer;">
+        <a href="{% url 'admin:catalog_productimage_changelist' %}" class="button cancel-link" style="padding:10px 20px;margin-left:10px;">Отмена</a>
+    </p>
+</form>
+{% endblock %}
