@@ -153,6 +153,8 @@ MEDIA_ROOT = BASE_DIR / 'media'
 DATA_UPLOAD_MAX_MEMORY_SIZE = 10485760  # 10 MB
 FILE_UPLOAD_MAX_MEMORY_SIZE = 10485760  # 10 MB
 DATA_UPLOAD_MAX_NUMBER_FIELDS = 1000000  # Увеличено для массового удаления товаров (до 500000)
+# Лимит файлов в одном multipart-запросе (по умолчанию Django — 1000) — массовая загрузка фото в админке
+DATA_UPLOAD_MAX_NUMBER_FILES = 10000
 
 # Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
