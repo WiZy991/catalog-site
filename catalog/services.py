@@ -6,7 +6,8 @@ import re
 import os
 from django.core.files.base import ContentFile
 from django.db import transaction
-from django.db.models import Count, Q
+from django.db.models import Count, Q, Value
+from django.db.models.functions import Lower, Replace
 from django.utils.text import capfirst
 from .models import Category, Product, ProductImage, Brand
 
@@ -1204,6 +1205,8 @@ def extract_article(text):
     patterns = [
         # TOYO/GUT style: TT-124, TU-1210, GUT-25, GU-1210 (2-3 буквы + дефис + 1-4 цифры)
         r'\b([A-Z]{2,3}-\d{1,4})\b',
+        # OEM с буквой во второй части: 48510-B1020, 23731-35U10, 16100-6935R
+        r'\b(\d{5}-[A-Z0-9]{3,6})\b',
         r'\b(\d{5}-\d{5})\b',  # Toyota style: 23300-78090
         r'\b([A-Z]{2}\d{6})\b',  # Mitsubishi style: ME220745
         r'\b(\d-\d{5}-\d{3}-\d)\b',  # Isuzu style: 1-13200-469-0
@@ -2519,6 +2522,56 @@ def _bulk_image_basename_for_match(filename):
     return s.strip()
 
 
+def _oem_compact(s: str) -> str:
+    """Сравнение OEM без дефисов и пробелов (16100-69355 ≡ 1610069355)."""
+    return re.sub(r'[\s\-/]+', '', (s or '')).upper()
+
+
+def _cross_numbers_tokens(text: str):
+    """Токены кросс-номеров как в карточке (запятая, ;, перевод строки, слэш)."""
+    if not (text or '').strip():
+        return []
+    parts = re.split(r'[,;\n/]+', text)
+    return [p.strip() for p in parts if p.strip()]
+
+
+def _product_retail_cross_compact_match(k_orig: str, k_compact: str):
+    """
+    Ищет товар, у которого в cross_numbers есть токен, совпадающий с k_orig или k_compact
+    (второй — без дефисов). Сначала узкий icontains по исходной строке, затем по compact.
+    """
+    if not k_compact or len(k_compact) < 4:
+        return None
+    base = Product.objects.filter(catalog_type='retail').exclude(cross_numbers='')
+    qs = None
+    if len(k_orig) >= 6:
+        qs = base.filter(cross_numbers__icontains=k_orig.strip())
+    if qs is None or not qs.exists():
+        qs = base.filter(cross_numbers__icontains=k_compact) if len(k_compact) >= 6 else base.none()
+    for p in qs[:500]:
+        for tok in _cross_numbers_tokens(p.cross_numbers):
+            if _oem_compact(tok) == k_compact or tok.strip().lower() == k_orig.strip().lower():
+                return p
+    return None
+
+
+def _product_retail_by_article_compact(k_compact: str):
+    """article после удаления дефисов/пробелов = k_compact."""
+    if not k_compact or len(k_compact) < 4:
+        return None
+    norm = Lower(
+        Replace(Replace('article', Value('-'), Value('')), Value(' '), Value(''))
+    )
+    return (
+        Product.objects.filter(catalog_type='retail')
+        .exclude(article='')
+        .exclude(article__isnull=True)
+        .annotate(_art_c=norm)
+        .filter(_art_c=k_compact.lower())
+        .first()
+    )
+
+
 def _product_retail_by_article_or_cross(key: str):
     """Точное совпадение с article или одним из кросс-номеров (поле через запятую)."""
     k = (key or '').strip().lstrip('/')
@@ -2527,13 +2580,43 @@ def _product_retail_by_article_or_cross(key: str):
     p = Product.objects.filter(article__iexact=k, catalog_type='retail').first()
     if p:
         return p
+    kc = _oem_compact(k)
+    p = _product_retail_by_article_compact(kc)
+    if p:
+        return p
+
     cq = (
         Q(cross_numbers__iexact=k)
         | Q(cross_numbers__istartswith=k + ',')
+        | Q(cross_numbers__istartswith=k + ' ,')
         | Q(cross_numbers__iendswith=',' + k)
+        | Q(cross_numbers__iendswith=', ' + k)
+        | Q(cross_numbers__iendswith=';' + k)
         | Q(cross_numbers__icontains=',' + k + ',')
+        | Q(cross_numbers__icontains=', ' + k + ',')
+        | Q(cross_numbers__icontains=',' + k + ' ,')
+        | Q(cross_numbers__icontains=';' + k + ';')
+        | Q(cross_numbers__icontains=';' + k + ',')
     )
-    return Product.objects.filter(cq, catalog_type='retail').first()
+    p = Product.objects.filter(cq, catalog_type='retail').first()
+    if p:
+        return p
+    return _product_retail_cross_compact_match(k, kc)
+
+
+def _filename_looks_like_part_number(raw: str) -> bool:
+    """
+    Имя файла похоже на артикул/OEM, а не на «starter_isuzu».
+    Для таких имён опасно искать по словам в name — цифры из OEM попадают в чужие названия.
+    """
+    t = (raw or '').strip()
+    if len(t) < 4 or len(t) > 48:
+        return False
+    if re.search(r'[а-яА-ЯёЁ]', t):
+        return False
+    if not re.search(r'\d', t):
+        return False
+    return bool(re.fullmatch(r'[\dA-Za-z][\w\-]*[\dA-Za-z]|[\dA-Za-z]{4,}', t))
 
 
 def match_image_to_product(filename):
@@ -2580,16 +2663,22 @@ def match_image_to_product(filename):
 
     name = raw.replace('_', ' ').replace('-', ' ')
     article = extract_article(raw) or extract_article(name)
+    looks_like_pn = _filename_looks_like_part_number(raw)
     if article:
-        product = Product.objects.filter(
-            article__icontains=article,
-            catalog_type='retail',
-        ).first()
-        if product:
-            return product
+        p = _product_retail_by_article_or_cross(article)
+        if p:
+            return p
+        # icontains по article давал ложные совпадения (один номер — подстрока чужого артикула)
+        if not looks_like_pn:
+            product = Product.objects.filter(
+                article__icontains=article,
+                catalog_type='retail',
+            ).first()
+            if product:
+                return product
 
     words = name.split()
-    if len(words) >= 2:
+    if len(words) >= 2 and not looks_like_pn:
         products = Product.objects.filter(catalog_type='retail')
         for word in words:
             if len(word) > 2:
