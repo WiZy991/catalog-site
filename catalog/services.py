@@ -6,7 +6,7 @@ import re
 import os
 from django.core.files.base import ContentFile
 from django.db import transaction
-from django.db.models import Count
+from django.db.models import Count, Q
 from django.utils.text import capfirst
 from .models import Category, Product, ProductImage, Brand
 
@@ -1197,6 +1197,9 @@ def extract_article(text):
     Артикул обычно содержит буквы и цифры, например: 23300-78090, ME220745, 1-13200-469-0
     Для крестовин TOYO формат: TT-124, TU-1210, GUT-25
     """
+    t = (text or '').strip()
+    if re.fullmatch(r'\d{5,12}', t):
+        return t.upper()
     # Паттерны для артикулов (в порядке приоритета)
     patterns = [
         # TOYO/GUT style: TT-124, TU-1210, GUT-25, GU-1210 (2-3 буквы + дефис + 1-4 цифры)
@@ -1205,6 +1208,7 @@ def extract_article(text):
         r'\b([A-Z]{2}\d{6})\b',  # Mitsubishi style: ME220745
         r'\b(\d-\d{5}-\d{3}-\d)\b',  # Isuzu style: 1-13200-469-0
         r'\b(\d{6})\b',  # 6-digit codes: 332120, 331008
+        r'\b(\d{7})\b',  # 7-digit codes (кросс-номера в имени файла)
         r'\b([A-Z0-9\-]{6,20})\b',  # Generic alphanumeric with dashes
     ]
     
@@ -2499,6 +2503,39 @@ def process_bulk_import(data_rows, auto_category=True, auto_brand=True):
     return stats
 
 
+def _bulk_image_basename_for_match(filename):
+    """
+    Имя файла без пути и расширения для сопоставления с артикулом / кросс-номером.
+    Не обрезает «хвост» из цифр у чисто числовых имён (332120.jpg) — иначе ключ
+    становится пустым и все фото могут ошибочно попасть на один товар.
+    Снимает только типичные суффиксы копий: _1, _12, « (2)».
+    """
+    s = os.path.basename((filename or '').strip())
+    s = os.path.splitext(s)[0].strip()
+    if not s:
+        return ''
+    s = re.sub(r'\s*\(\d+\)\s*$', '', s, flags=re.IGNORECASE)
+    s = re.sub(r'_\d{1,4}$', '', s, flags=re.IGNORECASE)
+    return s.strip()
+
+
+def _product_retail_by_article_or_cross(key: str):
+    """Точное совпадение с article или одним из кросс-номеров (поле через запятую)."""
+    k = (key or '').strip().lstrip('/')
+    if not k:
+        return None
+    p = Product.objects.filter(article__iexact=k, catalog_type='retail').first()
+    if p:
+        return p
+    cq = (
+        Q(cross_numbers__iexact=k)
+        | Q(cross_numbers__istartswith=k + ',')
+        | Q(cross_numbers__iendswith=',' + k)
+        | Q(cross_numbers__icontains=',' + k + ',')
+    )
+    return Product.objects.filter(cq, catalog_type='retail').first()
+
+
 def match_image_to_product(filename):
     """
     Находит товар по имени файла изображения.
@@ -2507,62 +2544,74 @@ def match_image_to_product(filename):
     Примеры:
     - 23300-78090.jpg -> товар с артикулом 23300-78090
     - ME220745_1.jpg -> товар с артикулом ME220745
+    - 332120.jpg -> по артикулу или кросс-номеру 332120
     - starter_isuzu.jpg -> поиск по ключевым словам
     """
-    # Убираем расширение и номер фото
-    name = os.path.splitext(filename)[0]
-    name = re.sub(r'[_-]?\d*$', '', name)  # Убираем _1, _2, -1 в конце
-    name = name.replace('_', ' ').replace('-', ' ')
-    
-    # Пробуем найти по артикулу (точное совпадение) ТОЛЬКО в основном каталоге
-    product = Product.objects.filter(
-        article__iexact=name.replace(' ', '-'),
-        catalog_type='retail'  # ТОЛЬКО основной каталог!
-    ).first()
-    if product:
-        return product
-    
-    product = Product.objects.filter(
-        article__iexact=name.replace(' ', ''),
-        catalog_type='retail'  # ТОЛЬКО основной каталог!
-    ).first()
-    if product:
-        return product
-    
-    # Пробуем найти по артикулу (частичное совпадение) ТОЛЬКО в основном каталоге
-    article = extract_article(name)
+    raw = _bulk_image_basename_for_match(filename)
+    if not raw:
+        return None
+
+    candidates = []
+    seen_lower = set()
+    for c in (
+        raw,
+        raw.replace('_', '-'),
+        raw.replace('_', '').replace('-', ''),
+        raw.replace('_', ' ').replace('-', ' '),
+    ):
+        c = c.strip().lstrip('/')
+        if not c:
+            continue
+        ck = c.lower()
+        if ck in seen_lower:
+            continue
+        seen_lower.add(ck)
+        candidates.append(c)
+
+    for key in candidates:
+        p = _product_retail_by_article_or_cross(key)
+        if p:
+            return p
+        compact = re.sub(r'\s+', '', key)
+        if compact and compact != key:
+            p = _product_retail_by_article_or_cross(compact)
+            if p:
+                return p
+
+    name = raw.replace('_', ' ').replace('-', ' ')
+    article = extract_article(raw) or extract_article(name)
     if article:
         product = Product.objects.filter(
             article__icontains=article,
-            catalog_type='retail'  # ТОЛЬКО основной каталог!
+            catalog_type='retail',
         ).first()
         if product:
             return product
-    
-    # Поиск по названию ТОЛЬКО в основном каталоге
+
     words = name.split()
     if len(words) >= 2:
-        # Ищем товары, содержащие все слова из имени файла ТОЛЬКО в основном каталоге
-        products = Product.objects.filter(catalog_type='retail')  # ТОЛЬКО основной каталог!
+        products = Product.objects.filter(catalog_type='retail')
         for word in words:
             if len(word) > 2:
                 products = products.filter(name__icontains=word)
-        
+
         product = products.first()
         if product:
             return product
-    
+
     return None
 
 
 def _normalize_bulk_image_basename(basename_no_ext: str) -> str:
     """
     Имя файла без расширения для сравнения при массовой загрузке фото.
-    Убирает суффикс уникальности Django (_AbCdEfGh) и хвост _1, _2.
+    Убирает суффикс уникальности Django (_AbCdEfGh), копию « (2)», индекс _1.._9999.
+    Не срезает чисто цифровое имя целиком (кросс-номер в имени файла).
     """
     s = (basename_no_ext or '').strip()
     s = re.sub(r'_[A-Za-z0-9]{7,8}$', '', s)
-    s = re.sub(r'[_-]?\d+$', '', s)
+    s = re.sub(r'\s*\(\d+\)\s*$', '', s, flags=re.IGNORECASE)
+    s = re.sub(r'_\d{1,4}$', '', s, flags=re.IGNORECASE)
     return s.lower()
 
 
@@ -2590,16 +2639,18 @@ def process_bulk_images(images, create_products=False):
         
         if not product and create_products:
             # Создаём товар из имени файла
-            name = os.path.splitext(filename)[0]
-            name = re.sub(r'[_-]?\d*$', '', name)
-            name = name.replace('_', ' ').replace('-', ' ').title()
+            raw_bn = _bulk_image_basename_for_match(filename)
+            name = raw_bn.replace('_', ' ').replace('-', ' ').title() if raw_bn else ''
             
             parsed = parse_product_name(name)
             category = get_category_for_product(name)
-            
+            article_new = parsed['article'] or ''
+            if not article_new and re.fullmatch(r'\d{5,12}', raw_bn.strip()):
+                article_new = raw_bn.strip()
+
             product = Product.objects.create(
-                name=name,
-                article=parsed['article'] or '',
+                name=name or raw_bn,
+                article=article_new,
                 brand=parsed['brand'] or '',
                 category=category,
                 catalog_type='retail',  # ОСНОВНОЙ КАТАЛОГ!
@@ -2608,7 +2659,7 @@ def process_bulk_images(images, create_products=False):
             stats['created_products'] += 1
         
         if product:
-            base_filename = _normalize_bulk_image_basename(os.path.splitext(filename)[0])
+            base_filename = _normalize_bulk_image_basename(_bulk_image_basename_for_match(filename))
             new_digest = hashlib.md5(file_content).hexdigest()
 
             existing_images = product.images.all()
