@@ -155,8 +155,31 @@
     .privacy-notice {
         font-size: 0.85rem;
         color: var(--color-gray-600);
-        text-align: center;
+        text-align: left;
         margin-top: 1.5rem;
+    }
+
+    .register-consent-row {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.65rem;
+        text-align: left;
+        cursor: pointer;
+        margin: 0;
+    }
+
+    .register-consent-row input[type="checkbox"] {
+        flex-shrink: 0;
+        margin: 0.2rem 0 0 0;
+        width: 1.05rem;
+        height: 1.05rem;
+        accent-color: var(--color-brand-red, #dc2626);
+    }
+
+    .register-consent-row__text {
+        flex: 1;
+        min-width: 0;
+        line-height: 1.5;
     }
     
     .privacy-notice a {
@@ -244,19 +267,16 @@
                         </div>
                         
                         <div class="privacy-notice" style="margin: 16px 0;">
-                            <label style="cursor:pointer;">
+                            <label class="register-consent-row" for="agree_pp">
                                 <input type="checkbox" id="agree_pp" name="personal_data_consent" required>
-                                Я принимаю 
-                                <a href="{% url 'core:privacy_policy' %}" target="_blank" rel="noopener">Политику конфиденциальности</a>
-                                и даю 
-                                <a href="{% url 'core:consent' %}" target="_blank" rel="noopener">Согласие на обработку персональных данных</a>
+                                <span class="register-consent-row__text">Я принимаю <a href="{% url 'core:privacy_policy' %}" target="_blank" rel="noopener">Политику конфиденциальности</a> и даю <a href="{% url 'core:consent' %}" target="_blank" rel="noopener">Согласие на обработку персональных данных</a></span>
                             </label>
                         </div>
 
                         <div class="privacy-notice" style="margin: 12px 0 20px;">
-                            <label style="cursor:pointer; display: flex; align-items: flex-start; gap: 0.5rem;">
+                            <label class="register-consent-row" for="id_newsletter_consent">
                                 {{ form.newsletter_consent }}
-                                <span>Согласен на получение <a href="{% url 'core:newsletter_consent' %}" target="_blank" rel="noopener">информационной рассылки</a></span>
+                                <span class="register-consent-row__text">Согласен на получение <a href="{% url 'core:newsletter_consent' %}" target="_blank" rel="noopener">информационной рассылки</a></span>
                             </label>
                             {% if form.newsletter_consent.errors %}
                                 <div class="form-error">{{ form.newsletter_consent.errors }}</div>
