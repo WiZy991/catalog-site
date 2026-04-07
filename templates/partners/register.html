@@ -247,10 +247,20 @@
                             <label style="cursor:pointer;">
                                 <input type="checkbox" id="agree_pp" name="personal_data_consent" required>
                                 Я принимаю 
-                                <a href="{% url 'core:privacy_policy' %}" target="_blank">Политику конфиденциальности</a>
+                                <a href="{% url 'core:privacy_policy' %}" target="_blank" rel="noopener">Политику конфиденциальности</a>
                                 и даю 
-                                <a href="{% url 'core:consent' %}" target="_blank">Согласие на обработку персональных данных</a>
+                                <a href="{% url 'core:consent' %}" target="_blank" rel="noopener">Согласие на обработку персональных данных</a>
                             </label>
+                        </div>
+
+                        <div class="privacy-notice" style="margin: 12px 0 20px;">
+                            <label style="cursor:pointer; display: flex; align-items: flex-start; gap: 0.5rem;">
+                                {{ form.newsletter_consent }}
+                                <span>Согласен на получение <a href="{% url 'core:newsletter_consent' %}" target="_blank" rel="noopener">информационной рассылки</a></span>
+                            </label>
+                            {% if form.newsletter_consent.errors %}
+                                <div class="form-error">{{ form.newsletter_consent.errors }}</div>
+                            {% endif %}
                         </div>
 
                         <button type="submit" class="btn-submit" id="partner-submit-btn" disabled>

@@ -117,6 +117,7 @@ class PartnerRegisterView(FormView):
 Email: {request_obj.email}
 Город: {request_obj.city}
 Комментарий: {request_obj.comment or 'Не указан'}
+Согласие на информационную рассылку: {'да' if request_obj.newsletter_consent else 'нет'}
 
 Дата заявки: {request_obj.created_at.strftime('%d.%m.%Y %H:%M')}
 

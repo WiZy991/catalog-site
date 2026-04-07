@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Согласие на получение информационной рассылки — {{ SITE_NAME }}{% endblock %}
+{% block meta_description %}Согласие на получение рассылки рекламно-информационных материалов — {{ SITE_NAME }}.{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="breadcrumbs" aria-label="Хлебные крошки">
+    <div class="container">
+        <ol class="breadcrumbs__list" itemscope itemtype="https://schema.org/BreadcrumbList">
+            <li class="breadcrumbs__item" itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
+                <a href="{% url 'core:home' %}" itemprop="item"><span itemprop="name">Главная</span></a>
+                <meta itemprop="position" content="1">
+            </li>
+            <li class="breadcrumbs__item breadcrumbs__item--active" itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
+                <span itemprop="name">Согласие на информационную рассылку</span>
+                <meta itemprop="position" content="2">
+            </li>
+        </ol>
+    </div>
+</nav>
+{% endblock %}
+
+{% block content %}
+<section class="page-section" style="text-align:center;">
+    <div class="container">
+        <h1 class="page-title" style="text-align:center;">Согласие на получение рассылки рекламно-информационных материалов</h1>
+        <div class="page-content policy-content" style="text-align:left; margin: 0 auto; max-width: 900px;">
+            {% if consent_text %}
+                <pre style="white-space: pre-wrap; font-family: inherit; line-height: 1.6; margin-top: 0;">{{ consent_text }}</pre>
+            {% else %}
+                <p>Текст согласия временно недоступен.</p>
+            {% endif %}
+        </div>
+    </div>
+</section>
+{% endblock %}

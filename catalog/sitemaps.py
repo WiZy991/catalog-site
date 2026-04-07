@@ -45,6 +45,8 @@ class StaticViewSitemap(Sitemap):
             'core:wholesale',
             'core:privacy_policy',
             'core:consent',
+            'core:order_consent',
+            'core:newsletter_consent',
             'core:public_offer',
         ]
 

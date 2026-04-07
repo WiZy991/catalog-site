@@ -1,0 +1,39 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Политика в отношении обработки персональных данных — {{ SITE_NAME }}{% endblock %}
+{% block meta_description %}Политика ИП Щербович Е.Н. в отношении обработки персональных данных на сайте {{ SITE_NAME }}.{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="breadcrumbs" aria-label="Хлебные крошки">
+    <div class="container">
+        <ol class="breadcrumbs__list" itemscope itemtype="https://schema.org/BreadcrumbList">
+            <li class="breadcrumbs__item" itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
+                <a href="{% url 'core:home' %}" itemprop="item"><span itemprop="name">Главная</span></a>
+                <meta itemprop="position" content="1">
+            </li>
+            <li class="breadcrumbs__item breadcrumbs__item--active" itemprop="itemListElement" itemscope itemtype="https://schema.org/ListItem">
+                <span itemprop="name">Политика конфиденциальности</span>
+                <meta itemprop="position" content="2">
+            </li>
+        </ol>
+    </div>
+</nav>
+{% endblock %}
+
+{% block content %}
+<section class="page-section">
+    <div class="container">
+        <h1 class="page-title" style="text-align:center;">Политика в отношении обработки персональных данных</h1>
+        <div class="page-content policy-content" style="text-align:left; margin: 0 auto; max-width: 980px;">
+            {% if policy_html %}
+                <div class="policy-document" style="white-space: pre-wrap; font-family: inherit; line-height: 1.65; font-size: 0.98rem;">{{ policy_html }}</div>
+            {% elif page and page.content %}
+                <div class="page-body">{{ page.content|safe }}</div>
+            {% else %}
+                <p>Текст политики временно недоступен.</p>
+            {% endif %}
+        </div>
+    </div>
+</section>
+{% endblock %}

@@ -19,10 +19,9 @@ class PartnerRequestForm(forms.ModelForm):
         label='Согласие на обработку персональных данных',
         error_messages={'required': 'Необходимо дать согласие на обработку персональных данных'}
     )
-    
     class Meta:
         model = PartnerRequest
-        fields = ['full_name', 'phone', 'email', 'city', 'comment']
+        fields = ['full_name', 'phone', 'email', 'city', 'comment', 'newsletter_consent']
         widgets = {
             'full_name': forms.TextInput(attrs={
                 'class': 'form-input',
@@ -50,8 +49,11 @@ class PartnerRequestForm(forms.ModelForm):
                 'placeholder': 'Дополнительная информация о вашей компании...',
                 'rows': 4,
             }),
+            'newsletter_consent': forms.CheckboxInput(attrs={
+                'id': 'id_newsletter_consent',
+            }),
         }
-    
+
     def clean_email(self):
         email = self.cleaned_data.get('email')
         # Проверяем, нет ли уже активной заявки с таким email

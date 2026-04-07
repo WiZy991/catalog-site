@@ -5,7 +5,7 @@ from django.db import OperationalError
 from django.conf import settings
 from catalog.models import Category, Product, Promotion
 from .models import Page
-import re
+from . import legal_documents
 
 
 class HomeView(TemplateView):
@@ -110,8 +110,8 @@ class PublicOfferView(TemplateView):
 
 class PrivacyPolicyView(TemplateView):
     """Страница Политики в отношении обработки персональных данных."""
-    template_name = 'core/privacy_policy.html'
-    
+    template_name = 'core/privacy_policy_document.html'
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         try:
@@ -119,13 +119,15 @@ class PrivacyPolicyView(TemplateView):
             context['page'] = page
         except Page.DoesNotExist:
             context['page'] = None
+        raw = legal_documents.load_policy_text()
+        context['policy_html'] = legal_documents.policy_text_as_safe_html(raw)
         return context
 
 
 class ConsentView(TemplateView):
-    """Страница Согласия на обработку персональных данных."""
+    """Согласие №2 — обработка ПД при регистрации личного кабинета партнёра."""
     template_name = 'core/consent.html'
-    
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         try:
@@ -133,74 +135,27 @@ class ConsentView(TemplateView):
             context['page'] = page
         except Page.DoesNotExist:
             context['page'] = None
+        context['consent_text'] = legal_documents.load_partner_consent_text()
+        return context
+
+
+class NewsletterConsentView(TemplateView):
+    """Согласие №3 — на получение информационной / рекламно-информационной рассылки."""
+    template_name = 'core/newsletter_consent.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['consent_text'] = legal_documents.load_newsletter_consent_text()
         return context
 
 
 class OrderConsentView(TemplateView):
-    """Согласие на обработку ПД при оформлении заказа (розница и опт)."""
+    """Согласие №1 — обработка ПД при оформлении заказа (корзина)."""
     template_name = 'core/order_consent.html'
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        # Пытаемся прочитать текст согласия из файла politic.txt в корне проекта
-        from django.conf import settings
-        import os
-        consent_text = ''
-        try:
-            file_path = os.path.join(settings.BASE_DIR, 'politic.txt')
-            if os.path.exists(file_path):
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    consent_text = f.read()
-                    # Удаляем дублирующий заголовок "СОГЛАСИЕ ..." в начале файла
-                    lines = [ln.rstrip('\r') for ln in consent_text.splitlines()]
-                    if lines and 'СОГЛАСИЕ' in lines[0].upper():
-                        # Если вторая строка тоже про "на обработку персональных данных" — удаляем обе
-                        if len(lines) > 1 and 'ОБРАБОТКУ ПЕРСОНАЛЬНЫХ ДАННЫХ' in lines[1].upper():
-                            lines = lines[2:]
-                        else:
-                            lines = lines[1:]
-                    consent_text = '\n'.join(lines).strip()
-                    # Удаляем "квадраты"/служебные маркеры из исходного текста
-                    # (часто приходят из Word как private-use символы или спец-иконки списка).
-                    bad_chars = {
-                        '\uf0a7': '',  # private use bullet
-                        '\uf0ad': '',  # private use square
-                        '\uf0b7': '',  # private use dot
-                        '□': '',
-                        '■': '',
-                        '☐': '',
-                        '▢': '',
-                        '▪': '',
-                        '▫': '',
-                    }
-                    consent_text = consent_text.translate(str.maketrans(bad_chars))
-                    # На случай других символов из Private Use Area (часто из Word),
-                    # которые в браузере отображаются как пустые квадраты.
-                    consent_text = re.sub(r'[\uE000-\uF8FF]', '', consent_text)
-
-                    # Форматируем бывшие пункты списков (где были квадраты):
-                    # делаем отступ/красную строку и визуально сдвигаем вправо.
-                    lines = consent_text.splitlines()
-                    list_prefixes = (
-                        'фамилия',
-                        'номер телефона',
-                        'адрес электронной почты',
-                        'город',
-                        'с положениями',
-                        'с политикой',
-                    )
-                    formatted_lines = []
-                    for ln in lines:
-                        stripped = ln.lstrip()
-                        lower = stripped.lower()
-                        if stripped and lower.startswith(list_prefixes):
-                            formatted_lines.append(f'    {stripped}')
-                        else:
-                            formatted_lines.append(ln)
-                    consent_text = '\n'.join(formatted_lines)
-        except Exception:
-            consent_text = ''
-        context['consent_text'] = consent_text
+        context['consent_text'] = legal_documents.load_order_consent_text()
         return context
 
 

@@ -11,6 +11,7 @@ urlpatterns = [
     path('public-offer/', views.PublicOfferView.as_view(), name='public_offer'),
     path('privacy-policy/', views.PrivacyPolicyView.as_view(), name='privacy_policy'),
     path('consent/', views.ConsentView.as_view(), name='consent'),
+    path('newsletter-consent/', views.NewsletterConsentView.as_view(), name='newsletter_consent'),
     path('order-consent/', views.OrderConsentView.as_view(), name='order_consent'),
     path('recommendations/', views.RecommendationsView.as_view(), name='recommendations_rules'),
     path('wholesale/', views.WholesaleView.as_view(), name='wholesale'),

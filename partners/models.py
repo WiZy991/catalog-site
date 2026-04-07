@@ -18,7 +18,12 @@ class PartnerRequest(models.Model):
     email = models.EmailField('E-mail')
     city = models.CharField('Город', max_length=100)
     comment = models.TextField('Комментарий', blank=True)
-    
+    newsletter_consent = models.BooleanField(
+        'Согласие на информационную рассылку',
+        default=False,
+        help_text='Отмечено в заявке добровольно; на отправку заявки не влияет.',
+    )
+
     # Статус и управление
     status = models.CharField('Статус', max_length=20, choices=STATUS_CHOICES, default='pending')
     admin_comment = models.TextField('Комментарий администратора', blank=True)

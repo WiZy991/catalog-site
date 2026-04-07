@@ -21,7 +21,7 @@ from import_export.widgets import ForeignKeyWidget
 class PartnerRequestAdmin(admin.ModelAdmin):
     """Админка для заявок партнёров."""
     list_display = [
-        'full_name', 'email', 'phone', 'city', 'status_badge', 'created_at', 'processed_at'
+        'full_name', 'email', 'phone', 'city', 'newsletter_consent', 'status_badge', 'created_at', 'processed_at'
     ]
     list_filter = ['status', 'created_at', 'city']
     search_fields = ['full_name', 'email', 'phone', 'city', 'comment']
@@ -32,7 +32,7 @@ class PartnerRequestAdmin(admin.ModelAdmin):
     
     fieldsets = (
         ('Контактные данные', {
-            'fields': ('full_name', 'phone', 'email', 'city', 'comment')
+            'fields': ('full_name', 'phone', 'email', 'city', 'comment', 'newsletter_consent')
         }),
         ('Статус', {
             'fields': ('status', 'admin_comment', 'partner')
