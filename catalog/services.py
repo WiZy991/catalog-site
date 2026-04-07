@@ -2512,6 +2512,7 @@ def _bulk_image_basename_for_match(filename):
     Не обрезает «хвост» из цифр у чисто числовых имён (332120.jpg) — иначе ключ
     становится пустым и все фото могут ошибочно попасть на один товар.
     Снимает только типичные суффиксы копий: _1, _12, « (2)».
+    Примеры: MD972003_1.jpg и MD972003_2.jpg → ключ MD972003 (розница, один товар — несколько фото).
     """
     s = os.path.basename((filename or '').strip())
     s = os.path.splitext(s)[0].strip()
@@ -2539,37 +2540,43 @@ def _product_retail_cross_compact_match(k_orig: str, k_compact: str):
     """
     Ищет товар, у которого в cross_numbers есть токен, совпадающий с k_orig или k_compact
     (второй — без дефисов). Сначала узкий icontains по исходной строке, затем по compact.
+    Сначала retail, затем wholesale (партнёрский каталог).
     """
     if not k_compact or len(k_compact) < 4:
         return None
-    base = Product.objects.filter(catalog_type='retail').exclude(cross_numbers='')
-    qs = None
-    if len(k_orig) >= 6:
-        qs = base.filter(cross_numbers__icontains=k_orig.strip())
-    if qs is None or not qs.exists():
-        qs = base.filter(cross_numbers__icontains=k_compact) if len(k_compact) >= 6 else base.none()
-    for p in qs[:500]:
-        for tok in _cross_numbers_tokens(p.cross_numbers):
-            if _oem_compact(tok) == k_compact or tok.strip().lower() == k_orig.strip().lower():
-                return p
+    for catalog_type in ('retail', 'wholesale'):
+        base = Product.objects.filter(catalog_type=catalog_type).exclude(cross_numbers='')
+        qs = None
+        if len(k_orig) >= 6:
+            qs = base.filter(cross_numbers__icontains=k_orig.strip())
+        if qs is None or not qs.exists():
+            qs = base.filter(cross_numbers__icontains=k_compact) if len(k_compact) >= 6 else base.none()
+        for p in qs[:500]:
+            for tok in _cross_numbers_tokens(p.cross_numbers):
+                if _oem_compact(tok) == k_compact or tok.strip().lower() == k_orig.strip().lower():
+                    return p
     return None
 
 
 def _product_retail_by_article_compact(k_compact: str):
-    """article после удаления дефисов/пробелов = k_compact."""
+    """article после удаления дефисов/пробелов = k_compact (retail, затем wholesale)."""
     if not k_compact or len(k_compact) < 4:
         return None
     norm = Lower(
         Replace(Replace('article', Value('-'), Value('')), Value(' '), Value(''))
     )
-    return (
-        Product.objects.filter(catalog_type='retail')
-        .exclude(article='')
-        .exclude(article__isnull=True)
-        .annotate(_art_c=norm)
-        .filter(_art_c=k_compact.lower())
-        .first()
-    )
+    for catalog_type in ('retail', 'wholesale'):
+        p = (
+            Product.objects.filter(catalog_type=catalog_type)
+            .exclude(article='')
+            .exclude(article__isnull=True)
+            .annotate(_art_c=norm)
+            .filter(_art_c=k_compact.lower())
+            .first()
+        )
+        if p:
+            return p
+    return None
 
 
 def _product_retail_by_article_or_cross(key: str):
@@ -2577,9 +2584,10 @@ def _product_retail_by_article_or_cross(key: str):
     k = (key or '').strip().lstrip('/')
     if not k:
         return None
-    p = Product.objects.filter(article__iexact=k, catalog_type='retail').first()
-    if p:
-        return p
+    for catalog_type in ('retail', 'wholesale'):
+        p = Product.objects.filter(article__iexact=k, catalog_type=catalog_type).first()
+        if p:
+            return p
     kc = _oem_compact(k)
     p = _product_retail_by_article_compact(kc)
     if p:
@@ -2598,10 +2606,52 @@ def _product_retail_by_article_or_cross(key: str):
         | Q(cross_numbers__icontains=';' + k + ';')
         | Q(cross_numbers__icontains=';' + k + ',')
     )
-    p = Product.objects.filter(cq, catalog_type='retail').first()
+    for catalog_type in ('retail', 'wholesale'):
+        p = Product.objects.filter(cq, catalog_type=catalog_type).first()
+        if p:
+            return p
+    return _product_retail_cross_compact_match(k, kc)
+
+
+def _product_by_oem_in_name_or_characteristics(key: str):
+    """
+    OEM часто попадает в название («…, MD972003») или в characteristics («OEM: MD972003»),
+    но не дублируется в поле cross_numbers — тогда article/cross не находят файл MD972003.jpg.
+    Ищем сначала в розничном каталоге, при отсутствии — в оптовом (как дубликат карточки).
+    Дополнительно: вхождение кода в тексте характеристик без строгой подписи «OEM:».
+    """
+    k = (key or '').strip().lstrip('/')
+    if len(k) < 6 or len(k) > 32:
+        return None
+    if not re.match(r'^[A-Za-z0-9\-]+$', k, re.IGNORECASE):
+        return None
+    ct = (Q(catalog_type='retail') | Q(catalog_type='wholesale')) & Q(is_active=True)
+    ku, kl = k.upper(), k.lower()
+    char_q = (
+        Q(characteristics__icontains=f'OEM: {k}')
+        | Q(characteristics__icontains=f'OEM:{k}')
+        | Q(characteristics__icontains=f'oem: {k}')
+        | Q(characteristics__icontains=f'oem:{k}')
+        | Q(characteristics__icontains=f'OEM-номер: {k}')
+        | Q(characteristics__icontains=f'Артикул2: {k}')
+        | Q(characteristics__icontains=f'артикул2: {k}')
+        | Q(characteristics__icontains=f'Article2: {k}')
+        | Q(characteristics__icontains=f'article2: {k}')
+        | Q(characteristics__icontains=f'Артикул 2: {k}')
+        | Q(characteristics__icontains=f'артикул 2: {k}')
+    )
+    if len(k) >= 7:
+        char_q |= Q(characteristics__icontains=k)
+    body = Q(name__icontains=k)
+    if len(k) >= 7:
+        body |= Q(short_description__icontains=k)
+    if ku != kl:
+        body |= Q(name__icontains=ku) | Q(name__icontains=kl)
+    qs = Product.objects.filter(ct).filter(char_q | body)
+    p = qs.filter(catalog_type='retail').order_by('pk').first()
     if p:
         return p
-    return _product_retail_cross_compact_match(k, kc)
+    return qs.filter(catalog_type='wholesale').order_by('pk').first()
 
 
 def _filename_looks_like_part_number(raw: str) -> bool:
@@ -2627,6 +2677,7 @@ def match_image_to_product(filename):
     Примеры:
     - 23300-78090.jpg -> товар с артикулом 23300-78090
     - ME220745_1.jpg -> товар с артикулом ME220745
+    - MD972003_1.jpg, MD972003_2.jpg -> один товар по OEM MD972003 (суффикс _1/_2 только для ракурсов)
     - 332120.jpg -> по артикулу или кросс-номеру 332120
     - starter_isuzu.jpg -> поиск по ключевым словам
     """
@@ -2676,6 +2727,15 @@ def match_image_to_product(filename):
             ).first()
             if product:
                 return product
+
+    oem_meta_keys = [raw]
+    if article:
+        oem_meta_keys.append(article)
+    for mk in dict.fromkeys(oem_meta_keys):
+        if mk:
+            p = _product_by_oem_in_name_or_characteristics(mk)
+            if p:
+                return p
 
     words = name.split()
     if len(words) >= 2 and not looks_like_pn:
