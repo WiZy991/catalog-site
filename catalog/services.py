@@ -2669,6 +2669,57 @@ def _filename_looks_like_part_number(raw: str) -> bool:
     return bool(re.fullmatch(r'[\dA-Za-z][\w\-]*[\dA-Za-z]|[\dA-Za-z]{4,}', t))
 
 
+def _product_by_main_article_prefix(code: str):
+    """
+    Имя файла с «коротким» артикулом (PF-1234.jpg), в каталоге полный код PF-1234/A-567.
+    Точный поиск по article не находит такую карточку; берём первую подходящую по префиксу.
+    """
+    code = (code or '').strip().lstrip('/')
+    if not code or '/' in code or len(code) < 4:
+        return None
+    prefix_q = Q(article__istartswith=code + '/') | Q(article__istartswith=code + '-')
+    for catalog_type in ('retail', 'wholesale'):
+        p = (
+            Product.objects.filter(catalog_type=catalog_type)
+            .exclude(article='')
+            .exclude(article__isnull=True)
+            .filter(prefix_q)
+            .order_by('pk')
+            .first()
+        )
+        if p:
+            return p
+    return None
+
+
+def _product_by_leading_numeric_article(code: str):
+    """
+    Файл 33946.jpg при артикуле 33946(TP)20999(RIK) — ведущий номер совпадает, дальше скобки/суффиксы.
+    Не используем голый istartswith(code): иначе 33946 совпадёт с 339461234.
+    """
+    code = (code or '').strip().lstrip('/')
+    if not code or not re.fullmatch(r'\d{4,14}', code):
+        return None
+    boundary = (
+        Q(article__istartswith=code + '(')
+        | Q(article__istartswith=code + '/')
+        | Q(article__istartswith=code + '-')
+        | Q(article__istartswith=code + ' ')
+    )
+    for catalog_type in ('retail', 'wholesale'):
+        p = (
+            Product.objects.filter(catalog_type=catalog_type)
+            .exclude(article='')
+            .exclude(article__isnull=True)
+            .filter(boundary)
+            .order_by('pk')
+            .first()
+        )
+        if p:
+            return p
+    return None
+
+
 def match_image_to_product(filename):
     """
     Находит товар по имени файла изображения.
@@ -2679,6 +2730,8 @@ def match_image_to_product(filename):
     - ME220745_1.jpg -> товар с артикулом ME220745
     - MD972003_1.jpg, MD972003_2.jpg -> один товар по OEM MD972003 (суффикс _1/_2 только для ракурсов)
     - 332120.jpg -> по артикулу или кросс-номеру 332120
+    - PF-1234.jpg -> товар с артикулом PF-1234/A-567 (основной код до «/» в имени файла)
+    - 33946.jpg -> товар с артикулом 33946(TP)20999(RIK) и аналогичными составными номерами
     - starter_isuzu.jpg -> поиск по ключевым словам
     """
     raw = _bulk_image_basename_for_match(filename)
@@ -2711,6 +2764,16 @@ def match_image_to_product(filename):
             p = _product_retail_by_article_or_cross(compact)
             if p:
                 return p
+
+    for stem in dict.fromkeys((raw, raw.replace('_', '-'))):
+        p = _product_by_main_article_prefix(stem)
+        if p:
+            return p
+
+    for stem in dict.fromkeys((raw, raw.replace('_', '-'))):
+        p = _product_by_leading_numeric_article(stem)
+        if p:
+            return p
 
     name = raw.replace('_', ' ').replace('-', ' ')
     article = extract_article(raw) or extract_article(name)
