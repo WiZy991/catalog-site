@@ -143,7 +143,7 @@ class NewsletterConsentView(TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['consent_text'] = legal_documents.load_newsletter_consent_text()
+        context['consent_html'] = legal_documents.load_newsletter_consent_html()
         return context
 
 

@@ -92,6 +92,63 @@ def load_newsletter_consent_text() -> str:
     return _strip_file_heading_duplicate(load_legal_plain_text(CONSENT_NEWSLETTER_FILENAME))
 
 
+def plain_consent_text_to_html(text: str):
+    """
+    Плоский текст согласия → HTML: пустая строка разделяет блоки; подряд строки без «-» склеиваются в <p>;
+    строки, начинающиеся с «- », — элементы <ul>.
+    """
+    from django.utils.html import escape
+    from django.utils.safestring import mark_safe
+
+    text = (text or '').replace('\r\n', '\n').replace('\r', '\n').strip()
+    if not text:
+        return mark_safe('')
+
+    lines = text.split('\n')
+    parts = []
+    buf_lines = []
+    in_ul = False
+
+    def flush_para():
+        nonlocal buf_lines
+        if buf_lines:
+            parts.append('<p>' + escape(' '.join(buf_lines)) + '</p>')
+            buf_lines = []
+
+    def close_ul():
+        nonlocal in_ul
+        if in_ul:
+            parts.append('</ul>')
+            in_ul = False
+
+    for raw in lines:
+        line = raw.strip()
+        if not line:
+            flush_para()
+            close_ul()
+            continue
+
+        is_li = line.startswith('-') and (len(line) == 1 or line[1].isspace())
+        if is_li:
+            flush_para()
+            if not in_ul:
+                parts.append('<ul>')
+                in_ul = True
+            parts.append(f'<li>{escape(line[1:].strip())}</li>')
+        else:
+            close_ul()
+            buf_lines.append(line)
+
+    flush_para()
+    close_ul()
+    return mark_safe('\n'.join(parts))
+
+
+def load_newsletter_consent_html():
+    """Согласие №3 для вывода как HTML (списки с маркерами)."""
+    return plain_consent_text_to_html(load_newsletter_consent_text())
+
+
 def load_policy_text() -> str:
     return load_legal_plain_text(POLICY_FILENAME)
 

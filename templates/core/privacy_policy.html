@@ -560,18 +560,31 @@
     line-height: 1.7;
 }
 
+/* Глобальный style.css задаёт ul, ol { list-style: none } — здесь явно восстанавливаем маркеры */
 .policy-content ul, .policy-content ol {
     margin-bottom: 1rem;
     padding-left: 1.5rem;
+    list-style-position: outside;
+}
+
+.policy-content ul {
+    list-style-type: disc;
+}
+
+.policy-content ol {
+    list-style-type: decimal;
 }
 
 .policy-content ul li, .policy-content ol li {
+    display: list-item;
     margin-bottom: 0.5rem;
     line-height: 1.6;
 }
 
-.policy-content ul ul {
+.policy-content ul ul,
+.policy-table ul ul {
     margin-top: 0.5rem;
+    list-style-type: circle;
 }
 
 .table-responsive {
@@ -623,9 +636,24 @@
     background-color: #f1f1f1;
 }
 
-.policy-table ul {
-    margin: 0.5rem 0;
-    padding-left: 1.2rem;
+.policy-table ul,
+.policy-table ol {
+    margin: 0.5rem 0 0.75rem 0;
+    padding-left: 1.35rem;
+    list-style-type: disc;
+    list-style-position: inside;
+}
+
+.policy-table ol {
+    list-style-type: decimal;
+}
+
+.policy-table ul li,
+.policy-table ol li {
+    display: list-item;
+    margin-bottom: 0.35rem;
+    line-height: 1.55;
+    padding-left: 0.15rem;
 }
 
 .policy-table p {
@@ -659,6 +687,46 @@
     .policy-table th,
     .policy-table td {
         padding: 8px 10px;
+    }
+}
+
+@media print {
+    .policy-content ul,
+    .policy-content ol {
+        list-style-type: disc !important;
+        list-style-position: outside !important;
+        padding-left: 1.35rem !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+
+    .policy-content ol {
+        list-style-type: decimal !important;
+    }
+
+    .policy-content ul li,
+    .policy-content ol li {
+        display: list-item !important;
+    }
+
+    .policy-table ul,
+    .policy-table ol {
+        list-style-type: disc !important;
+        list-style-position: inside !important;
+        padding-left: 1.25rem !important;
+    }
+
+    .policy-table ol {
+        list-style-type: decimal !important;
+    }
+
+    .policy-table ul li,
+    .policy-table ol li {
+        display: list-item !important;
+    }
+
+    .table-responsive {
+        overflow: visible !important;
     }
 }
 </style>
