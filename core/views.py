@@ -109,8 +109,8 @@ class PublicOfferView(TemplateView):
 
 
 class PrivacyPolicyView(TemplateView):
-    """Страница Политики в отношении обработки персональных данных."""
-    template_name = 'core/privacy_policy_document.html'
+    """Страница Политики в отношении обработки персональных данных (HTML с таблицами)."""
+    template_name = 'core/privacy_policy.html'
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -119,8 +119,6 @@ class PrivacyPolicyView(TemplateView):
             context['page'] = page
         except Page.DoesNotExist:
             context['page'] = None
-        raw = legal_documents.load_policy_text()
-        context['policy_html'] = legal_documents.policy_text_as_safe_html(raw)
         return context
 
 
