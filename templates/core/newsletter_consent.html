@@ -24,7 +24,10 @@
 {% block content %}
 <section class="page-section">
     <div class="container">
-        <h1 class="page-title consent-page-title">Согласие на получение рассылки рекламно-информационных материалов</h1>
+        <h1 class="page-title consent-page-title">
+            Согласие на получение рассылки
+            <span class="consent-page-title__sub">(рекламно-информационных материалов)</span>
+        </h1>
 
         <div class="consent-content">
             {% if consent_html %}
@@ -43,13 +46,18 @@
     max-width: 980px;
     margin: 0 auto;
     line-height: 1.75;
-    color: var(--color-gray-700, #374151);
+    color: var(--color-gray-700);
     font-size: 1rem;
 }
 
 .consent-content p {
     margin-bottom: 1rem;
     text-align: left;
+    font-weight: 400;
+}
+
+.consent-content li {
+    font-weight: 400;
 }
 
 .consent-content ul {
@@ -93,6 +101,13 @@
 
 .consent-page-title {
     text-align: center;
+}
+
+.consent-page-title__sub {
+    display: block;
+    margin-top: 0.25rem;
+    font-size: 0.85em;
+    font-weight: 600;
 }
 </style>
 {% endblock %}

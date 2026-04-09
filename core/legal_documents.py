@@ -94,8 +94,9 @@ def load_newsletter_consent_text() -> str:
 
 def plain_consent_text_to_html(text: str):
     """
-    Плоский текст согласия → HTML: пустая строка разделяет блоки; подряд строки без «-» склеиваются в <p>;
-    строки, начинающиеся с «- », — элементы <ul>.
+    Плоский текст согласия → HTML: пустая строка — новый абзац; подряд идущие строки без «- »
+    попадают в один <p> с <br> (как переносы в <pre> у других согласий);
+    строки «- …» — элементы <ul>.
     """
     from django.utils.html import escape
     from django.utils.safestring import mark_safe
@@ -112,7 +113,8 @@ def plain_consent_text_to_html(text: str):
     def flush_para():
         nonlocal buf_lines
         if buf_lines:
-            parts.append('<p>' + escape(' '.join(buf_lines)) + '</p>')
+            inner = '<br>\n'.join(escape(x) for x in buf_lines)
+            parts.append(f'<p>{inner}</p>')
             buf_lines = []
 
     def close_ul():
