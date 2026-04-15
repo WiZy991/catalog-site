@@ -209,8 +209,8 @@ class Command(BaseCommand):
                                 if not dry_run:
                                     product.price = retail_price
                                     product.quantity = quantity
-                                    product.is_active = True
-                                    product.availability = 'in_stock' if quantity > 0 else 'order'
+                                    product.is_active = quantity > 0
+                                    product.availability = 'in_stock' if quantity > 0 else 'out_of_stock'
                                     product.save(update_fields=['price', 'quantity', 'is_active', 'availability'])
                                 activated_retail += 1
                                 should_activate = True
@@ -219,8 +219,8 @@ class Command(BaseCommand):
                                 if not dry_run:
                                     product.wholesale_price = wholesale_price
                                     product.quantity = quantity
-                                    product.is_active = True
-                                    product.availability = 'in_stock' if quantity > 0 else 'order'
+                                    product.is_active = quantity > 0
+                                    product.availability = 'in_stock' if quantity > 0 else 'out_of_stock'
                                     product.save(update_fields=['wholesale_price', 'quantity', 'is_active', 'availability'])
                                 activated_wholesale += 1
                                 should_activate = True

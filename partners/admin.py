@@ -316,6 +316,8 @@ class PartnerOrderItemInline(admin.TabularInline):
     extra = 0
     fields = ['product', 'quantity', 'price', 'get_total']
     readonly_fields = ['get_total']
+    # Иначе Django рендерит <select> по всему каталогу Product — десятки тысяч строк HTML и таймаут
+    autocomplete_fields = ['product']
     
     def get_total(self, obj):
         if obj.pk:
@@ -387,6 +389,10 @@ class PartnerOrderAdmin(admin.ModelAdmin):
     list_display_links = ['id']
     list_per_page = 50
     actions = ['export_orders_xls', 'export_order_xls']
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        return qs.select_related('partner').prefetch_related('items__product')
     
     def export_orders_xls(self, request, queryset):
         """Экспорт выбранных заказов в XLS."""

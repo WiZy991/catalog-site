@@ -8,7 +8,7 @@ from django.urls import reverse
 from django.conf import settings
 from .models import Category, Product
 from .filters import ProductFilter, get_brand_choices
-from .services import format_models_multiline, build_farpost_compact_name
+from .services import format_models_multiline, build_farpost_compact_name, extract_engine_hint_from_product_name
 
 
 class CatalogView(ListView):
@@ -53,9 +53,7 @@ class CategoryView(ListView):
             category__in=descendants,
             is_active=True,
             catalog_type='retail',
-            quantity__gt=0
-        ).filter(
-            Q(availability='in_stock') | Q(availability='order')
+            quantity__gt=0,
         ).count()
 
     def get_category(self):
@@ -105,9 +103,7 @@ class CategoryView(ListView):
             category__in=descendants,
             is_active=True,
             catalog_type='retail',  # Только товары из основного каталога
-            quantity__gt=0  # Только товары с количеством больше 0
-        ).filter(
-            Q(availability='in_stock') | Q(availability='order')  # Товары в наличии или под заказ
+            quantity__gt=0,  # Только с остатком; «под заказ» при нуле на складе не показываем
         ).select_related('category').prefetch_related('images')
         
         # Применяем фильтры
@@ -178,9 +174,7 @@ class CatalogItemView(ListView):
             category__in=descendants,
             is_active=True,
             catalog_type='retail',
-            quantity__gt=0
-        ).filter(
-            Q(availability='in_stock') | Q(availability='order')
+            quantity__gt=0,
         ).count()
     
     def dispatch(self, request, *args, **kwargs):
@@ -215,9 +209,7 @@ class CatalogItemView(ListView):
                             slug=slug,
                             category__in=descendants,
                             is_active=True,
-                            quantity__gt=0  # Только товары с количеством больше 0
-                        ).filter(
-                            Q(availability='in_stock') | Q(availability='order')  # Товары в наличии или под заказ
+                            quantity__gt=0,
                         ).first()
                         
                         if product:
@@ -253,10 +245,8 @@ class CatalogItemView(ListView):
             queryset = Product.objects.filter(
                 category__in=descendants,
                 is_active=True,
-                catalog_type='retail',  # Только товары из основного каталога
-                quantity__gt=0  # Только товары с количеством больше 0
-            ).filter(
-                Q(availability='in_stock') | Q(availability='order')  # Товары в наличии или под заказ
+                catalog_type='retail',
+                quantity__gt=0,
             ).select_related('category').prefetch_related('images')
             
             # Применяем фильтры
@@ -405,9 +395,7 @@ class ProductView(DetailView):
         return Product.objects.filter(
             is_active=True,
             catalog_type='retail',  # Только товары из основного каталога
-            quantity__gt=0  # Только товары с количеством больше 0
-        ).filter(
-            Q(availability='in_stock') | Q(availability='order')  # Товары в наличии или под заказ
+            quantity__gt=0,  # Только с остатком; «под заказ» при нуле на складе не показываем
         ).select_related('category').prefetch_related('images')
 
     def get_context_data(self, **kwargs):
@@ -730,6 +718,11 @@ class ProductView(DetailView):
                     if not first_engine:
                         first_engine = part
                     break
+            if not first_engine:
+                hint = extract_engine_hint_from_product_name(product.name or '')
+                if hint:
+                    characteristics.append(('Применимо для двигателей', hint))
+                    first_engine = hint.split(',')[0].strip()
 
         # Fallback для "Кузов": часто "Кузов" не проходит фильтрацию в characteristics,
         # но остаётся в applicability. Если кузов не найден — пытаемся взять
@@ -877,18 +870,14 @@ def filter_products_ajax(request):
         queryset = Product.objects.filter(
             category__in=descendants,
             is_active=True,
-            catalog_type='retail',  # Только товары из основного каталога
-            quantity__gt=0  # Только товары с количеством больше 0
-        ).filter(
-            Q(availability='in_stock') | Q(availability='order')  # Товары в наличии или под заказ
+            catalog_type='retail',
+            quantity__gt=0,
         )
     else:
         queryset = Product.objects.filter(
             is_active=True,
-            catalog_type='retail',  # Только товары из основного каталога
-            quantity__gt=0  # Только товары с количеством больше 0
-        ).filter(
-            Q(availability='in_stock') | Q(availability='order')  # Товары в наличии или под заказ
+            catalog_type='retail',
+            quantity__gt=0,
         )
     
     # Применяем фильтры
@@ -946,9 +935,8 @@ def search_products(request):
         # Для SQLite лучше использовать iregex, для других БД - icontains
         products = Product.objects.filter(
             is_active=True,
-            catalog_type='retail'  # Только товары из основного каталога
-        ).filter(
-            Q(quantity__gt=0) | Q(availability='order')  # Товары с остатком или под заказ
+            catalog_type='retail',
+            quantity__gt=0,
         )
         
         # Для каждого слова создаём условие поиска

@@ -3001,6 +3001,90 @@ def generate_farpost_title(product):
     return ' '.join(parts)
 
 
+def extract_engine_hint_from_product_name(name: str) -> str:
+    """
+    Для названий из 1С в одной строке (часто генераторы): «Генератор MAZDA, RFJ5-18-300B, LR160-412, 12V/…»
+    код двигателя может быть:
+    - префиксом до первого «-» в токене с номером (RFJ5 из RFJ5-18-300B, SL07 из SL07-18-300);
+    - отдельным токеном после запятой (OM810).
+    Не подменяет данные из 1С в характеристиках — только дополняет отображение, когда поле «Двигатель» пустое.
+    """
+    raw = (name or '').replace('\r\n', '\n').strip()
+    if not raw:
+        return ''
+
+    def _looks_like_voltage_or_specs(s: str) -> bool:
+        sl = s.lower()
+        if re.search(r'\d+\s*v', sl):
+            return True
+        if 'задн' in sl or 'пер.' in sl or 'пл.рем' in sl or 'руч' in sl or 'конт' in sl:
+            return True
+        if re.search(r'\d+\s*/\s*\d+\s*a', sl):
+            return True
+        return False
+
+    def _oemish_head(head: str) -> bool:
+        """Длинный номер вида MD106319 в начале токена — OEM, не код двигателя."""
+        h = head.strip()
+        if not h:
+            return True
+        if re.fullmatch(r'[A-Z]{2}\d{5,}', h, re.I):
+            return True
+        if re.fullmatch(r'\d{5,}', h):
+            return True
+        return False
+
+    def _from_hyphen_token(token: str) -> str:
+        token = token.strip()
+        if '-' not in token:
+            return ''
+        head = token.split('-', 1)[0].strip()
+        if not head or head.isdigit() or _oemish_head(head):
+            return ''
+        # RFJ5, SL07, 1NZ: буквы + цифры, без «длинного OEM»
+        if re.fullmatch(r'[A-Za-z]{1,5}\d{1,4}[A-Za-z]?', head):
+            return head.upper()
+        if re.fullmatch(r'\d?[A-Za-z]{2,4}\d{1,3}', head):
+            return head.upper()
+        return ''
+
+    def _whole_token(t: str) -> str:
+        t = t.strip()
+        if not t or '-' in t or '/' in t:
+            return ''
+        if _looks_like_voltage_or_specs(t):
+            return ''
+        if re.fullmatch(r'\d{3,}', t):
+            return ''
+        if re.fullmatch(r'[A-Z]{2}\d{5,}', t, re.I):
+            return ''
+        if re.fullmatch(r'[A-Za-z]{1,5}\d{1,5}[A-Za-z]?', t):
+            return t.upper()
+        return ''
+
+    parts = [p.strip() for p in raw.split(',') if p and p.strip()]
+    candidates = []
+    seen = set()
+    start = 0
+    if parts and ('генератор' in parts[0].lower() or 'generator' in parts[0].lower()):
+        start = 1
+
+    for p in parts[start:]:
+        if _looks_like_voltage_or_specs(p):
+            break
+        w = _whole_token(p)
+        if w and w.lower() not in seen:
+            seen.add(w.lower())
+            candidates.append(w)
+            continue
+        h = _from_hyphen_token(p)
+        if h and h.lower() not in seen:
+            seen.add(h.lower())
+            candidates.append(h)
+
+    return ', '.join(candidates[:3]) if candidates else ''
+
+
 def build_farpost_compact_name(product):
     """
     Короткое наименование для выгрузки (как в карточке):
@@ -3118,6 +3202,10 @@ def build_farpost_compact_name(product):
 
     compact_model = _first_model_and_body(model_raw)
     compact_engine = _first_engine(engine_raw)
+    if not compact_engine:
+        hint = extract_engine_hint_from_product_name(base_name)
+        if hint:
+            compact_engine = _first_engine(hint)
     chunks = [x for x in [title_base, article, oem, compact_model, compact_engine, characteristic_raw] if x]
     return ', '.join(chunks) if chunks else base_name
 

@@ -3032,12 +3032,7 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                                                     product._price_updated = True  # Флаг для сохранения
                                                     if idx < 10:
                                                         logger.info(f"✓ Обновлена розничная цена для товара {product_id}: {price} (тип цены: {price_type_id})")
-                                                # ВАЖНО: После обновления цены пересчитываем is_active
-                                                # Товар активен если: quantity > 0 ИЛИ price > 0
-                                                current_qty = product.quantity or 0
-                                                if current_qty > 0 or price > 0:
-                                                    product.is_active = True
-                                                    product.availability = 'in_stock' if current_qty > 0 else 'order'
+                                                # Видимость задаётся только блоком остатков ниже (не держать карточку «под заказ» при quantity=0)
                                                 break  # Нашли нужную цену, выходим из цикла
                                     except (ValueError, AttributeError, TypeError) as e:
                                         if idx < 5:
@@ -3107,11 +3102,6 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                                                         product.price = price
                                                         if idx < 5:
                                                             logger.info(f"Обновлена розничная цена (fallback по типу) для товара {product_id}: {price}")
-                                                    # ВАЖНО: После обновления цены пересчитываем is_active
-                                                    current_qty = product.quantity or 0
-                                                    if current_qty > 0 or price > 0:
-                                                        product.is_active = True
-                                                        product.availability = 'in_stock' if current_qty > 0 else 'order'
                                                     break
                                         except (ValueError, AttributeError, TypeError):
                                             pass
@@ -3140,11 +3130,6 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                                                 product.wholesale_price = price
                                                 if idx < 5:
                                                     logger.warning(f"⚠ Обновлена оптовая цена (fallback - любая цена) для товара {product_id}: {price}")
-                                                # ВАЖНО: После обновления цены пересчитываем is_active
-                                                current_qty = product.quantity or 0
-                                                if current_qty > 0 or price > 0:
-                                                    product.is_active = True
-                                                    product.availability = 'in_stock' if current_qty > 0 else 'order'
                                                 break
                                     except (ValueError, AttributeError, TypeError):
                                         pass
@@ -3697,15 +3682,10 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
             except (ValueError, TypeError):
                 quantity = 0
         
-        # Определяем наличие и активность
-        # ВАЖНО: Товары из import.xml создаются активными если есть остаток > 0 ИЛИ цена > 0
-        # Цены и количество придут из offers.xml и обновят статус товара
-        # Товары скрываются ТОЛЬКО если остаток = 0 И цена = 0
-        
-        # Товар активен если есть остаток > 0 ИЛИ цена > 0
-        # Товар скрыт ТОЛЬКО если остаток = 0 И цена = 0
-        if quantity > 0 or price > 0:
-            availability = 'in_stock' if quantity > 0 else 'order'
+        # Наличие на сайте только по остатку из import (остаток из offers обновит позже).
+        # Цена > 0 при нуле на складе не включает карточку в витрину.
+        if quantity > 0:
+            availability = 'in_stock'
             is_active = True
         else:
             availability = 'out_of_stock'
@@ -3944,24 +3924,11 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
             
             # ВАЖНО: При обновлении из import.xml НЕ меняем quantity/availability.
             # Остатки/наличие обновляются ТОЛЬКО из offers.xml.
-            # НО: Если обновилась цена, нужно пересчитать is_active на основе цены и количества
-            # Товар активен если: quantity > 0 ИЛИ price > 0
-            # Товар скрыт ТОЛЬКО если: quantity = 0 И price = 0
+            # Остаток из import не меняем здесь (его даёт offers). Видимость — только по текущему quantity.
             if price_updated:
-                # Получаем текущее количество и цену
                 current_quantity = product.quantity or 0
-                if catalog_type == 'wholesale':
-                    current_price = product.wholesale_price or 0
-                else:
-                    current_price = product.price or 0
-                
-                # Пересчитываем is_active на основе количества и цены
-                if current_quantity > 0 or current_price > 0:
-                    product.availability = 'in_stock' if current_quantity > 0 else 'order'
-                    product.is_active = True
-                else:
-                    product.availability = 'out_of_stock'
-                    product.is_active = False
+                product.availability = 'in_stock' if current_quantity > 0 else 'out_of_stock'
+                product.is_active = current_quantity > 0
             # ВАЖНО: Всегда обновляем категорию из данных 1С, чтобы товары правильно распределялись по категориям
             # НО: только если категория активна, чтобы товары не попадали в неактивные категории
             if category:

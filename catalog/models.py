@@ -113,8 +113,6 @@ class Category(MPTTModel):
         
         # ВАЖНО: НЕ используем кеширование - всегда получаем актуальные данные из БД
         # Это гарантирует, что количество товаров всегда корректное
-        from django.db.models import Q
-        
         descendants = self.get_descendants(include_self=True)
         # Преобразуем QuerySet в список ID для более надежной работы
         descendant_ids = list(descendants.values_list('id', flat=True))
@@ -122,12 +120,10 @@ class Category(MPTTModel):
             return 0
         
         count = Product.objects.filter(
-            category_id__in=descendant_ids, 
+            category_id__in=descendant_ids,
             is_active=True,
-            catalog_type='retail',  # Только товары из основного каталога
-            quantity__gt=0  # Только товары с количеством больше 0
-        ).filter(
-            Q(availability='in_stock') | Q(availability='order')  # Как в CategoryView
+            catalog_type='retail',
+            quantity__gt=0,
         ).count()
         
         return count

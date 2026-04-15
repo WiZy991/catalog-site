@@ -305,8 +305,10 @@
         transition: max-height 0.3s ease;
     }
     
+    /* Раньше было 2000px — при длинных заказах обрезался футер с кнопкой «Заказать» */
     .order-item--expanded .order-content {
-        max-height: 2000px;
+        max-height: 100000px;
+        overflow: visible;
     }
     
     .order-items {
