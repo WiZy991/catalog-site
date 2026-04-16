@@ -8,7 +8,13 @@ from django.urls import reverse
 from django.conf import settings
 from .models import Category, Product
 from .filters import ProductFilter, get_brand_choices
-from .services import format_models_multiline, build_farpost_compact_name, extract_engine_hint_from_product_name
+from .services import (
+    format_models_multiline,
+    build_farpost_compact_name,
+    extract_engine_hint_from_product_name,
+    extract_engine_from_description,
+    augment_engine_raw_for_export,
+)
 
 
 class CatalogView(ListView):
@@ -659,6 +665,26 @@ class ProductView(DetailView):
         existing_keys = {str(k).strip().lower() for k, _ in characteristics}
         name_parts = [p.strip() for p in (product.name or '').split(',') if p and p.strip()]
 
+        def _looks_like_engine_token(s: str) -> bool:
+            s = str(s or '').strip()
+            if not s:
+                return False
+            if '-' in s:
+                return False
+            sl = s.lower()
+            if '.' in s or 'kw' in sl or 'квт' in sl or 'пр' in sl or 'отк' in sl:
+                return False
+            if s.startswith('/'):
+                return False
+            has_letters = bool(re.search(r'[A-Za-zА-Яа-я]', s))
+            has_digits = bool(re.search(r'\d', s))
+            if '/' in s and has_letters and '-' not in s and not s.startswith('/'):
+                parts = [p for p in s.split('/') if p]
+                if parts and all(len(p.strip()) <= 1 for p in parts):
+                    return False
+                return True
+            return has_letters and has_digits and '-' not in s
+
         if name_parts and not has_size_in_source:
             size_candidate = name_parts[-1]
             if size_candidate:
@@ -686,32 +712,6 @@ class ProductView(DetailView):
                     characteristics.append(('Характеристики', s))
 
         if name_parts and 'двигатель' not in existing_keys and 'engine' not in existing_keys and 'применимо для двигателей' not in existing_keys:
-            def _looks_like_engine_token(s: str) -> bool:
-                s = str(s or '').strip()
-                if not s:
-                    return False
-                # Cross-номер содержит "-"
-                if '-' in s:
-                    return False
-                sl = s.lower()
-                if '.' in s or 'kw' in sl or 'квт' in sl or 'пр' in sl or 'отк' in sl:
-                    return False
-                # Варианты вида "/022248" не берем как двигатель
-                if s.startswith('/'):
-                    return False
-                # Двигатель — это либо "буквы+цифры", либо коды типа "EW/EV" (есть "/",
-                # но цифр может не быть). Не принимаем cross-номера с "-" и значения вида "/022248".
-                # Варианты вида "R/R/L" (односимвольные сегменты) считаем характеристикой, а не двигателем.
-                has_letters = bool(re.search(r'[A-Za-zА-Яа-я]', s))
-                has_digits = bool(re.search(r'\d', s))
-                if '/' in s and has_letters and '-' not in s and not s.startswith('/'):
-                    parts = [p for p in s.split('/') if p]
-                    # Если во всех частях по 1 символу (например, R/R/L), это НЕ двигатель.
-                    if parts and all(len(p.strip()) <= 1 for p in parts):
-                        return False
-                    return True
-                return has_letters and has_digits and '-' not in s
-
             for part in reversed(name_parts):
                 if _looks_like_engine_token(part):
                     characteristics.append(('Применимо для двигателей', part))
@@ -730,11 +730,17 @@ class ProductView(DetailView):
         existing_char_keys = {str(k).strip().lower() for k, _ in characteristics}
         has_body = any(k in existing_char_keys for k in ('кузов', 'body', 'применимо для моделей'))
         if not has_body:
-            engine_val = ''
+            engine_tokens = set()
             for k, v in characteristics:
-                if str(k).strip().lower() in ('двигатель', 'engine'):
-                    engine_val = str(v).strip()
-                    break
+                kn = str(k).strip().lower()
+                if kn in ('двигатель', 'engine', 'применимо для двигателей'):
+                    for p in re.split(r'[,;/]+', str(v)):
+                        t = p.strip()
+                        if t:
+                            engine_tokens.add(t.lower())
+            desc_eng = extract_engine_from_description(product.description or '')
+            if desc_eng:
+                engine_tokens.add(desc_eng.lower())
 
             applicability_list = product.get_applicability_list()
             if applicability_list:
@@ -742,11 +748,15 @@ class ProductView(DetailView):
                     item_str = str(item).strip()
                     if not item_str:
                         continue
-                    if engine_val and item_str == engine_val:
+                    item_l = item_str.lower()
+                    if item_l in engine_tokens:
                         continue
                     if item_str.startswith('/'):
                         continue
                     if '-' in item_str:
+                        continue
+                    # Не подменяем «модель» кодом двигателя (2UZ#, 3SFE, …).
+                    if _looks_like_engine_token(item_str):
                         continue
                     # Должно быть похоже на код с буквами и цифрами.
                     if re.search(r'[A-Za-zА-Яа-я]', item_str) and re.search(r'\d', item_str):
@@ -810,6 +820,39 @@ class ProductView(DetailView):
             has_voltage = any(key.lower() in ['вольтаж', 'voltage', 'напряжение'] for key, _ in characteristics)
             if not has_voltage:
                 characteristics.append(('Напряжение', voltage))
+
+        # Импорт 1С кладёт «Двигатель» в описание/applicability, но не в текст характеристик —
+        # явно показываем строку «Применимо для двигателей», чтобы не подменялась «моделью».
+        if not any(str(k).strip().lower() == 'применимо для двигателей' for k, _ in characteristics):
+            model_for_skip = ''
+            for k, v in characteristics:
+                if str(k).strip().lower() == 'применимо для моделей':
+                    model_for_skip = str(v)
+                    break
+            eng_fill = augment_engine_raw_for_export(
+                product,
+                '',
+                str(product.article or ''),
+                str(article2_value or '').strip().lstrip('/'),
+                model_for_skip,
+            )
+            if eng_fill:
+                characteristics.append(('Применимо для двигателей', eng_fill))
+
+        eng_display_vals = {
+            str(v).strip().lower()
+            for k, v in characteristics
+            if str(k).strip().lower() == 'применимо для двигателей' and str(v).strip()
+        }
+        if eng_display_vals:
+            characteristics = [
+                (k, v)
+                for k, v in characteristics
+                if not (
+                    str(k).strip().lower() == 'применимо для моделей'
+                    and str(v).strip().lower() in eng_display_vals
+                )
+            ]
         
         context['characteristics'] = characteristics
 
