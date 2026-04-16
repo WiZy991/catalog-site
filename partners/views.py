@@ -1178,7 +1178,7 @@ class PartnerOrdersView(PartnerRequiredMixin, ListView):
 
 @login_required
 def partner_order_create(request):
-    """Создать заказ из корзины партнёра."""
+    """Перенести корзину в черновик заказа: дополняем существующий draft, а не создаём новый каждый раз."""
     # Админы могут просматривать, но не создавать заказы без профиля партнёра
     if not hasattr(request.user, 'partner_profile'):
         if request.user.is_staff:
@@ -1195,35 +1195,63 @@ def partner_order_create(request):
     
     partner = request.user.partner_profile
     
-    # Создаём заказ со статусом draft (черновик)
-    order = PartnerOrder.objects.create(
-        partner=partner,
-        status='draft'
+    order = (
+        PartnerOrder.objects.filter(partner=partner, status='draft')
+        .order_by('-created_at')
+        .first()
     )
+    merged_into_existing = bool(order)
+    if not order:
+        order = PartnerOrder.objects.create(
+            partner=partner,
+            status='draft'
+        )
     
-    # Добавляем товары
+    added_any = False
     for product_id, item_data in cart.items():
         try:
-            product = Product.objects.get(id=int(product_id), is_active=True)
-            quantity = item_data['quantity']
+            product = Product.objects.get(
+                id=int(product_id),
+                is_active=True,
+                catalog_type='wholesale',
+            )
+            quantity = int(item_data['quantity'])
             price = float(item_data['price'])
-            
+        except (Product.DoesNotExist, ValueError, TypeError, KeyError):
+            continue
+        
+        existing = order.items.filter(product=product).first()
+        if existing:
+            existing.quantity += quantity
+            existing.price = price
+            existing.save(update_fields=['quantity', 'price'])
+        else:
             PartnerOrderItem.objects.create(
                 order=order,
                 product=product,
                 quantity=quantity,
                 price=price,
             )
-        except Product.DoesNotExist:
-            continue
+        added_any = True
     
-    # Очищаем корзину
     set_partner_cart(request, {})
     
-    # Email отправляется только при подтверждении заказа (статус pending)
-    # Здесь заказ создаётся со статусом draft (черновик)
+    if not added_any:
+        if not merged_into_existing:
+            order.delete()
+        messages.warning(request, 'Не удалось добавить товары в заказ (проверьте наличие позиций в каталоге).')
+        return redirect('partners:cart')
     
-    messages.success(request, f'Заказ #{order.id} успешно создан. Подтвердите заказ на странице "Мои заказы"')
+    if merged_into_existing:
+        messages.success(
+            request,
+            f'Товары из корзины добавлены в заказ #{order.id}. Подтвердите заказ на странице «Мои заказы».',
+        )
+    else:
+        messages.success(
+            request,
+            f'Заказ #{order.id} успешно создан. Подтвердите заказ на странице «Мои заказы»',
+        )
     return redirect('partners:orders')
 
 
