@@ -599,6 +599,15 @@ class ProductView(DetailView):
                     # Иногда 1С ошибочно кладёт код двигателя в поле "Размер" (например: "3VZ/5VZ").
                     v = str(value).strip()
                     v_lower = v.lower()
+                    # Габариты/размеры вида "90*400 мм", "20x450", "260*170*10*29"
+                    # не должны попадать в блок двигателя.
+                    looks_like_dimensions = bool(
+                        re.search(
+                            r'\d+\s*(?:\*|x|х)\s*\d+(?:\s*(?:\*|x|х)\s*\d+)*(?:\s*(?:мм|см|м|mm|cm|m))?$',
+                            v_lower,
+                            re.IGNORECASE,
+                        )
+                    )
                     size_parts = [p.strip() for p in v.split('/') if p.strip()]
                     is_single_letter_size = bool(size_parts) and all(len(p) == 1 for p in size_parts)
                     # Признак кода двигателя:
@@ -616,7 +625,7 @@ class ProductView(DetailView):
                     is_engine_code = (
                         ('/' in v and bool(re.search(r'[A-Za-zА-Яа-я]', v)))
                         or (bool(re.search(r'[A-Za-zА-Яа-я]', v)) and bool(re.search(r'\d', v)))
-                    ) and ('-' not in v) and (not v.strip().startswith('/')) and (not contains_characteristic_markers) and (not is_single_letter_size)
+                    ) and ('-' not in v) and (not v.strip().startswith('/')) and (not contains_characteristic_markers) and (not is_single_letter_size) and (not looks_like_dimensions)
                     if is_engine_code:
                         characteristics.append(('Применимо для двигателей', v))
                         if not first_engine:
