@@ -97,6 +97,13 @@
         padding-bottom: 4rem;
     }
     
+    /* Расширяем рабочую область заказов в партнёрском разделе */
+    .partner-header .container,
+    .orders-page .container {
+        width: min(96vw, 1680px);
+        max-width: 1680px;
+    }
+    
     .orders-header {
         display: flex;
         align-items: center;
@@ -335,6 +342,23 @@
         border-bottom: 1px solid var(--color-gray-200);
     }
     
+    /* Цена/сумма не должны переносить знак рубля на новую строку */
+    .order-items-table th:nth-child(5),
+    .order-items-table td:nth-child(5),
+    .order-items-table th:nth-child(6),
+    .order-items-table td:nth-child(6),
+    .order-items-table th:nth-child(7),
+    .order-items-table td:nth-child(7) {
+        white-space: nowrap;
+    }
+    
+    .order-items-table th:nth-child(6),
+    .order-items-table td:nth-child(6),
+    .order-items-table th:nth-child(7),
+    .order-items-table td:nth-child(7) {
+        min-width: 110px;
+    }
+    
     .order-items-table tr:last-child td {
         border-bottom: none;
     }
@@ -436,6 +460,12 @@
     }
     
     @media (max-width: 768px) {
+        .partner-header .container,
+        .orders-page .container {
+            width: auto;
+            max-width: 100%;
+        }
+        
         .order-header {
             flex-direction: column;
             align-items: flex-start;
