@@ -3001,6 +3001,117 @@ def generate_farpost_title(product):
     return ' '.join(parts)
 
 
+def _normalize_leading_zero_engine_typo(token: str) -> str:
+    t = str(token or '').strip()
+    if len(t) >= 4 and t[0] == '0' and t[1].isalpha():
+        return 'O' + t[1:]
+    return t
+
+
+def extract_engine_from_description(text: str) -> str:
+    """
+    1С часто кладёт двигатель в описание строкой «Двигатель: …» (см. commerceml_views).
+    """
+    raw = str(text or '').replace('\r\n', '\n').strip()
+    if not raw:
+        return ''
+    for line in raw.split('\n'):
+        line = line.strip()
+        if not line:
+            continue
+        m = re.match(r'(?i)^двигатель\s*:\s*(.+)$', line)
+        if not m:
+            continue
+        val = m.group(1).strip()
+        if not val:
+            continue
+        val = val.split(',')[0].split('/')[0].strip()
+        if val:
+            return val
+    return ''
+
+
+def _lone_token_as_engine_candidate(token: str) -> str:
+    """
+    Один токен из применимости/описания: похож на код двигателя, не на кузов/OEM/вольтаж.
+    """
+    t = _normalize_leading_zero_engine_typo(str(token or '').strip())
+    if not t or t.startswith('/'):
+        return ''
+    sl = t.lower()
+    if re.search(r'\d+\s*v', sl):
+        return ''
+    if 'задн' in sl or 'пер.' in sl or 'пл.рем' in sl or 'руч' in sl or 'конт' in sl:
+        return ''
+    if re.search(r'\d+\s*/\s*\d+\s*a', sl):
+        return ''
+    if re.fullmatch(r'\d{3,}', t):
+        return ''
+    if re.fullmatch(r'[A-Z]{2}\d{5,}', t, re.I):
+        return ''
+    if re.fullmatch(r'^[A-Za-z]{2}\d{3,4}$', t):
+        return ''
+    m_lead = re.match(r'^([A-Za-z]+)(\d)', t)
+    if m_lead and len(m_lead.group(1)) >= 3:
+        return ''
+    if re.fullmatch(r'\d[A-Za-z]{1,5}\d{0,4}[A-Za-z]?', t, re.I):
+        return t.upper()
+    if re.fullmatch(r'[A-Za-z]{1,3}\d{2,5}[A-Za-z]{0,2}', t, re.I):
+        return t.upper()
+    return ''
+
+
+def extract_engine_from_applicability_items(items, skip_normalized=None) -> str:
+    if not items:
+        return ''
+    sk = {str(x).strip().lower() for x in (skip_normalized or set()) if str(x).strip()}
+    flat = []
+    for item in items:
+        s = str(item or '').strip()
+        if not s:
+            continue
+        for part in re.split(r'[/／]+', s):
+            p = part.strip()
+            if p:
+                flat.append(p)
+    for t in reversed(flat):
+        cand = _lone_token_as_engine_candidate(t)
+        if not cand:
+            continue
+        if cand.lower() in sk:
+            continue
+        return cand
+    return ''
+
+
+def augment_engine_raw_for_export(product, engine_raw, article, oem, model_raw):
+    """
+    Если «Двигатель» не пришёл в характеристиках XML, подставляем из описания (1С)
+    и из применимости (кузов/двигатель собираются в commerceml в фиксированном порядке).
+    """
+    if str(engine_raw or '').strip():
+        return str(engine_raw).strip()
+    er = extract_engine_from_description(getattr(product, 'description', None) or '')
+    if er:
+        return er
+    skip = set()
+    for x in (article, oem):
+        xs = str(x or '').strip().lower()
+        if xs:
+            skip.add(xs)
+    if model_raw:
+        for p in re.split(r'[,;/\n]+', str(model_raw)):
+            x = p.strip().lower()
+            if len(x) > 1:
+                skip.add(x)
+    try:
+        app_list = product.get_applicability_list()
+    except Exception:
+        app_list = []
+    er = extract_engine_from_applicability_items(app_list, skip)
+    return er or ''
+
+
 def extract_engine_hint_from_product_name(name: str) -> str:
     """
     Для названий из 1С в одной строке (часто генераторы): «Генератор MAZDA, RFJ5-18-300B, LR160-412, 12V/…»
@@ -3050,6 +3161,7 @@ def extract_engine_hint_from_product_name(name: str) -> str:
 
     def _whole_token(t: str) -> str:
         t = t.strip()
+        t = _normalize_leading_zero_engine_typo(t)
         if not t or '-' in t or '/' in t:
             return ''
         if _looks_like_voltage_or_specs(t):
@@ -3175,6 +3287,8 @@ def build_farpost_compact_name(product):
             continue
         if not characteristic_raw and key in ('размер', 'size', 'характеристика', 'характеристики'):
             characteristic_raw = val
+
+    engine_raw = augment_engine_raw_for_export(product, engine_raw, article, oem, model_raw)
 
     def _first_model_and_body(raw: str) -> str:
         parts = [p.strip() for p in str(raw or '').replace('\n', ' ').split(',') if p and p.strip()]
