@@ -1248,54 +1248,14 @@ def process_commerceml_file(file_path, filename, request=None):
             is_exchange_data_file = ('import' in filename_lower) or ('offers' in filename_lower)
             
             if is_exchange_data_file and file_path and os.path.exists(file_path):
-                processed_marker = f"{file_path}.processed"
-                if os.path.exists(processed_marker):
-                    # Файл уже обрабатывался - проверяем, изменился ли он
-                    # ВАЖНО: Используем file_mtime из маркера, а не время создания маркера
-                    try:
-                        # Получаем текущее время файла
-                        file_mtime = os.path.getmtime(file_path)
-                        file_mtime_dt = datetime.fromtimestamp(file_mtime)
-                        
-                        # Пытаемся прочитать время файла из маркера (если оно там сохранено)
-                        file_mtime_from_marker = None
-                        try:
-                            with open(processed_marker, 'r') as f:
-                                for line in f:
-                                    if line.startswith('file_mtime:'):
-                                        file_mtime_from_marker = datetime.fromisoformat(line.split(':', 1)[1].strip())
-                                        break
-                        except Exception:
-                            pass
-                        
-                        # Если время файла сохранено в маркере, используем его
-                        # Иначе используем время маркера (старая логика для обратной совместимости)
-                        if file_mtime_from_marker:
-                            # Сравниваем текущее время файла с временем из маркера
-                            if file_mtime_dt > file_mtime_from_marker:
-                                should_hide_products = True
-                                logger.info(f"Файл обмена изменен после последней обработки (файл: {file_mtime_dt}, маркер: {file_mtime_from_marker}) - скрываем товары, не пришедшие в обмене")
-                            else:
-                                should_hide_products = False
-                                logger.info(f"Файл обмена НЕ изменился с последней обработки (файл: {file_mtime_dt}, маркер: {file_mtime_from_marker}) - НЕ скрываем товары")
-                        else:
-                            # Старая логика - сравниваем с временем маркера (для обратной совместимости)
-                            marker_mtime = os.path.getmtime(processed_marker)
-                            marker_mtime_dt = datetime.fromtimestamp(marker_mtime)
-                            if file_mtime_dt > marker_mtime_dt:
-                                should_hide_products = True
-                                logger.info(f"Файл обмена изменен после последней обработки (файл: {file_mtime_dt}, маркер: {marker_mtime_dt}) - скрываем товары, не пришедшие в обмене")
-                            else:
-                                should_hide_products = False
-                                logger.info(f"Файл обмена НЕ изменился с последней обработки (файл: {file_mtime_dt}, маркер: {marker_mtime_dt}) - НЕ скрываем товары")
-                    except Exception as e:
-                        # Если не удалось проверить - НЕ скрываем товары (безопаснее)
-                        should_hide_products = False
-                        logger.warning(f"Не удалось проверить время изменения файла: {e}, НЕ скрываем товары для безопасности")
-                else:
-                    # Файл новый (нет маркера) - скрываем товары (это новая загрузка из 1С через веб-интерфейс)
-                    should_hide_products = True
-                    logger.info(f"Файл обмена новый (нет маркера) - скрываем товары, не пришедшие в обмене")
+                # Скрытие выполняем на КАЖДОЙ успешной обработке exchange-файла.
+                # Сравнение mtime с *.processed приводило к зависаниям "старых" карточек,
+                # когда файл приходил с тем же временем или маркер обновлялся раньше/иначе.
+                should_hide_products = True
+                logger.info(
+                    f"Файл {filename} распознан как exchange-data (import/offers) - "
+                    f"включаем скрытие отсутствующих товаров по external_id"
+                )
             else:
                 # Для неизвестных файлов или если не можем определить путь - НЕ скрываем товары
                 should_hide_products = False
