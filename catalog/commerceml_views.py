@@ -1241,12 +1241,13 @@ def process_commerceml_file(file_path, filename, request=None):
             logger.info("ONE_C_HIDE_MISSING_PRODUCTS=False — товары, отсутствующие в обмене, НЕ скрываем")
         
         if getattr(settings, 'ONE_C_HIDE_MISSING_PRODUCTS', False):
-            # Обработка через веб-интерфейс - проверяем, нужно ли скрывать товары
-            # Проверяем тип файла - скрываем товары только для import.xml
+            # Проверяем, нужно ли скрывать товары для файлов обмена.
+            # ВАЖНО: в проекте фактическое создание/обновление идёт из offers.xml,
+            # поэтому скрытие должно срабатывать и на offers-файлах.
             filename_lower = filename.lower() if filename else ''
-            is_import_file = 'import' in filename_lower and 'offers' not in filename_lower
+            is_exchange_data_file = ('import' in filename_lower) or ('offers' in filename_lower)
             
-            if is_import_file and file_path and os.path.exists(file_path):
+            if is_exchange_data_file and file_path and os.path.exists(file_path):
                 processed_marker = f"{file_path}.processed"
                 if os.path.exists(processed_marker):
                     # Файл уже обрабатывался - проверяем, изменился ли он
@@ -1273,20 +1274,20 @@ def process_commerceml_file(file_path, filename, request=None):
                             # Сравниваем текущее время файла с временем из маркера
                             if file_mtime_dt > file_mtime_from_marker:
                                 should_hide_products = True
-                                logger.info(f"Файл import.xml изменен после последней обработки (файл: {file_mtime_dt}, маркер: {file_mtime_from_marker}) - скрываем товары, не пришедшие в обмене")
+                                logger.info(f"Файл обмена изменен после последней обработки (файл: {file_mtime_dt}, маркер: {file_mtime_from_marker}) - скрываем товары, не пришедшие в обмене")
                             else:
                                 should_hide_products = False
-                                logger.info(f"Файл import.xml НЕ изменился с последней обработки (файл: {file_mtime_dt}, маркер: {file_mtime_from_marker}) - НЕ скрываем товары")
+                                logger.info(f"Файл обмена НЕ изменился с последней обработки (файл: {file_mtime_dt}, маркер: {file_mtime_from_marker}) - НЕ скрываем товары")
                         else:
                             # Старая логика - сравниваем с временем маркера (для обратной совместимости)
                             marker_mtime = os.path.getmtime(processed_marker)
                             marker_mtime_dt = datetime.fromtimestamp(marker_mtime)
                             if file_mtime_dt > marker_mtime_dt:
                                 should_hide_products = True
-                                logger.info(f"Файл import.xml изменен после последней обработки (файл: {file_mtime_dt}, маркер: {marker_mtime_dt}) - скрываем товары, не пришедшие в обмене")
+                                logger.info(f"Файл обмена изменен после последней обработки (файл: {file_mtime_dt}, маркер: {marker_mtime_dt}) - скрываем товары, не пришедшие в обмене")
                             else:
                                 should_hide_products = False
-                                logger.info(f"Файл import.xml НЕ изменился с последней обработки (файл: {file_mtime_dt}, маркер: {marker_mtime_dt}) - НЕ скрываем товары")
+                                logger.info(f"Файл обмена НЕ изменился с последней обработки (файл: {file_mtime_dt}, маркер: {marker_mtime_dt}) - НЕ скрываем товары")
                     except Exception as e:
                         # Если не удалось проверить - НЕ скрываем товары (безопаснее)
                         should_hide_products = False
@@ -1294,12 +1295,12 @@ def process_commerceml_file(file_path, filename, request=None):
                 else:
                     # Файл новый (нет маркера) - скрываем товары (это новая загрузка из 1С через веб-интерфейс)
                     should_hide_products = True
-                    logger.info(f"Файл import.xml новый (нет маркера) - скрываем товары, не пришедшие в обмене")
+                    logger.info(f"Файл обмена новый (нет маркера) - скрываем товары, не пришедшие в обмене")
             else:
-                # Для offers.xml или если не можем определить файл - НЕ скрываем товары
+                # Для неизвестных файлов или если не можем определить путь - НЕ скрываем товары
                 should_hide_products = False
-                if not is_import_file:
-                    logger.info(f"Файл {filename} - это offers.xml, НЕ скрываем товары (только обновляем цены и остатки)")
+                if not is_exchange_data_file:
+                    logger.info(f"Файл {filename} не import/offers - НЕ скрываем товары")
                 else:
                     logger.warning(f"⚠ Не удалось определить путь к файлу или файл не существует - НЕ скрываем товары")
         
