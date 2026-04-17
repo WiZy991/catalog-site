@@ -2461,6 +2461,44 @@ def process_offers_file_single_pass(root, namespaces, filename, request=None):
         request._offers_processed_external_ids['retail'] = stats['retail']['processed_external_ids']
         request._offers_processed_external_ids['wholesale'] = stats['wholesale']['processed_external_ids']
 
+    # Скрываем товары, которых нет в текущем offers-файле.
+    # Это основной путь обмена в проекте (import.xml здесь не участвует).
+    if getattr(settings, 'ONE_C_HIDE_MISSING_PRODUCTS', False):
+        for catalog_type in ('retail', 'wholesale'):
+            ids_in_exchange = set(stats[catalog_type]['processed_external_ids'])
+            processed_count = stats[catalog_type]['processed']
+            errors_count = len(stats[catalog_type]['errors'])
+            total_attempts = processed_count + errors_count
+            error_rate = errors_count / total_attempts if total_attempts > 0 else 0
+
+            if not ids_in_exchange:
+                logger.warning(
+                    f"⚠ offers.xml: нет external_id для {catalog_type} "
+                    f"(processed={processed_count}, errors={errors_count}) — пропускаем скрытие"
+                )
+                continue
+            if error_rate >= 0.5:
+                logger.warning(
+                    f"⚠ offers.xml: слишком много ошибок для {catalog_type} "
+                    f"({error_rate*100:.1f}%) — пропускаем скрытие"
+                )
+                continue
+
+            products_to_hide = Product.objects.filter(
+                catalog_type=catalog_type,
+                external_id__isnull=False,
+                external_id__gt='',
+                is_active=True,
+            ).exclude(external_id__in=ids_in_exchange)
+            hidden_count = products_to_hide.count()
+            if hidden_count:
+                products_to_hide.update(is_active=False, availability='out_of_stock')
+                logger.info(
+                    f"✓ offers.xml: скрыто {hidden_count} товаров в каталоге {catalog_type}, "
+                    f"которых нет в текущем exchange"
+                )
+                stats[catalog_type]['deleted'] = hidden_count
+
     all_errors = stats['retail']['errors'] + stats['wholesale']['errors']
     all_ids = set(stats['retail']['processed_external_ids']).union(stats['wholesale']['processed_external_ids'])
     return {
