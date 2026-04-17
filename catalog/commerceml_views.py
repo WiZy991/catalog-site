@@ -1240,11 +1240,7 @@ def process_commerceml_file(file_path, filename, request=None):
             should_hide_products = False
             logger.info("ONE_C_HIDE_MISSING_PRODUCTS=False — товары, отсутствующие в обмене, НЕ скрываем")
         
-        # Если обработка через скрипт (request=None), НЕ скрываем товары вообще
-        if request is None:
-            logger.info(f"Обработка через скрипт (request=None) - НЕ скрываем товары для безопасности (предотвращает случайное скрытие при повторной обработке)")
-            should_hide_products = False
-        elif getattr(settings, 'ONE_C_HIDE_MISSING_PRODUCTS', False):
+        if getattr(settings, 'ONE_C_HIDE_MISSING_PRODUCTS', False):
             # Обработка через веб-интерфейс - проверяем, нужно ли скрывать товары
             # Проверяем тип файла - скрываем товары только для import.xml
             filename_lower = filename.lower() if filename else ''
@@ -1337,14 +1333,16 @@ def process_commerceml_file(file_path, filename, request=None):
                 else:
                     logger.info(f"⚠ Нет сохраненных external_id из offers.xml (request=None или offers.xml не обработан)")
                 
-                # ВАЖНО: Скрываем товары ТОЛЬКО если были обработаны товары для этого типа каталога (processed_count > 0)
-                # И если количество ошибок не слишком большое (более 50% ошибок - не скрываем товары для безопасности)
+                # ВАЖНО: Скрываем товары, если есть валидный набор external_id для текущего каталога
+                # (из import + offers), и если количество ошибок не слишком большое
+                # (более 50% ошибок - не скрываем товары для безопасности).
                 # Это предотвращает скрытие всех товаров, если в обмене не было товаров для этого типа каталога
                 # или если было много ошибок обработки (например, "database is locked")
                 total_attempts = processed_count + errors_count
                 error_rate = errors_count / total_attempts if total_attempts > 0 else 0
+                effective_ids_count = len(processed_external_ids)
                 
-                if processed_external_ids and processed_count > 0 and error_rate < 0.5:
+                if processed_external_ids and effective_ids_count > 0 and error_rate < 0.5:
                     # Ищем товары, которые:
                     # 1. Имеют external_id (были импортированы из 1С)
                     # 2. Принадлежат к текущему типу каталога (retail или wholesale)
@@ -1391,8 +1389,12 @@ def process_commerceml_file(file_path, filename, request=None):
                             f"Все товары из 1С присутствуют в текущем обмене для каталога {current_catalog_type} "
                             f"(по external_id) - скрывать нечего"
                         )
-                elif processed_count == 0:
-                    logger.warning(f"⚠ В обмене нет товаров для каталога {current_catalog_type} (processed_count=0) - НЕ скрываем товары (предотвращает случайное скрытие всех товаров)")
+                elif effective_ids_count == 0:
+                    logger.warning(
+                        f"⚠ В обмене нет external_id для каталога {current_catalog_type} "
+                        f"(processed_count={processed_count}) - НЕ скрываем товары "
+                        f"(предотвращает случайное скрытие всех товаров)"
+                    )
                 elif error_rate >= 0.5:
                     logger.warning(f"⚠ Слишком много ошибок обработки для каталога {current_catalog_type} (ошибок: {errors_count}, обработано: {processed_count}, процент ошибок: {error_rate*100:.1f}%) - НЕ скрываем товары для безопасности (могут быть пропущены из-за ошибок)")
                 else:
