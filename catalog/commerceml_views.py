@@ -2163,8 +2163,22 @@ def process_offers_file_single_pass(root, namespaces, filename, request=None):
     RETAIL_PRICE_TYPE_ID = 'f6708032-0bd5-11f1-811f-00155d01d802'
     WHOLESALE_PRICE_TYPE_ID = 'b12f44c0-1208-11f1-811f-00155d01d802'
     stats = {
-        'retail': {'processed': 0, 'created': 0, 'updated': 0, 'errors': [], 'processed_external_ids': set()},
-        'wholesale': {'processed': 0, 'created': 0, 'updated': 0, 'errors': [], 'processed_external_ids': set()},
+        'retail': {
+            'processed': 0,
+            'created': 0,
+            'updated': 0,
+            'errors': [],
+            'processed_external_ids': set(),
+            'processed_articles': set(),
+        },
+        'wholesale': {
+            'processed': 0,
+            'created': 0,
+            'updated': 0,
+            'errors': [],
+            'processed_external_ids': set(),
+            'processed_articles': set(),
+        },
     }
 
     def _find(elem, tag):
@@ -2452,6 +2466,8 @@ def process_offers_file_single_pass(root, namespaces, filename, request=None):
 
                 stats[catalog_type]['processed'] += 1
                 stats[catalog_type]['processed_external_ids'].add(product_id)
+                if article and str(article).strip():
+                    stats[catalog_type]['processed_articles'].add(str(article).strip().upper())
             except Exception as e:
                 stats[catalog_type]['errors'].append({'offer_id': product_id, 'error': str(e)})
 
@@ -2466,6 +2482,7 @@ def process_offers_file_single_pass(root, namespaces, filename, request=None):
     if getattr(settings, 'ONE_C_HIDE_MISSING_PRODUCTS', False):
         for catalog_type in ('retail', 'wholesale'):
             ids_in_exchange = set(stats[catalog_type]['processed_external_ids'])
+            articles_in_exchange = set(stats[catalog_type].get('processed_articles', set()))
             processed_count = stats[catalog_type]['processed']
             errors_count = len(stats[catalog_type]['errors'])
             total_attempts = processed_count + errors_count
@@ -2498,6 +2515,33 @@ def process_offers_file_single_pass(root, namespaces, filename, request=None):
                     f"которых нет в текущем exchange"
                 )
                 stats[catalog_type]['deleted'] = hidden_count
+
+            # Дополнительно скрываем "старые хвосты" без external_id по артикулу.
+            # Это покрывает исторические карточки, которые не попадают под скрытие по external_id.
+            if articles_in_exchange:
+                products_no_external = Product.objects.filter(
+                    catalog_type=catalog_type,
+                    is_active=True,
+                ).filter(
+                    Q(external_id__isnull=True) | Q(external_id='')
+                ).exclude(
+                    article__isnull=True
+                ).exclude(
+                    article=''
+                )
+                stale_by_article = products_no_external.exclude(
+                    article__in=articles_in_exchange
+                ).exclude(
+                    article__in=[a.lower() for a in articles_in_exchange]
+                )
+                stale_count = stale_by_article.count()
+                if stale_count:
+                    stale_by_article.update(is_active=False, availability='out_of_stock')
+                    logger.info(
+                        f"✓ offers.xml: скрыто {stale_count} товаров без external_id "
+                        f"в каталоге {catalog_type} (по отсутствию артикула в текущем exchange)"
+                    )
+                    stats[catalog_type]['deleted'] = stats[catalog_type].get('deleted', 0) + stale_count
 
     all_errors = stats['retail']['errors'] + stats['wholesale']['errors']
     all_ids = set(stats['retail']['processed_external_ids']).union(stats['wholesale']['processed_external_ids'])
