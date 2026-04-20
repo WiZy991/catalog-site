@@ -191,6 +191,7 @@ class FarpostExportMixin:
             clean_product_name,
             build_farpost_compact_name,
             format_models_multiline,
+            farpost_csv_cell_excel_text_preserve,
         )
         import io as _io
         
@@ -275,7 +276,7 @@ class FarpostExportMixin:
                 full_name,  # Полное наименование товара (первый столбец)
                 str(product.price),
                 product.article or '',
-                product.supplier_article or '',
+                farpost_csv_cell_excel_text_preserve(product.supplier_article),
                 product.brand or '',
                 product.get_condition_display(),
                 product.get_availability_display(),

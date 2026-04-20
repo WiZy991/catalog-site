@@ -3417,6 +3417,37 @@ def generate_farpost_images(product, request=None):
     return image_urls
 
 
+def farpost_csv_cell_excel_text_preserve(value):
+    """
+    Значение для CSV (разделитель ';'), чтобы Excel не обрезал ведущие нули.
+    Чисто числовые артикулы отдаём как формулу =\"...\" — в файле остаётся полная строка цифр.
+    """
+    if value is None:
+        return ''
+    s = str(value).strip()
+    if not s:
+        return ''
+    if re.fullmatch(r'\d+', s) or re.fullmatch(r'\d+[.,]\d+', s):
+        escaped = s.replace('"', '""')
+        return f'="{escaped}"'
+    return s
+
+
+def _farpost_openpyxl_mark_columns_text(ws, cols):
+    """Столбцы cols (1-based) хранить как текст (@), чтобы Excel не «съедал» нули."""
+    if ws is None or ws.max_row < 1:
+        return
+    for row_idx in range(1, ws.max_row + 1):
+        for col_idx in cols:
+            cell = ws.cell(row=row_idx, column=col_idx)
+            v = cell.value
+            if v is None or v == '':
+                cell.number_format = '@'
+                continue
+            cell.value = str(v)
+            cell.number_format = '@'
+
+
 def generate_farpost_api_file(products, file_format='xls', request=None):
     """
     Генерирует файл для отправки в API Farpost.
@@ -3511,7 +3542,7 @@ def generate_farpost_api_file(products, file_format='xls', request=None):
                 full_name,  # Полное наименование товара (первый столбец)
                 str(product.price),
                 product.article or '',
-                product.supplier_article or '',
+                farpost_csv_cell_excel_text_preserve(product.supplier_article),
                 product.brand or '',
                 product.get_condition_display(),
                 product.get_availability_display(),
@@ -3637,6 +3668,8 @@ def generate_farpost_api_file(products, file_format='xls', request=None):
                 product.category.name if product.category else '',
                 'Onesimus',  # Производитель по умолчанию
             ])
+        # Столбцы C–D: «Артикул», «Артикул (1С)» — явный текст, иначе Excel обрезает ведущие нули
+        _farpost_openpyxl_mark_columns_text(ws, (3, 4))
         
         # Сохраняем в BytesIO
         output = io.BytesIO()
