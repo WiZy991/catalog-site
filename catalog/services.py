@@ -3441,7 +3441,7 @@ def generate_farpost_api_file(products, file_format='xls', request=None):
         # Удален столбец "Заголовок" - Фарпост не хочет его считывать
         # Столбец "Производитель" возвращен - Фарпост должен получать производителя "Onesimus" из прайс-листа
         writer.writerow([
-            'Наименование', 'Цена', 'Артикул', 'Бренд',
+            'Наименование', 'Цена', 'Артикул', 'Артикул (1С)', 'Бренд',
             'Состояние', 'Наличие', 'Количество', 'Характеристика',
             'Применимо для моделей', 'Применимо для двигателей',
             'Кросс-номера', 'Фото1', 'Фото2', 'Фото3', 'Фото4', 'Фото5',
@@ -3511,6 +3511,7 @@ def generate_farpost_api_file(products, file_format='xls', request=None):
                 full_name,  # Полное наименование товара (первый столбец)
                 str(product.price),
                 product.article or '',
+                product.supplier_article or '',
                 product.brand or '',
                 product.get_condition_display(),
                 product.get_availability_display(),
@@ -3547,7 +3548,7 @@ def generate_farpost_api_file(products, file_format='xls', request=None):
         # Удален столбец "Заголовок" - Фарпост не хочет его считывать
         # Столбец "Производитель" возвращен - Фарпост должен получать производителя "Onesimus" из прайс-листа
         headers = [
-            'Наименование', 'Цена', 'Артикул', 'Бренд',
+            'Наименование', 'Цена', 'Артикул', 'Артикул (1С)', 'Бренд',
             'Состояние', 'Наличие', 'Количество', 'Характеристика',
             'Применимо для моделей', 'Применимо для двигателей',
             'Кросс-номера', 'Фото1', 'Фото2', 'Фото3', 'Фото4', 'Фото5',
@@ -3618,6 +3619,7 @@ def generate_farpost_api_file(products, file_format='xls', request=None):
                 full_name,  # Полное наименование товара (первый столбец)
                 float(product.price),
                 product.article or '',
+                product.supplier_article or '',
                 product.brand or '',
                 product.get_condition_display(),
                 product.get_availability_display(),
