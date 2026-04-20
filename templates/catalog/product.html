@@ -145,6 +145,14 @@
 
     .image-modal__nav--prev { left: 10px; }
     .image-modal__nav--next { right: 10px; }
+
+    /* Смещаем строку метаданных вправо, как в макете */
+    .product-info__meta {
+        display: flex;
+        justify-content: flex-end;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
 </style>
 {% endblock %}
 
@@ -213,6 +221,11 @@
                 <h1 class="product-info__title">{{ display_name|default:product.name }}</h1>
                 
                 <div class="product-info__meta">
+                    {% if product.supplier_article %}
+                    <span class="product-meta__item">
+                        <strong>Артикул:</strong> {{ product.supplier_article }}
+                    </span>
+                    {% endif %}
                     {% if product.article %}
                     <span class="product-meta__item">
                         <strong>Номер:</strong> {{ product.article }}

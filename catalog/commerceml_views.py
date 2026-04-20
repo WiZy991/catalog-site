@@ -2256,8 +2256,8 @@ def process_offers_file_single_pass(root, namespaces, filename, request=None):
                 continue
         return total if found else 0
 
-    def _extract_article(offer_elem):
-        # 1) Пытаемся найти Артикул1 в ХарактеристикиТовара
+    def _extract_supplier_article(offer_elem):
+        # 1) Пытаемся найти Артикул1/Артикул в ХарактеристикиТовара
         characteristics_elem = _find(offer_elem, 'ХарактеристикиТовара')
         if characteristics_elem is not None:
             for char_elem in characteristics_elem.findall('.//*'):
@@ -2267,7 +2267,7 @@ def process_offers_file_single_pass(root, namespaces, filename, request=None):
                     continue
                 char_name = name_elem.text.strip().lower()
                 char_value = value_elem.text.strip()
-                if char_name in ['артикул1', 'артикул 1', 'article1', 'article 1'] and char_value:
+                if char_name in ['артикул1', 'артикул 1', 'article1', 'article 1', 'артикул', 'article'] and char_value:
                     return char_value
 
         # 2) Если не нашли, пробуем взять из имени по шаблону: "Название (БРЕНД, АРТИКУЛ, ...)"
@@ -2278,6 +2278,25 @@ def process_offers_file_single_pass(root, namespaces, filename, request=None):
             parts = [p.strip() for p in inside.split(',') if p.strip()]
             if len(parts) >= 2:
                 return parts[1]
+        return ''
+
+    def _extract_number(offer_elem):
+        # Ищем поле "Номер" из характеристик/свойств — это отображаемый номер в карточке.
+        for root_name in ('ХарактеристикиТовара', 'ЗначенияСвойств'):
+            root_elem = _find(offer_elem, root_name)
+            if root_elem is None:
+                continue
+            for item in root_elem.findall('.//*'):
+                name_elem = _find(item, 'Наименование')
+                value_elem = _find(item, 'Значение')
+                if name_elem is None or value_elem is None or not name_elem.text or not value_elem.text:
+                    continue
+                n = name_elem.text.strip().lower()
+                v = value_elem.text.strip()
+                if not v:
+                    continue
+                if n in ('номер', 'number', 'номер детали', 'part number', 'partnumber'):
+                    return v
         return ''
 
     def _extract_brand(offer_elem):
@@ -2404,7 +2423,9 @@ def process_offers_file_single_pass(root, namespaces, filename, request=None):
         name_elem = _find(offer_elem, 'Наименование')
         raw_offer_name = name_elem.text.strip() if (name_elem is not None and name_elem.text) else ''
         offer_name = _clean_offer_product_name(raw_offer_name) if raw_offer_name else product_id
-        article = _extract_article(offer_elem)
+        supplier_article = _extract_supplier_article(offer_elem)
+        number_article = _extract_number(offer_elem)
+        article = number_article or supplier_article
         brand = _extract_brand(offer_elem)
         characteristics_text, applicability_text = _extract_characteristics_and_applicability(offer_elem)
         quantity = _parse_quantity(offer_elem)
@@ -2427,6 +2448,7 @@ def process_offers_file_single_pass(root, namespaces, filename, request=None):
                     product = Product(
                         external_id=product_id,
                         article=article,
+                        supplier_article=supplier_article,
                         brand=brand,
                         name=offer_name,
                         category=category,
@@ -2441,6 +2463,8 @@ def process_offers_file_single_pass(root, namespaces, filename, request=None):
                 product.name = offer_name
                 if article:
                     product.article = article
+                if supplier_article:
+                    product.supplier_article = supplier_article
                 if brand:
                     product.brand = brand
                 product.characteristics = characteristics_text
@@ -2459,7 +2483,7 @@ def process_offers_file_single_pass(root, namespaces, filename, request=None):
                     save_with_retry(product)
                     stats[catalog_type]['created'] += 1
                 else:
-                    fields = ['name', 'article', 'brand', 'characteristics', 'applicability', 'quantity', 'availability', 'is_active', 'category']
+                    fields = ['name', 'article', 'supplier_article', 'brand', 'characteristics', 'applicability', 'quantity', 'availability', 'is_active', 'category']
                     fields.append('price' if catalog_type == 'retail' else 'wholesale_price')
                     save_with_retry(product, update_fields=fields)
                     stats[catalog_type]['updated'] += 1

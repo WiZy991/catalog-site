@@ -2559,19 +2559,17 @@ def _product_retail_cross_compact_match(k_orig: str, k_compact: str):
 
 
 def _product_retail_by_article_compact(k_compact: str):
-    """article после удаления дефисов/пробелов = k_compact (retail, затем wholesale)."""
+    """article/supplier_article после удаления дефисов/пробелов = k_compact."""
     if not k_compact or len(k_compact) < 4:
         return None
-    norm = Lower(
-        Replace(Replace('article', Value('-'), Value('')), Value(' '), Value(''))
-    )
+    norm_article = Lower(Replace(Replace('article', Value('-'), Value('')), Value(' '), Value('')))
+    norm_supplier = Lower(Replace(Replace('supplier_article', Value('-'), Value('')), Value(' '), Value('')))
     for catalog_type in ('retail', 'wholesale'):
         p = (
             Product.objects.filter(catalog_type=catalog_type)
-            .exclude(article='')
-            .exclude(article__isnull=True)
-            .annotate(_art_c=norm)
-            .filter(_art_c=k_compact.lower())
+            .exclude(Q(article='') & Q(supplier_article=''))
+            .annotate(_art_c=norm_article, _sup_c=norm_supplier)
+            .filter(Q(_art_c=k_compact.lower()) | Q(_sup_c=k_compact.lower()))
             .first()
         )
         if p:
@@ -2580,12 +2578,15 @@ def _product_retail_by_article_compact(k_compact: str):
 
 
 def _product_retail_by_article_or_cross(key: str):
-    """Точное совпадение с article или одним из кросс-номеров (поле через запятую)."""
+    """Точное совпадение с article/supplier_article или одним из кросс-номеров."""
     k = (key or '').strip().lstrip('/')
     if not k:
         return None
     for catalog_type in ('retail', 'wholesale'):
-        p = Product.objects.filter(article__iexact=k, catalog_type=catalog_type).first()
+        p = Product.objects.filter(
+            Q(article__iexact=k) | Q(supplier_article__iexact=k),
+            catalog_type=catalog_type
+        ).first()
         if p:
             return p
     kc = _oem_compact(k)
@@ -2677,12 +2678,16 @@ def _product_by_main_article_prefix(code: str):
     code = (code or '').strip().lstrip('/')
     if not code or '/' in code or len(code) < 4:
         return None
-    prefix_q = Q(article__istartswith=code + '/') | Q(article__istartswith=code + '-')
+    prefix_q = (
+        Q(article__istartswith=code + '/')
+        | Q(article__istartswith=code + '-')
+        | Q(supplier_article__istartswith=code + '/')
+        | Q(supplier_article__istartswith=code + '-')
+    )
     for catalog_type in ('retail', 'wholesale'):
         p = (
             Product.objects.filter(catalog_type=catalog_type)
-            .exclude(article='')
-            .exclude(article__isnull=True)
+            .exclude(Q(article='') & Q(supplier_article=''))
             .filter(prefix_q)
             .order_by('pk')
             .first()
@@ -2705,12 +2710,15 @@ def _product_by_leading_numeric_article(code: str):
         | Q(article__istartswith=code + '/')
         | Q(article__istartswith=code + '-')
         | Q(article__istartswith=code + ' ')
+        | Q(supplier_article__istartswith=code + '(')
+        | Q(supplier_article__istartswith=code + '/')
+        | Q(supplier_article__istartswith=code + '-')
+        | Q(supplier_article__istartswith=code + ' ')
     )
     for catalog_type in ('retail', 'wholesale'):
         p = (
             Product.objects.filter(catalog_type=catalog_type)
-            .exclude(article='')
-            .exclude(article__isnull=True)
+            .exclude(Q(article='') & Q(supplier_article=''))
             .filter(boundary)
             .order_by('pk')
             .first()
