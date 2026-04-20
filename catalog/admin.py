@@ -192,6 +192,9 @@ class FarpostExportMixin:
             build_farpost_compact_name,
             format_models_multiline,
             farpost_csv_cell_excel_text_preserve,
+            _farpost_char_key_is_models_column,
+            _farpost_char_key_is_engines_column,
+            _farpost_char_key_is_cross_column,
         )
         import io as _io
         
@@ -229,16 +232,17 @@ class FarpostExportMixin:
                 for k, v in char_list:
                     key_norm = str(k).strip().lower()
                     val_str = str(v).strip()
-                    if key_norm in ('кросс-номер', 'кросс номер', 'cross numbers', 'cross_numbers', 'примечание', 'note'):
+                    if _farpost_char_key_is_cross_column(key_norm):
                         extracted_cross.extend([x.strip() for x in val_str.replace('\n', ',').split(',') if x.strip()])
                         continue
                     if key_norm in ('артикул2', 'article2', 'oem', 'oem номер', 'oem-номер'):
+                        extracted_cross.extend([x.strip() for x in val_str.replace('\n', ',').split(',') if x.strip()])
                         continue
-                    if key_norm in ('кузов', 'body'):
+                    if _farpost_char_key_is_models_column(key_norm):
                         if not models_value:
                             models_value = val_str
                         continue
-                    if key_norm in ('двигатель', 'engine'):
+                    if _farpost_char_key_is_engines_column(key_norm):
                         if not engines_value:
                             engines_value = val_str
                         continue

@@ -3377,6 +3377,42 @@ def format_models_multiline(value: str) -> str:
     return '\n'.join(out)
 
 
+def _farpost_char_key_is_engines_column(key_norm: str) -> bool:
+    """Ключ характеристики 1С → колонка «Применимо для двигателей» в Farpost."""
+    kn = (key_norm or '').strip().lower()
+    if kn in ('двигатель', 'engine', 'motor', 'мотор'):
+        return True
+    if 'двигател' in kn:
+        return True
+    if 'применимо' in kn and 'двигател' in kn:
+        return True
+    return False
+
+
+def _farpost_char_key_is_models_column(key_norm: str) -> bool:
+    """Ключ характеристики 1С → колонка «Применимо для моделей» в Farpost."""
+    kn = (key_norm or '').strip().lower()
+    if _farpost_char_key_is_engines_column(kn):
+        return False
+    if kn in ('кузов', 'body', 'тип кузова'):
+        return True
+    if 'применимо' in kn and 'модел' in kn:
+        return True
+    return False
+
+
+def _farpost_char_key_is_cross_column(key_norm: str) -> bool:
+    """Ключ характеристики 1С → колонка «Кросс-номера» (в т.ч. синонимы из свойств)."""
+    kn = (key_norm or '').strip().lower()
+    if kn in ('примечание', 'note'):
+        return True
+    if 'кросс' in kn or 'cross' in kn:
+        return True
+    if 'аналог' in kn or 'взаимозамен' in kn:
+        return True
+    return False
+
+
 def generate_farpost_description(product, site_url=''):
     """
     Генерирует описание для Farpost.
@@ -3499,17 +3535,17 @@ def generate_farpost_api_file(products, file_format='xls', request=None):
                 for k, v in char_list:
                     key_norm = str(k).strip().lower()
                     val_str = str(v).strip()
-                    if key_norm in ('кросс-номер', 'кросс номер', 'cross numbers', 'cross_numbers', 'примечание', 'note'):
+                    if _farpost_char_key_is_cross_column(key_norm):
                         extracted_cross.extend([x.strip() for x in val_str.replace('\n', ',').split(',') if x.strip()])
                         continue
                     if key_norm in ('артикул2', 'article2', 'oem', 'oem номер', 'oem-номер'):
-                        # OEM должен идти только в отдельные поля, не в колонку "Характеристика"
+                        extracted_cross.extend([x.strip() for x in val_str.replace('\n', ',').split(',') if x.strip()])
                         continue
-                    if key_norm in ('кузов', 'body'):
+                    if _farpost_char_key_is_models_column(key_norm):
                         if not models_value:
                             models_value = val_str
                         continue
-                    if key_norm in ('двигатель', 'engine'):
+                    if _farpost_char_key_is_engines_column(key_norm):
                         if not engines_value:
                             engines_value = val_str
                         continue
@@ -3608,16 +3644,17 @@ def generate_farpost_api_file(products, file_format='xls', request=None):
                 for k, v in char_list:
                     key_norm = str(k).strip().lower()
                     val_str = str(v).strip()
-                    if key_norm in ('кросс-номер', 'кросс номер', 'cross numbers', 'cross_numbers', 'примечание', 'note'):
+                    if _farpost_char_key_is_cross_column(key_norm):
                         extracted_cross.extend([x.strip() for x in val_str.replace('\n', ',').split(',') if x.strip()])
                         continue
                     if key_norm in ('артикул2', 'article2', 'oem', 'oem номер', 'oem-номер'):
+                        extracted_cross.extend([x.strip() for x in val_str.replace('\n', ',').split(',') if x.strip()])
                         continue
-                    if key_norm in ('кузов', 'body'):
+                    if _farpost_char_key_is_models_column(key_norm):
                         if not models_value:
                             models_value = val_str
                         continue
-                    if key_norm in ('двигатель', 'engine'):
+                    if _farpost_char_key_is_engines_column(key_norm):
                         if not engines_value:
                             engines_value = val_str
                         continue
