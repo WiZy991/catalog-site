@@ -2270,7 +2270,27 @@ def process_offers_file_single_pass(root, namespaces, filename, request=None):
                 if char_name in ['артикул1', 'артикул 1', 'article1', 'article 1', 'артикул', 'article'] and char_value:
                     return char_value
 
-        # 2) Если не нашли, пробуем взять из имени по шаблону: "Название (БРЕНД, АРТИКУЛ, ...)"
+        # 2) Пытаемся найти Артикул1/Артикул в ЗначенияСвойств
+        props_elem = _find(offer_elem, 'ЗначенияСвойств')
+        if props_elem is not None:
+            if namespace:
+                prop_items = props_elem.findall(f'{{{namespace}}}ЗначенияСвойства')
+            else:
+                prop_items = []
+            if not prop_items:
+                prop_items = props_elem.findall('ЗначенияСвойства')
+
+            for item in prop_items:
+                name_elem = _find(item, 'Наименование')
+                value_elem = _find(item, 'Значение')
+                if name_elem is None or value_elem is None or not name_elem.text or not value_elem.text:
+                    continue
+                prop_name = name_elem.text.strip().lower()
+                prop_value = value_elem.text.strip()
+                if prop_name in ['артикул1', 'артикул 1', 'article1', 'article 1', 'артикул', 'article'] and prop_value:
+                    return prop_value
+
+        # 3) Если не нашли, пробуем взять из имени по шаблону: "Название (БРЕНД, АРТИКУЛ, ...)"
         name_elem = _find(offer_elem, 'Наименование')
         raw_name = name_elem.text.strip() if (name_elem is not None and name_elem.text) else ''
         if raw_name and '(' in raw_name and ')' in raw_name:
