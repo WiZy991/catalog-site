@@ -456,14 +456,16 @@ class ProductAdmin(ImportExportModelAdmin, FarpostExportMixin, admin.ModelAdmin)
     resource_class = ProductResource
     list_display = [
         'image_preview', 'name', 'external_id', 'article', 'brand', 'category',
-        'retail_price_from_pair', 'price', 'wholesale_price', 'availability', 'is_active', 'created_at'
+        'display_retail_price', 'wholesale_price', 'availability', 'is_active', 'created_at'
     ]
     list_display_links = ['name']
     list_filter = [
         'catalog_type', 'is_active', 'is_featured', 'condition', 'availability', 'category', 'brand',
         PriceFilter, PriceTypeFilter
     ]
-    list_editable = ['price', 'wholesale_price', 'availability', 'is_active']
+    # price убран из list_editable: в списке показывается «эффективная» розница (в т.ч. с пары retail),
+    # правка розничной цены — на странице товара (для опта поле price в БД часто 0).
+    list_editable = ['wholesale_price', 'availability', 'is_active']
     search_fields = ['name', 'external_id', 'article', 'brand', 'cross_numbers', 'applicability']
     prepopulated_fields = {'slug': ('name',)}
     autocomplete_fields = ['category']
@@ -573,16 +575,12 @@ class ProductAdmin(ImportExportModelAdmin, FarpostExportMixin, admin.ModelAdmin)
     delete_all_products.short_description = 'Удалить ВСЕ товары'
     save_on_top = True
 
-    def retail_price_from_pair(self, obj):
-        """Розничная цена из пары (основной каталог): для оптовой строки с пустой розницей в БД."""
-        if obj.catalog_type == 'retail':
-            return '—'
-        rp = obj.get_retail_counterpart()
-        if rp and rp.price and rp.price > 0:
-            return rp.price
-        return '—'
+    def display_retail_price(self, obj):
+        """Розничная цена как на сайте и в Farpost: для опта — с пары из основного каталога."""
+        from .services import farpost_export_unit_price
+        return farpost_export_unit_price(obj)
 
-    retail_price_from_pair.short_description = 'Розница (пара)'
+    display_retail_price.short_description = Product._meta.get_field('price').verbose_name
 
     def get_actions(self, request):
         """Переопределяем actions, чтобы использовать наш delete_selected вместо стандартного."""
