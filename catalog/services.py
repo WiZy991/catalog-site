@@ -3221,7 +3221,14 @@ def build_farpost_compact_name(product):
         return s.split('/')[0].strip()
     # Укорачиваем бренд/тип, если там перечисление через "/"
     title_base = _first_token_by_slash(title_base)
-    # Дополнительно ограничиваем первые слова до "Тип Бренд Артикул"
+    supplier_article = str(getattr(product, 'supplier_article', '') or '').strip()
+    if supplier_article:
+        # В заголовках не показываем «Артикул (1С)»: убираем точные вхождения как отдельный токен.
+        esc = re.escape(supplier_article)
+        title_base = re.sub(rf'(?<!\w){esc}(?!\w)', ' ', title_base, flags=re.IGNORECASE)
+        title_base = re.sub(r'\s+', ' ', title_base).strip(' ,')
+
+    # Дополнительно ограничиваем первые слова до "Тип Бренд Номер"
     # чтобы не тащить длинные хвосты, пришедшие из 1С в первой секции до запятой.
     try:
         import re as _re

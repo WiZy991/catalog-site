@@ -428,6 +428,11 @@
                 <h1 class="product-info__title">{{ display_name|default:product.name }}</h1>
                 
                 <div class="product-info__meta">
+                    {% if product.supplier_article %}
+                    <span class="product-info__meta-item">
+                        <strong>Артикул:</strong> {{ product.supplier_article }}
+                    </span>
+                    {% endif %}
                     {% if product.article %}
                     <span class="product-info__meta-item">
                         <strong>Номер:</strong> {{ product.article }}

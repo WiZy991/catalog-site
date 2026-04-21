@@ -600,41 +600,48 @@
     .products-table th:nth-child(1),
     .products-table td:nth-child(1) { 
         width: 10%;
-        min-width: 120px;
-        max-width: 150px;
+        min-width: 110px;
+        max-width: 140px;
     } /* Код детали */
     
     .products-table th:nth-child(2),
     .products-table td:nth-child(2) { 
-        width: 35%;
-        min-width: 250px;
-    } /* Описание */
+        width: 10%;
+        min-width: 110px;
+        max-width: 140px;
+    } /* Артикул */
     
     .products-table th:nth-child(3),
     .products-table td:nth-child(3) { 
-        width: 15%;
-        min-width: 140px;
-        max-width: 180px;
-    } /* Наличие */
+        width: 30%;
+        min-width: 240px;
+    } /* Описание */
     
     .products-table th:nth-child(4),
     .products-table td:nth-child(4) { 
+        width: 14%;
+        min-width: 130px;
+        max-width: 170px;
+    } /* Наличие */
+    
+    .products-table th:nth-child(5),
+    .products-table td:nth-child(5) { 
         width: 8%;
         min-width: 80px;
         max-width: 100px;
         padding-right: 0.2rem !important;
     } /* Цена */
     
-    .products-table th:nth-child(5),
-    .products-table td:nth-child(5) { 
-        width: 24%;
-        min-width: 200px;
+    .products-table th:nth-child(6),
+    .products-table td:nth-child(6) { 
+        width: 20%;
+        min-width: 190px;
         padding-left: 0.3rem !important;
     } /* Количество + Заказ */
     
     /* Выравнивание колонки Количество по верху - ПРИНУДИТЕЛЬНО */
-    .products-table th:nth-child(5),
-    .products-table td:nth-child(5),
+    .products-table th:nth-child(6),
+    .products-table td:nth-child(6),
     .products-table__quantity {
         vertical-align: top !important;
         padding-top: 0.5rem !important;
@@ -2057,6 +2064,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         <thead>
                             <tr>
                                 <th>Код детали</th>
+                                <th>Артикул</th>
                                 <th>Описание</th>
                                 <th>Наличие</th>
                                 <th>Цена</th>
@@ -2069,6 +2077,13 @@ document.addEventListener('DOMContentLoaded', function() {
                                 <td class="products-table__article" title="{% if product.article %}{{ product.article }}{% endif %}">
                                     {% if product.article %}
                                         {{ product.article|truncatechars:20 }}
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endif %}
+                                </td>
+                                <td class="products-table__article" title="{% if product.supplier_article %}{{ product.supplier_article }}{% endif %}">
+                                    {% if product.supplier_article %}
+                                        {{ product.supplier_article|truncatechars:20 }}
                                     {% else %}
                                         <span class="text-muted">—</span>
                                     {% endif %}

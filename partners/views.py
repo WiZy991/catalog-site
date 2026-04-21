@@ -622,6 +622,7 @@ class PublicPartnerCatalogView(ListView):
                     Q(name__contains=word) |
                     # Остальные поля - регистронезависимый поиск
                     Q(article__icontains=word) |
+                    Q(supplier_article__icontains=word) |
                     Q(brand__icontains=word) |
                     Q(cross_numbers__icontains=word) |
                     Q(applicability__icontains=word) |
@@ -629,6 +630,7 @@ class PublicPartnerCatalogView(ListView):
                     Q(short_description__icontains=word) |
                     # Также пробуем iregex для надежности
                     Q(article__iregex=word_escaped) |
+                    Q(supplier_article__iregex=word_escaped) |
                     Q(brand__iregex=word_escaped) |
                     Q(cross_numbers__iregex=word_escaped) |
                     Q(applicability__iregex=word_escaped) |
@@ -903,6 +905,7 @@ class PartnerCatalogView(PartnerRequiredMixin, ListView):
                     Q(name__contains=word) |
                     # Остальные поля - регистронезависимый поиск
                     Q(article__icontains=word) |
+                    Q(supplier_article__icontains=word) |
                     Q(brand__icontains=word) |
                     Q(cross_numbers__icontains=word) |
                     Q(applicability__icontains=word) |
@@ -910,6 +913,7 @@ class PartnerCatalogView(PartnerRequiredMixin, ListView):
                     Q(short_description__icontains=word) |
                     # Также пробуем iregex для надежности
                     Q(article__iregex=word_escaped) |
+                    Q(supplier_article__iregex=word_escaped) |
                     Q(brand__iregex=word_escaped) |
                     Q(cross_numbers__iregex=word_escaped) |
                     Q(applicability__iregex=word_escaped) |
