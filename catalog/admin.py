@@ -576,9 +576,22 @@ class ProductAdmin(ImportExportModelAdmin, FarpostExportMixin, admin.ModelAdmin)
     save_on_top = True
 
     def display_retail_price(self, obj):
-        """Розничная цена как на сайте и в Farpost: для опта — с пары из основного каталога."""
+        """Розничная цена (в т.ч. с пары для опта); оформление как у list_editable — белое поле ввода."""
         from .services import farpost_export_unit_price
-        return farpost_export_unit_price(obj)
+        v = farpost_export_unit_price(obj)
+        try:
+            vs = f'{float(v):.2f}'.replace('.', ',')
+        except (TypeError, ValueError):
+            vs = '0,00'
+        return format_html(
+            '<input type="text" readonly tabindex="-1" '
+            'class="vTextField" '
+            'style="width:9em;text-align:right;background:#fff;color:#111;'
+            'border:1px solid #ccc;border-radius:2px;padding:5px 8px;box-sizing:border-box;" '
+            'value="{}" '
+            'title="Для оптовой записи — розница из пары в основном каталоге. Правка — в карточке товара." />',
+            vs,
+        )
 
     display_retail_price.short_description = Product._meta.get_field('price').verbose_name
 
