@@ -3336,7 +3336,15 @@ def build_farpost_compact_name(product):
         if hint:
             compact_engine = _first_engine(hint)
     chunks = [x for x in [title_base, article, oem, compact_model, compact_engine, characteristic_raw] if x]
-    return ', '.join(chunks) if chunks else base_name
+    result = ', '.join(chunks) if chunks else base_name
+
+    # Финальная гарантия: «Артикул (1С)» не должен попадать в заголовок нигде.
+    if supplier_article:
+        esc = re.escape(supplier_article)
+        result = re.sub(rf'(?<!\w){esc}(?!\w)', ' ', str(result or ''), flags=re.IGNORECASE)
+        result = re.sub(r'\s+', ' ', result)
+        result = re.sub(r'\s*,\s*', ', ', result).strip(' ,')
+    return result
 
 
 def format_models_multiline(value: str) -> str:
