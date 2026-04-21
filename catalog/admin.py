@@ -193,6 +193,7 @@ class FarpostExportMixin:
             format_models_multiline,
             farpost_csv_cell_excel_text_preserve,
             farpost_export_unit_price,
+            farpost_export_brand,
             _farpost_char_key_is_models_column,
             _farpost_char_key_is_engines_column,
             _farpost_char_key_is_cross_column,
@@ -287,7 +288,7 @@ class FarpostExportMixin:
                 str(export_price),
                 product.article or '',
                 farpost_csv_cell_excel_text_preserve(product.supplier_article),
-                product.brand or '',
+                farpost_export_brand(product),
                 product.get_condition_display(),
                 product.get_availability_display(),
                 quantity,
@@ -454,8 +455,8 @@ class ProductAdmin(ImportExportModelAdmin, FarpostExportMixin, admin.ModelAdmin)
     """Админка для товаров."""
     resource_class = ProductResource
     list_display = [
-        'image_preview', 'name', 'external_id', 'article', 'brand', 'category', 
-        'price', 'wholesale_price', 'availability', 'is_active', 'created_at'
+        'image_preview', 'name', 'external_id', 'article', 'brand', 'category',
+        'retail_price_from_pair', 'price', 'wholesale_price', 'availability', 'is_active', 'created_at'
     ]
     list_display_links = ['name']
     list_filter = [
@@ -571,7 +572,18 @@ class ProductAdmin(ImportExportModelAdmin, FarpostExportMixin, admin.ModelAdmin)
     
     delete_all_products.short_description = 'Удалить ВСЕ товары'
     save_on_top = True
-    
+
+    def retail_price_from_pair(self, obj):
+        """Розничная цена из пары (основной каталог): для оптовой строки с пустой розницей в БД."""
+        if obj.catalog_type == 'retail':
+            return '—'
+        rp = obj.get_retail_counterpart()
+        if rp and rp.price and rp.price > 0:
+            return rp.price
+        return '—'
+
+    retail_price_from_pair.short_description = 'Розница (пара)'
+
     def get_actions(self, request):
         """Переопределяем actions, чтобы использовать наш delete_selected вместо стандартного."""
         actions = super().get_actions(request)

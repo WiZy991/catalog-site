@@ -291,6 +291,43 @@ class Product(models.Model):
                 return retail.images.all().order_by('-is_main', 'order')
         return own_images
 
+    def get_retail_counterpart(self):
+        """
+        Розничная запись того же товара из 1С.
+        Для catalog_type=retail возвращает self; для wholesale — пару из основного каталога
+        (тот же external_id, иначе база UUID до «#», иначе совпадение по артикулу).
+        """
+        if self.catalog_type == 'retail':
+            return self
+        eid = (self.external_id or '').strip()
+        if eid:
+            r = Product.objects.filter(catalog_type='retail', external_id=eid).first()
+            if r:
+                return r
+            if '#' in eid:
+                base = eid.split('#', 1)[0]
+                r = Product.objects.filter(catalog_type='retail', external_id=base).first()
+                if r:
+                    return r
+                r = (
+                    Product.objects.filter(
+                        catalog_type='retail',
+                        external_id__startswith=f'{base}#',
+                    )
+                    .order_by('-price', '-is_active', '-id')
+                    .first()
+                )
+                if r:
+                    return r
+        art = (self.article or '').strip()
+        if art:
+            return (
+                Product.objects.filter(catalog_type='retail', article=art)
+                .order_by('-price', '-is_active', '-id')
+                .first()
+            )
+        return None
+
     def get_meta_title(self):
         if self.meta_title:
             return self.meta_title

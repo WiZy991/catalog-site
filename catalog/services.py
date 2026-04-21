@@ -3466,20 +3466,73 @@ def generate_farpost_images(product, request=None):
 
 def farpost_export_unit_price(product):
     """
-    Цена для прайса Farpost: у оптовой позиции — wholesale_price, если задана и > 0,
-    иначе розничная price (как на сайте для retail).
+    Розничная цена для Farpost (как на витрине): всегда из записи основного каталога (retail),
+    для оптовой строки — с пары get_retail_counterpart(), без подстановки оптовой цены.
     """
     from decimal import Decimal
     zero = Decimal('0')
-    ct = (getattr(product, 'catalog_type', None) or 'retail') or 'retail'
-    if ct == 'wholesale':
-        w = getattr(product, 'wholesale_price', None)
-        if w is not None and w > zero:
-            return w
+    try:
+        rc = product.get_retail_counterpart()
+    except Exception:
+        rc = None
+    if rc is not None and rc.price is not None and rc.price > zero:
+        return rc.price
     p = getattr(product, 'price', None)
     if p is not None and p > zero:
         return p
     return zero
+
+
+def farpost_export_brand(product):
+    """
+    Марка для колонки «Бренд» в Farpost: одно слово (TOYOTA), без хвоста из номеров/применимости.
+    Берётся из пары retail и из поля brand; при «мусоре» — первое осмысленное слово.
+    """
+    _SKIP = frozenset({
+        'амортизатор', 'стартер', 'генератор', 'насос', 'фильтр', 'датчик',
+        'колодки', 'тормоз', 'рулев', 'привод', 'аккумулятор', 'лампа', 'реле',
+        'подшипник', 'ремкомплект', 'сайлентблок', 'втулка', 'шрус', 'муфта',
+    })
+    sources = []
+    try:
+        rc = product.get_retail_counterpart()
+        if rc and rc.pk != product.pk and rc.brand:
+            sources.append(rc.brand)
+    except Exception:
+        pass
+    if product.brand:
+        sources.append(product.brand)
+    for raw in sources:
+        raw = str(raw or '').strip()
+        if not raw:
+            continue
+        for part in re.split(r'[\s,;/|]+', raw):
+            p = part.strip()
+            if len(p) < 2 or len(p) > 45:
+                continue
+            if re.fullmatch(r'[\d\-\s./]+', p):
+                continue
+            if not re.search(r'[A-Za-zА-Яа-яЁё]', p):
+                continue
+            if p.lower() in _SKIP:
+                continue
+            return p.upper() if p.isascii() else p
+    name = str(product.name or '').strip()
+    toks = [t for t in re.split(r'[\s,]+', name) if t]
+    for i, t in enumerate(toks):
+        tl = t.lower()
+        if tl in _SKIP and i + 1 < len(toks):
+            cand = toks[i + 1].strip()
+            if len(cand) >= 2 and re.search(r'[A-Za-zА-Яа-яЁё]', cand) and not re.fullmatch(r'[\d\-\s./]+', cand):
+                return cand.upper() if cand.isascii() else cand
+    for t in toks:
+        if t.lower() in _SKIP:
+            continue
+        if len(t) < 2 or re.fullmatch(r'[\d\-\s./]+', t):
+            continue
+        if re.search(r'[A-Za-zА-Яа-яЁё]', t):
+            return t.upper() if t.isascii() else t
+    return ''
 
 
 def farpost_csv_cell_excel_text_preserve(value):
@@ -3612,7 +3665,7 @@ def generate_farpost_api_file(products, file_format='xls', request=None):
                 str(farpost_export_unit_price(product)),
                 product.article or '',
                 farpost_csv_cell_excel_text_preserve(product.supplier_article),
-                product.brand or '',
+                farpost_export_brand(product),
                 product.get_condition_display(),
                 product.get_availability_display(),
                 quantity,
@@ -3723,7 +3776,7 @@ def generate_farpost_api_file(products, file_format='xls', request=None):
                 float(farpost_export_unit_price(product)),
                 product.article or '',
                 product.supplier_article or '',
-                product.brand or '',
+                farpost_export_brand(product),
                 product.get_condition_display(),
                 product.get_availability_display(),
                 quantity,
@@ -3789,8 +3842,9 @@ def generate_farpost_api_file(products, file_format='xls', request=None):
             # ВАЖНО: Производитель "Onesimus" - Фарпост должен получать производителя из прайс-листа
             SubElement(offer_elem, 'vendor').text = 'Onesimus'
             
-            if product.brand:
-                SubElement(offer_elem, 'manufacturer').text = product.brand
+            _brand = farpost_export_brand(product)
+            if _brand:
+                SubElement(offer_elem, 'manufacturer').text = _brand
             
             SubElement(offer_elem, 'condition').text = product.get_condition_display()
             
