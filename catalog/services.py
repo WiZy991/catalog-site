@@ -3401,6 +3401,17 @@ def _farpost_char_key_is_models_column(key_norm: str) -> bool:
     return False
 
 
+def _farpost_char_key_skip_duplicate_of_article_columns(key_norm: str) -> bool:
+    """Ключи 1С, которые уже выведены в «Артикул»/«Артикул (1С)» — не дублировать в «Характеристика»."""
+    kn = (key_norm or '').strip().lower()
+    if kn in (
+        'номер', 'number', 'номер детали', 'part number', 'partnumber',
+        'артикул', 'article', 'артикул 1', 'article 1',
+    ):
+        return True
+    return False
+
+
 def _farpost_char_key_is_cross_column(key_norm: str) -> bool:
     """Ключ характеристики 1С → колонка «Кросс-номера» (в т.ч. синонимы из свойств)."""
     kn = (key_norm or '').strip().lower()
@@ -3453,6 +3464,24 @@ def generate_farpost_images(product, request=None):
     return image_urls
 
 
+def farpost_export_unit_price(product):
+    """
+    Цена для прайса Farpost: у оптовой позиции — wholesale_price, если задана и > 0,
+    иначе розничная price (как на сайте для retail).
+    """
+    from decimal import Decimal
+    zero = Decimal('0')
+    ct = (getattr(product, 'catalog_type', None) or 'retail') or 'retail'
+    if ct == 'wholesale':
+        w = getattr(product, 'wholesale_price', None)
+        if w is not None and w > zero:
+            return w
+    p = getattr(product, 'price', None)
+    if p is not None and p > zero:
+        return p
+    return zero
+
+
 def farpost_csv_cell_excel_text_preserve(value):
     """
     Значение для CSV (разделитель ';'), чтобы Excel не обрезал ведущие нули.
@@ -3501,7 +3530,9 @@ def generate_farpost_api_file(products, file_format='xls', request=None):
     if file_format == 'csv':
         # CSV формат
         output = io.StringIO()
-        writer = csv.writer(output, delimiter=';')
+        # QUOTE_ALL: в «Наименовании» есть запятые (build_farpost_compact_name) — иначе Excel
+        # открывает файл с разделителем «запятая» и сдвигает столбцы (цена/бренд ломаются).
+        writer = csv.writer(output, delimiter=';', quoting=csv.QUOTE_ALL)
         
         # Заголовки (адаптируйте под формат Farpost)
         # ВАЖНО: Первым столбцом должен быть "Наименование" - Фарпост с первого столбца берет наименование товара
@@ -3535,6 +3566,8 @@ def generate_farpost_api_file(products, file_format='xls', request=None):
                 for k, v in char_list:
                     key_norm = str(k).strip().lower()
                     val_str = str(v).strip()
+                    if _farpost_char_key_skip_duplicate_of_article_columns(key_norm):
+                        continue
                     if _farpost_char_key_is_cross_column(key_norm):
                         extracted_cross.extend([x.strip() for x in val_str.replace('\n', ',').split(',') if x.strip()])
                         continue
@@ -3576,7 +3609,7 @@ def generate_farpost_api_file(products, file_format='xls', request=None):
             
             writer.writerow([
                 full_name,  # Полное наименование товара (первый столбец)
-                str(product.price),
+                str(farpost_export_unit_price(product)),
                 product.article or '',
                 farpost_csv_cell_excel_text_preserve(product.supplier_article),
                 product.brand or '',
@@ -3644,6 +3677,8 @@ def generate_farpost_api_file(products, file_format='xls', request=None):
                 for k, v in char_list:
                     key_norm = str(k).strip().lower()
                     val_str = str(v).strip()
+                    if _farpost_char_key_skip_duplicate_of_article_columns(key_norm):
+                        continue
                     if _farpost_char_key_is_cross_column(key_norm):
                         extracted_cross.extend([x.strip() for x in val_str.replace('\n', ',').split(',') if x.strip()])
                         continue
@@ -3685,7 +3720,7 @@ def generate_farpost_api_file(products, file_format='xls', request=None):
             
             ws.append([
                 full_name,  # Полное наименование товара (первый столбец)
-                float(product.price),
+                float(farpost_export_unit_price(product)),
                 product.article or '',
                 product.supplier_article or '',
                 product.brand or '',
@@ -3742,7 +3777,7 @@ def generate_farpost_api_file(products, file_format='xls', request=None):
             # Фарпост должен видеть полное наименование товара
             full_name = build_farpost_compact_name(product)
             SubElement(offer_elem, 'name').text = full_name
-            SubElement(offer_elem, 'price').text = str(product.price)
+            SubElement(offer_elem, 'price').text = str(farpost_export_unit_price(product))
             SubElement(offer_elem, 'currencyId').text = 'RUR'
             SubElement(offer_elem, 'quantity').text = str(quantity)
             

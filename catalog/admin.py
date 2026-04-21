@@ -192,14 +192,17 @@ class FarpostExportMixin:
             build_farpost_compact_name,
             format_models_multiline,
             farpost_csv_cell_excel_text_preserve,
+            farpost_export_unit_price,
             _farpost_char_key_is_models_column,
             _farpost_char_key_is_engines_column,
             _farpost_char_key_is_cross_column,
+            _farpost_char_key_skip_duplicate_of_article_columns,
         )
+        import csv
         import io as _io
         
         output = _io.StringIO()
-        writer = csv.writer(output, delimiter=';')
+        writer = csv.writer(output, delimiter=';', quoting=csv.QUOTE_ALL)
         # Заголовки для Farpost
         # ВАЖНО: Первым столбцом должен быть "Наименование" - Фарпост с первого столбца берет наименование товара
         # Удален столбец "Заголовок" - Фарпост не хочет его считывать
@@ -232,6 +235,8 @@ class FarpostExportMixin:
                 for k, v in char_list:
                     key_norm = str(k).strip().lower()
                     val_str = str(v).strip()
+                    if _farpost_char_key_skip_duplicate_of_article_columns(key_norm):
+                        continue
                     if _farpost_char_key_is_cross_column(key_norm):
                         extracted_cross.extend([x.strip() for x in val_str.replace('\n', ',').split(',') if x.strip()])
                         continue
@@ -269,7 +274,8 @@ class FarpostExportMixin:
             
             if not product.article:
                 no_article_count += 1
-            if not product.price or product.price == 0:
+            export_price = farpost_export_unit_price(product)
+            if not export_price or export_price == 0:
                 zero_price_count += 1
             
             # ВАЖНО: Используем полное название товара, а не очищенное
@@ -278,7 +284,7 @@ class FarpostExportMixin:
             
             writer.writerow([
                 full_name,  # Полное наименование товара (первый столбец)
-                str(product.price),
+                str(export_price),
                 product.article or '',
                 farpost_csv_cell_excel_text_preserve(product.supplier_article),
                 product.brand or '',
