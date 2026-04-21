@@ -1017,6 +1017,11 @@ def search_products(request):
     
     paginator = Paginator(products, getattr(settings, 'PRODUCTS_PER_PAGE', 24))
     products_page = paginator.get_page(page)
+    for p in products_page:
+        try:
+            p.compact_name = build_farpost_compact_name(p)
+        except Exception:
+            p.compact_name = p.name
     
     return render(request, 'catalog/search.html', {
         'query': query,
