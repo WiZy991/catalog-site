@@ -668,6 +668,27 @@ class ProductView(DetailView):
         if article2_value and not has_oem_row:
             characteristics.append(('OEM', article2_value))
 
+        # Убираем дубль "Номер", если его значение совпадает с OEM.
+        # В новых выгрузках 1С один и тот же код может приходить и как "Номер", и как "OEM/Артикул2".
+        def _norm_code(val):
+            import re
+            return re.sub(r'[^A-Za-z0-9]+', '', str(val or '').upper())
+
+        oem_norm_values = {
+            _norm_code(v)
+            for k, v in characteristics
+            if str(k).strip().lower() == 'oem' and _norm_code(v)
+        }
+        if oem_norm_values:
+            characteristics = [
+                (k, v)
+                for k, v in characteristics
+                if not (
+                    str(k).strip().lower() in ('номер', 'number', 'номер детали', 'part number', 'partnumber')
+                    and _norm_code(v) in oem_norm_values
+                )
+            ]
+
         # Fallback: если "Размер" или "Двигатель" не пришли из XML,
         # пытаемся извлечь их из названия товара (последние сегменты после запятых).
         import re
