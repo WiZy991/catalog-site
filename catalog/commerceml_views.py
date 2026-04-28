@@ -2445,7 +2445,9 @@ def process_offers_file_single_pass(root, namespaces, filename, request=None):
         offer_name = _clean_offer_product_name(raw_offer_name) if raw_offer_name else product_id
         supplier_article = _extract_supplier_article(offer_elem)
         number_article = _extract_number(offer_elem)
-        article = number_article or supplier_article
+        # Уникальный ключ для карточки — артикул из свойств (06033), а не «Номер» (H7/H11):
+        # иначе два разных SKU с одним цоколем сливаются при поиске Product(article=...).
+        article = (supplier_article or number_article or '').strip()
         brand = _extract_brand(offer_elem)
         characteristics_text, applicability_text = _extract_characteristics_and_applicability(offer_elem)
         quantity = _parse_quantity(offer_elem)
