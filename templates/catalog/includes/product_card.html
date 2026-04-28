@@ -28,9 +28,6 @@
                     {% if product.article %}
                     <span class="product-card__article">Артикул: {{ product.article }}</span>
                     {% endif %}
-                    {% if product.brand %}
-                    <span class="product-card__brand" itemprop="brand">Применимость: {{ product.brand }}</span>
-                    {% endif %}
                     <span class="product-card__manufacturer">Производитель: Onesimus</span>
                 </div>
                 
@@ -44,15 +41,6 @@
                 <div class="product-card__characteristics">
                     {% for key, value in product.get_card_characteristics_list %}
                     <span class="product-card__char-item">{{ key }}: {{ value|truncatechars:30 }}</span>
-                    {% endfor %}
-                </div>
-                {% endif %}
-                
-                {% if product.get_applicability_list %}
-                <div class="product-card__applicability">
-                    <span class="product-card__applicability-label">Применимо:</span>
-                    {% for item in product.get_applicability_list|slice:":1" %}
-                    <span class="product-card__applicability-tag">{{ item|truncatechars:40 }}</span>
                     {% endfor %}
                 </div>
                 {% endif %}
