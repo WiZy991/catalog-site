@@ -396,6 +396,26 @@ class Product(models.Model):
         
         return result
 
+    def get_card_characteristics_list(self):
+        """
+        Характеристики для карточки товара в каталоге.
+        Сначала исключаем служебные ключи, затем берем первые две.
+        """
+        characteristics = self.get_characteristics_list()
+        if not characteristics:
+            return []
+
+        excluded_keys = {'артикул2', 'article2', 'oem'}
+        filtered = [
+            (key, value)
+            for key, value in characteristics
+            if str(key).strip().lower() not in excluded_keys
+        ]
+
+        if filtered:
+            return filtered[:2]
+        return characteristics[:2]
+
     def get_cross_numbers_list(self):
         """Преобразует кросс-номера в список."""
         if not self.cross_numbers:

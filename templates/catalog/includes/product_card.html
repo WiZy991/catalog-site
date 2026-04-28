@@ -26,7 +26,7 @@
                 
                 <div class="product-card__meta">
                     {% if product.article %}
-                    <span class="product-card__article">Кросс-номер: {{ product.article }}</span>
+                    <span class="product-card__article">Артикул: {{ product.article }}</span>
                     {% endif %}
                     {% if product.brand %}
                     <span class="product-card__brand" itemprop="brand">Применимость: {{ product.brand }}</span>
@@ -40,12 +40,10 @@
                 </div>
                 {% endif %}
                 
-                {% if product.get_characteristics_list %}
+                {% if product.get_card_characteristics_list %}
                 <div class="product-card__characteristics">
-                    {% for key, value in product.get_characteristics_list|slice:":2" %}
-                    {% if key != 'Артикул2' and key != 'article2' and key != 'OEM' and key != 'oem' %}
+                    {% for key, value in product.get_card_characteristics_list %}
                     <span class="product-card__char-item">{{ key }}: {{ value|truncatechars:30 }}</span>
-                    {% endif %}
                     {% endfor %}
                 </div>
                 {% endif %}
