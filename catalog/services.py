@@ -3274,6 +3274,29 @@ def build_farpost_compact_name(product):
                         break
         except Exception:
             pass
+    # Доп. fallback для некоторых новых товаров (например, поршневые кольца):
+    # OEM приходит не как "OEM/Артикул2", а как "Номер: 13011-54120".
+    if not oem:
+        try:
+            article_norm_for_oem = str(article or '').strip().lower()
+            supplier_article_norm = str(getattr(product, 'supplier_article', '') or '').strip().lower()
+            for k, v in product.get_characteristics_list():
+                key = str(k).strip().lower()
+                if key not in ('номер', 'number', 'номер детали', 'part number', 'partnumber'):
+                    continue
+                val = str(v or '').strip().lstrip('/')
+                if not val:
+                    continue
+                val_norm = val.lower()
+                if val_norm in (article_norm_for_oem, supplier_article_norm):
+                    continue
+                # В заголовок как OEM берем только "номероподобные" значения:
+                # с дефисом/буквами или длинный цифровой код.
+                if ('-' in val) or re.search(r'[A-Za-z]', val) or re.fullmatch(r'\d{8,}', val):
+                    oem = val
+                    break
+        except Exception:
+            pass
 
     # Устраняем дубли: если article уже присутствует в title_base — не добавляем его повторно.
     def _norm(s: str) -> str:
