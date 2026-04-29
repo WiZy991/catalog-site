@@ -1257,10 +1257,24 @@ class PartnerOrdersView(PartnerRequiredMixin, ListView):
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['partner'] = get_partner_or_none(self.request.user)
+        partner = get_partner_or_none(self.request.user)
+        pricing_meta = get_partner_pricing(partner, 0)
+        context['partner'] = partner
+        context['partner_pricing'] = pricing_meta
         context['date_from'] = self.request.GET.get('date_from', '')
         context['date_to'] = self.request.GET.get('date_to', '')
         context['search_query'] = self.request.GET.get('q', '')
+
+        # Для режима скидки показываем в "Мои заказы" также оптовые суммы (зачеркнутые).
+        if pricing_meta['has_discount']:
+            for order in context.get('orders', []):
+                wholesale_total = Decimal('0')
+                for item in order.items.all():
+                    wholesale_unit = _to_decimal_price(item.product.wholesale_price or item.product.price)
+                    item.wholesale_unit_price = wholesale_unit
+                    item.wholesale_total = wholesale_unit * item.quantity
+                    wholesale_total += item.wholesale_total
+                order.wholesale_total = wholesale_total
         return context
 
 

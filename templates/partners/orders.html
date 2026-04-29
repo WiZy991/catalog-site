@@ -287,6 +287,12 @@
         font-size: 1.1rem;
         color: var(--color-brand-red);
     }
+    .order-total--old {
+        text-decoration: line-through;
+        color: var(--color-gray-500);
+        font-size: 0.95rem;
+        font-weight: 500;
+    }
     
     .order-actions {
         display: flex;
@@ -398,6 +404,12 @@
         font-size: 1.25rem;
         font-weight: 700;
         color: var(--color-gray-900);
+    }
+    .order-footer-total--old {
+        font-size: 1rem;
+        color: var(--color-gray-500);
+        text-decoration: line-through;
+        font-weight: 500;
     }
     
     .order-footer-total span {
@@ -576,6 +588,11 @@
                             <span class="order-status order-status--{{ order.status }}">
                                 {{ order.get_status_display }}
                             </span>
+                            {% if partner_pricing.has_discount and order.wholesale_total %}
+                            <div class="order-total order-total--old">
+                                {{ order.wholesale_total|floatformat:0 }} ₽
+                            </div>
+                            {% endif %}
                             <div class="order-total">
                                 {{ order.get_total_price|floatformat:0 }} ₽
                             </div>
@@ -618,8 +635,30 @@
                                     <td>{{ item.product.article|default:"—" }}</td>
                                     <td>{{ item.product.brand|default:"—" }}</td>
                                     <td>{{ item.quantity }}</td>
-                                    <td>{{ item.price|floatformat:0 }} ₽</td>
-                                    <td>{{ item.get_total|floatformat:0 }} ₽</td>
+                                    <td>
+                                        {% if partner_pricing.has_discount %}
+                                        <div style="text-decoration: line-through; color: #6b7280;">
+                                            {{ item.wholesale_unit_price|floatformat:0 }} ₽
+                                        </div>
+                                        <div style="color: #dc2626; font-weight: 700;">
+                                            {{ item.price|floatformat:0 }} ₽
+                                        </div>
+                                        {% else %}
+                                        {{ item.price|floatformat:0 }} ₽
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if partner_pricing.has_discount %}
+                                        <div style="text-decoration: line-through; color: #6b7280;">
+                                            {{ item.wholesale_total|floatformat:0 }} ₽
+                                        </div>
+                                        <div style="color: #dc2626; font-weight: 700;">
+                                            {{ item.get_total|floatformat:0 }} ₽
+                                        </div>
+                                        {% else %}
+                                        {{ item.get_total|floatformat:0 }} ₽
+                                        {% endif %}
+                                    </td>
                                     <td>
                                         {% if order.status == 'draft' or order.status == 'pending' %}
                                         <button type="button" 
@@ -637,6 +676,11 @@
                         
                         <div class="order-footer">
                             <div class="order-footer-total">
+                                {% if partner_pricing.has_discount and order.wholesale_total %}
+                                <div class="order-footer-total--old">
+                                    Итого опт: <span style="color:#6b7280;">{{ order.wholesale_total|floatformat:0 }} ₽</span>
+                                </div>
+                                {% endif %}
                                 Итого: <span>{{ order.get_total_price|floatformat:0 }} ₽</span>
                             </div>
                             {% if order.status == 'draft' or order.status == 'pending' %}
