@@ -3636,7 +3636,7 @@ def generate_farpost_api_file(products, file_format='xls', request=None):
         # Удален столбец "Заголовок" - Фарпост не хочет его считывать
         # Столбец "Производитель" возвращен - Фарпост должен получать производителя "Onesimus" из прайс-листа
         writer.writerow([
-            'Наименование', 'Цена', 'Артикул', 'Артикул (1С)', 'Бренд',
+            'Наименование', 'Цена', 'Артикул (1С)', 'Бренд',
             'Состояние', 'Наличие', 'Количество', 'Характеристика',
             'Применимо для моделей', 'Применимо для двигателей',
             'Кросс-номера', 'Фото1', 'Фото2', 'Фото3', 'Фото4', 'Фото5',
@@ -3707,7 +3707,6 @@ def generate_farpost_api_file(products, file_format='xls', request=None):
             writer.writerow([
                 full_name,  # Полное наименование товара (первый столбец)
                 str(farpost_export_unit_price(product)),
-                product.article or '',
                 farpost_csv_cell_excel_text_preserve(product.supplier_article),
                 farpost_export_brand(product),
                 product.get_condition_display(),
@@ -3745,7 +3744,7 @@ def generate_farpost_api_file(products, file_format='xls', request=None):
         # Удален столбец "Заголовок" - Фарпост не хочет его считывать
         # Столбец "Производитель" возвращен - Фарпост должен получать производителя "Onesimus" из прайс-листа
         headers = [
-            'Наименование', 'Цена', 'Артикул', 'Артикул (1С)', 'Бренд',
+            'Наименование', 'Цена', 'Артикул (1С)', 'Бренд',
             'Состояние', 'Наличие', 'Количество', 'Характеристика',
             'Применимо для моделей', 'Применимо для двигателей',
             'Кросс-номера', 'Фото1', 'Фото2', 'Фото3', 'Фото4', 'Фото5',
@@ -3818,7 +3817,6 @@ def generate_farpost_api_file(products, file_format='xls', request=None):
             ws.append([
                 full_name,  # Полное наименование товара (первый столбец)
                 float(farpost_export_unit_price(product)),
-                product.article or '',
                 product.supplier_article or '',
                 farpost_export_brand(product),
                 product.get_condition_display(),
@@ -3837,8 +3835,8 @@ def generate_farpost_api_file(products, file_format='xls', request=None):
                 product.category.name if product.category else '',
                 'Onesimus',  # Производитель по умолчанию
             ])
-        # Столбцы C–D: «Артикул», «Артикул (1С)» — явный текст, иначе Excel обрезает ведущие нули
-        _farpost_openpyxl_mark_columns_text(ws, (3, 4))
+        # Столбец C: «Артикул (1С)» — явный текст, иначе Excel обрезает ведущие нули
+        _farpost_openpyxl_mark_columns_text(ws, (3,))
         
         # Сохраняем в BytesIO
         output = io.BytesIO()

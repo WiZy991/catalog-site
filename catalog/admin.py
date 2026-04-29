@@ -209,7 +209,7 @@ class FarpostExportMixin:
         # Удален столбец "Заголовок" - Фарпост не хочет его считывать
         # Столбец "Производитель" возвращен - Фарпост должен получать производителя "Onesimus" из прайс-листа
         writer.writerow([
-            'Наименование', 'Цена', 'Артикул', 'Артикул (1С)', 'Бренд',
+            'Наименование', 'Цена', 'Артикул (1С)', 'Бренд',
             'Состояние', 'Наличие', 'Количество', 'Характеристика',
             'Применимо для моделей', 'Применимо для двигателей',
             'Кросс-номера', 'Фото1', 'Фото2', 'Фото3', 'Фото4', 'Фото5',
@@ -286,7 +286,6 @@ class FarpostExportMixin:
             writer.writerow([
                 full_name,  # Полное наименование товара (первый столбец)
                 str(export_price),
-                product.article or '',
                 farpost_csv_cell_excel_text_preserve(product.supplier_article),
                 farpost_export_brand(product),
                 product.get_condition_display(),
