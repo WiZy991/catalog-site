@@ -693,12 +693,14 @@ class PublicPartnerCatalogView(ListView):
             base_price = product.wholesale_price or product.price or 0
             pricing = get_partner_pricing(partner, base_price)
             product.partner_wholesale_price = pricing['wholesale_price']
-            # В режиме скидки в каталоге намеренно оставляем оптовую цену.
+            product.partner_final_price = pricing['final_price']
+            product.partner_has_markup = pricing['has_markup']
+            product.partner_has_discount = pricing['has_discount']
+            product.partner_markup_percent = pricing['markup_percent']
+            product.partner_discount_percent = pricing['discount_percent']
             product.partner_display_price = (
                 pricing['final_price'] if pricing['has_markup'] else pricing['wholesale_price']
             )
-            product.partner_has_markup = pricing['has_markup']
-            product.partner_markup_percent = pricing['markup_percent']
         # Получаем корневые категории с подкатегориями
         root_categories = Category.objects.filter(
             parent=None, 
@@ -999,11 +1001,15 @@ class PartnerCatalogView(PartnerRequiredMixin, ListView):
             base_price = product.wholesale_price or product.price or 0
             pricing = get_partner_pricing(partner, base_price)
             product.partner_wholesale_price = pricing['wholesale_price']
+            product.partner_final_price = pricing['final_price']
+            product.partner_has_markup = pricing['has_markup']
+            product.partner_has_discount = pricing['has_discount']
+            product.partner_markup_percent = pricing['markup_percent']
+            product.partner_discount_percent = pricing['discount_percent']
+            # Для шаблона: наценка — одна строка с итоговой ценой; скидка — опт + итог в шаблоне отдельно
             product.partner_display_price = (
                 pricing['final_price'] if pricing['has_markup'] else pricing['wholesale_price']
             )
-            product.partner_has_markup = pricing['has_markup']
-            product.partner_markup_percent = pricing['markup_percent']
         # Получаем корневые категории с подкатегориями
         # Показываем ВСЕ активные корневые категории
         root_categories = Category.objects.filter(

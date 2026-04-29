@@ -2132,13 +2132,19 @@ document.addEventListener('DOMContentLoaded', function() {
                                 </td>
                                 <td class="products-table__price">
                                     {% if product.partner_has_markup %}
+                                    <div class="products-table__price-main">
+                                        {{ product.partner_final_price|floatformat:0 }} ₽
+                                    </div>
+                                    {% elif product.partner_has_discount %}
                                     <div class="products-table__price-old">
                                         {{ product.partner_wholesale_price|floatformat:0 }} ₽
                                     </div>
                                     <div class="products-table__price-main">
-                                        {{ product.partner_display_price|floatformat:0 }} ₽
+                                        {{ product.partner_final_price|floatformat:0 }} ₽
                                     </div>
-                                    <div class="products-table__price-note">+{{ product.partner_markup_percent|floatformat:0 }}%</div>
+                                    <div class="products-table__price-note">
+                                        −{{ product.partner_discount_percent|floatformat:0 }}%
+                                    </div>
                                     {% else %}
                                     <div class="products-table__price-main">
                                         {{ product.partner_display_price|floatformat:0 }} ₽
