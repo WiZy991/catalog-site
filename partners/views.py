@@ -993,8 +993,17 @@ class PartnerCatalogView(PartnerRequiredMixin, ListView):
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        partner = get_partner_or_none(self.request.user)
         for product in context.get('products', []):
             product.compact_name = build_farpost_compact_name(product)
+            base_price = product.wholesale_price or product.price or 0
+            pricing = get_partner_pricing(partner, base_price)
+            product.partner_wholesale_price = pricing['wholesale_price']
+            product.partner_display_price = (
+                pricing['final_price'] if pricing['has_markup'] else pricing['wholesale_price']
+            )
+            product.partner_has_markup = pricing['has_markup']
+            product.partner_markup_percent = pricing['markup_percent']
         # Получаем корневые категории с подкатегориями
         # Показываем ВСЕ активные корневые категории
         root_categories = Category.objects.filter(
