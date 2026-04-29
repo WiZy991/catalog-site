@@ -3367,6 +3367,12 @@ def build_farpost_compact_name(product):
         result = re.sub(rf'(?<!\w){esc}(?!\w)', ' ', str(result or ''), flags=re.IGNORECASE)
         result = re.sub(r'\s+', ' ', result)
         result = re.sub(r'\s*,\s*', ', ', result).strip(' ,')
+    # Жесткая нормализация разделителей: убираем ", ," и лишние запятые/пробелы.
+    result = re.sub(r'\s*,\s*,+\s*', ', ', str(result or ''))
+    result = re.sub(r',\s*,+', ', ', result)
+    result = re.sub(r'\s+,', ',', result)
+    result = re.sub(r',\s*$', '', result)
+    result = re.sub(r'\s{2,}', ' ', result).strip(' ,')
     return result
 
 
