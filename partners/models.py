@@ -82,6 +82,13 @@ class PartnerRequest(models.Model):
 
 class Partner(models.Model):
     """Модель партнёра (оптового покупателя)."""
+    PRICING_MODE_DISCOUNT = 'discount'
+    PRICING_MODE_MARKUP = 'markup'
+    PRICING_MODE_CHOICES = [
+        (PRICING_MODE_DISCOUNT, 'Индивидуальная скидка'),
+        (PRICING_MODE_MARKUP, 'Индивидуальная наценка'),
+    ]
+
     # Связь с пользователем Django
     user = models.OneToOneField(
         User,
@@ -109,6 +116,20 @@ class Partner(models.Model):
         decimal_places=2, 
         default=0,
         help_text='Индивидуальная скидка партнёра (0-100%)'
+    )
+    pricing_mode = models.CharField(
+        'Режим ценообразования',
+        max_length=20,
+        choices=PRICING_MODE_CHOICES,
+        default=PRICING_MODE_DISCOUNT,
+        help_text='Скидка: цена ниже оптовой. Наценка: цена выше оптовой.'
+    )
+    markup_percent = models.DecimalField(
+        'Наценка %',
+        max_digits=5,
+        decimal_places=2,
+        default=0,
+        help_text='Индивидуальная наценка партнёра (0-100%)'
     )
     
     # Служебные поля

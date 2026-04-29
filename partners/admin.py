@@ -240,12 +240,12 @@ class PartnerAdmin(admin.ModelAdmin):
     """Админка для партнёров."""
     list_display = [
         'full_name', 'company_name', 'email', 'phone', 'city', 
-        'discount_percent', 'is_active_badge', 'created_at'
+        'pricing_mode', 'discount_percent', 'markup_percent', 'is_active_badge', 'created_at'
     ]
     list_filter = ['is_active', 'city', 'created_at']
     search_fields = ['full_name', 'company_name', 'user__email', 'phone', 'inn']
     readonly_fields = ['created_at', 'updated_at', 'last_login', 'user']
-    list_editable = ['discount_percent']
+    list_editable = ['pricing_mode', 'discount_percent', 'markup_percent']
     ordering = ['-created_at']
     actions = ['activate_partners', 'deactivate_partners']
     
@@ -261,7 +261,7 @@ class PartnerAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         }),
         ('Настройки', {
-            'fields': ('is_active', 'discount_percent')
+            'fields': ('is_active', 'pricing_mode', 'discount_percent', 'markup_percent')
         }),
         ('Информация', {
             'fields': ('created_at', 'updated_at', 'last_login'),

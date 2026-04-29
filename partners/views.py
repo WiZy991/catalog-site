@@ -1,5 +1,6 @@
 import re
 import logging
+from decimal import Decimal, ROUND_HALF_UP
 from django.shortcuts import render, redirect, get_object_or_404
 from django.views.generic import TemplateView, ListView, DetailView, FormView, View
 from django.contrib.auth.views import LoginView, LogoutView, PasswordResetView, PasswordResetDoneView, PasswordResetConfirmView, PasswordResetCompleteView
@@ -32,6 +33,45 @@ def get_partner_or_none(user):
     if hasattr(user, 'partner_profile'):
         return user.partner_profile
     return None
+
+
+def _to_decimal_price(value):
+    """Нормализует цену в Decimal."""
+    try:
+        return Decimal(str(value or 0))
+    except Exception:
+        return Decimal('0')
+
+
+def get_partner_pricing(partner, base_price):
+    """
+    Возвращает цены партнёра для оптовой витрины.
+    - discount: итог < оптовой
+    - markup: итог > оптовой
+    """
+    wholesale_price = _to_decimal_price(base_price)
+    mode = getattr(partner, 'pricing_mode', Partner.PRICING_MODE_DISCOUNT) if partner else Partner.PRICING_MODE_DISCOUNT
+    discount_percent = _to_decimal_price(getattr(partner, 'discount_percent', 0) if partner else 0)
+    markup_percent = _to_decimal_price(getattr(partner, 'markup_percent', 0) if partner else 0)
+    hundred = Decimal('100')
+
+    final_price = wholesale_price
+    if mode == Partner.PRICING_MODE_MARKUP and markup_percent > 0:
+        final_price = wholesale_price * (Decimal('1') + (markup_percent / hundred))
+    elif mode == Partner.PRICING_MODE_DISCOUNT and discount_percent > 0:
+        final_price = wholesale_price * (Decimal('1') - (discount_percent / hundred))
+
+    final_price = final_price.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+    return {
+        'mode': mode,
+        'wholesale_price': wholesale_price,
+        'final_price': final_price,
+        'discount_percent': discount_percent,
+        'markup_percent': markup_percent,
+        'has_discount': mode == Partner.PRICING_MODE_DISCOUNT and discount_percent > 0,
+        'has_markup': mode == Partner.PRICING_MODE_MARKUP and markup_percent > 0,
+    }
 
 
 class PartnerRequiredMixin(LoginRequiredMixin):
@@ -647,8 +687,18 @@ class PublicPartnerCatalogView(ListView):
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        partner = get_partner_or_none(self.request.user)
         for product in context.get('products', []):
             product.compact_name = build_farpost_compact_name(product)
+            base_price = product.wholesale_price or product.price or 0
+            pricing = get_partner_pricing(partner, base_price)
+            product.partner_wholesale_price = pricing['wholesale_price']
+            # В режиме скидки в каталоге намеренно оставляем оптовую цену.
+            product.partner_display_price = (
+                pricing['final_price'] if pricing['has_markup'] else pricing['wholesale_price']
+            )
+            product.partner_has_markup = pricing['has_markup']
+            product.partner_markup_percent = pricing['markup_percent']
         # Получаем корневые категории с подкатегориями
         root_categories = Category.objects.filter(
             parent=None, 
@@ -1000,7 +1050,8 @@ class PartnerCatalogView(PartnerRequiredMixin, ListView):
         context['current_category'] = getattr(self, 'current_category', None)
         context['search_query'] = getattr(self, 'search_query', '')
         context['current_sort'] = self.request.GET.get('sort', 'name')
-        context['partner'] = get_partner_or_none(self.request.user)
+        context['partner'] = partner
+        context['partner_pricing'] = get_partner_pricing(partner, 0)
         
         # Получаем корзину для отображения количества
         cart = get_partner_cart(self.request)
@@ -1022,6 +1073,7 @@ def partner_cart_add(request, product_id):
             is_active=True,
             catalog_type='wholesale'
         )
+        partner = get_partner_or_none(request.user)
         cart = get_partner_cart(request)
         
         product_id_str = str(product_id)
@@ -1030,11 +1082,15 @@ def partner_cart_add(request, product_id):
         if product_id_str in cart:
             cart[product_id_str]['quantity'] += quantity
         else:
-            # Используем оптовую цену, если есть
-            price = float(product.wholesale_price or product.price)
+            base_price = _to_decimal_price(product.wholesale_price or product.price)
+            pricing = get_partner_pricing(partner, base_price)
             cart[product_id_str] = {
                 'quantity': quantity,
-                'price': str(price),
+                # price оставляем для обратной совместимости (используется в заказе)
+                'price': str(pricing['final_price']),
+                'base_price': str(pricing['wholesale_price']),
+                'final_price': str(pricing['final_price']),
+                'pricing_mode': pricing['mode'],
             }
         
         set_partner_cart(request, cart)
@@ -1093,31 +1149,50 @@ def partner_cart_view(request):
         messages.error(request, 'Недостаточно прав')
         return redirect('partners:catalog')
     
+    partner = get_partner_or_none(request.user)
     cart = get_partner_cart(request)
     cart_items = []
     total = 0
+    total_wholesale = 0
     
     for product_id, item_data in cart.items():
         try:
             product = Product.objects.get(id=int(product_id), is_active=True)
             quantity = item_data['quantity']
-            price = float(item_data['price'])
-            item_total = quantity * price
+            base_price = _to_decimal_price(item_data.get('base_price'))
+            final_price = _to_decimal_price(item_data.get('final_price') or item_data.get('price'))
+
+            # Фолбэк для старых записей корзины без новых полей.
+            if base_price <= 0:
+                base_price = _to_decimal_price(product.wholesale_price or product.price)
+            if final_price <= 0:
+                pricing = get_partner_pricing(partner, base_price)
+                final_price = pricing['final_price']
+
+            base_total = base_price * quantity
+            item_total = final_price * quantity
             
             cart_items.append({
                 'product': product,
                 'quantity': quantity,
-                'price': price,
+                'base_price': base_price,
+                'price': final_price,
+                'final_price': final_price,
+                'base_total': base_total,
                 'total': item_total,
             })
             total += item_total
+            total_wholesale += base_total
         except (Product.DoesNotExist, ValueError, KeyError):
             continue
     
+    pricing_meta = get_partner_pricing(partner, 0)
     context = {
         'cart_items': cart_items,
         'total': total,
-        'partner': get_partner_or_none(request.user),
+        'total_wholesale': total_wholesale,
+        'partner': partner,
+        'partner_pricing': pricing_meta,
     }
     
     return render(request, 'partners/cart.html', context)

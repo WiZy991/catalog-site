@@ -833,6 +833,17 @@
         color: var(--color-brand-red);
         white-space: nowrap;
     }
+    .products-table__price-old {
+        font-size: 0.78rem;
+        color: var(--color-gray-500);
+        text-decoration: line-through;
+        white-space: nowrap;
+    }
+    .products-table__price-note {
+        font-size: 0.72rem;
+        color: var(--color-gray-600);
+        white-space: nowrap;
+    }
     
     
     .products-table__quantity {
@@ -2120,9 +2131,19 @@ document.addEventListener('DOMContentLoaded', function() {
                                     {% endif %}
                                 </td>
                                 <td class="products-table__price">
-                                    <div class="products-table__price-main">
-                                        {{ product.wholesale_price|default:product.price|floatformat:0 }} ₽
+                                    {% if product.partner_has_markup %}
+                                    <div class="products-table__price-old">
+                                        {{ product.partner_wholesale_price|floatformat:0 }} ₽
                                     </div>
+                                    <div class="products-table__price-main">
+                                        {{ product.partner_display_price|floatformat:0 }} ₽
+                                    </div>
+                                    <div class="products-table__price-note">+{{ product.partner_markup_percent|floatformat:0 }}%</div>
+                                    {% else %}
+                                    <div class="products-table__price-main">
+                                        {{ product.partner_display_price|floatformat:0 }} ₽
+                                    </div>
+                                    {% endif %}
                                 </td>
                                 <td class="products-table__quantity">
                                     <div class="quantity-control-wrapper">

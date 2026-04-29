@@ -230,11 +230,30 @@
         font-size: 0.9rem;
         color: var(--color-gray-600);
     }
+    .cart-item__price-unit--old {
+        text-decoration: line-through;
+        color: var(--color-gray-500);
+    }
+    .cart-item__price-unit--final {
+        color: var(--color-brand-red);
+        font-weight: 700;
+    }
     
     .cart-item__price-total {
         font-size: 1.1rem;
         font-weight: 600;
         color: var(--color-brand-red);
+    }
+    .cart-item__price-total--old {
+        text-decoration: line-through;
+        color: var(--color-gray-500);
+        font-size: 0.95rem;
+        font-weight: 500;
+    }
+    .cart-item__price-total--final {
+        color: var(--color-brand-red);
+        font-size: 1.1rem;
+        font-weight: 700;
     }
     
     .btn-remove {
@@ -271,6 +290,12 @@
     .cart-total {
         font-size: 1.5rem;
         color: var(--color-brand-red);
+    }
+    .cart-total--old {
+        text-decoration: line-through;
+        color: var(--color-gray-500);
+        font-size: 1.1rem;
+        font-weight: 500;
     }
     
     .cart-summary__actions {
@@ -385,8 +410,15 @@
                     </div>
                     
                     <div class="cart-item__price">
+                        {% if partner_pricing.has_discount %}
+                        <div class="cart-item__price-unit cart-item__price-unit--old">{{ item.base_price|floatformat:0 }} ₽</div>
+                        <div class="cart-item__price-unit cart-item__price-unit--final">{{ item.final_price|floatformat:0 }} ₽</div>
+                        <div class="cart-item__price-total cart-item__price-total--old">{{ item.base_total|floatformat:0 }} ₽</div>
+                        <div class="cart-item__price-total cart-item__price-total--final">{{ item.total|floatformat:0 }} ₽</div>
+                        {% else %}
                         <div class="cart-item__price-unit">{{ item.price|floatformat:0 }} ₽</div>
                         <div class="cart-item__price-total">{{ item.total|floatformat:0 }} ₽</div>
+                        {% endif %}
                     </div>
                     
                     <div class="cart-item__remove">
@@ -400,8 +432,14 @@
             
             <div class="cart-summary">
                 <div class="cart-summary__block">
+                    {% if partner_pricing.has_discount %}
                     <div class="cart-summary__row">
-                        <span>Итого:</span>
+                        <span>Итого опт:</span>
+                        <strong class="cart-total cart-total--old">{{ total_wholesale|floatformat:0 }} ₽</strong>
+                    </div>
+                    {% endif %}
+                    <div class="cart-summary__row">
+                        <span>{% if partner_pricing.has_discount %}Итого со скидкой:{% else %}Итого:{% endif %}</span>
                         <strong class="cart-total">{{ total|floatformat:0 }} ₽</strong>
                     </div>
                 </div>
