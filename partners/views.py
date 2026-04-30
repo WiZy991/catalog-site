@@ -74,6 +74,54 @@ def get_partner_pricing(partner, base_price):
     }
 
 
+def _partner_catalog_search_word_q(word: str) -> Q:
+    """
+    OR по одному слову запроса в партнёрском каталоге.
+    Внутренний артикул — supplier_article (колонка «Артикул» в таблице); также OEM, характеристики, id 1С.
+    """
+    if not word:
+        return Q(pk__in=[])
+    word_capitalize = word[0].upper() + word[1:].lower() if len(word) > 1 else word.upper()
+    word_upper = word.upper()
+    word_escaped = word.replace('\\', '\\\\').replace('(', '\\(').replace(')', '\\)').replace('[', '\\[').replace(']', '\\]')
+    return (
+        Q(name__contains=word_capitalize)
+        | Q(name__contains=word_upper)
+        | Q(name__contains=word)
+        | Q(article__icontains=word)
+        | Q(supplier_article__icontains=word)
+        | Q(brand__icontains=word)
+        | Q(cross_numbers__icontains=word)
+        | Q(applicability__icontains=word)
+        | Q(description__icontains=word)
+        | Q(short_description__icontains=word)
+        | Q(characteristics__icontains=word)
+        | Q(external_id__icontains=word)
+        | Q(article__iregex=word_escaped)
+        | Q(supplier_article__iregex=word_escaped)
+        | Q(brand__iregex=word_escaped)
+        | Q(cross_numbers__iregex=word_escaped)
+        | Q(applicability__iregex=word_escaped)
+        | Q(description__iregex=word_escaped)
+        | Q(short_description__iregex=word_escaped)
+        | Q(characteristics__iregex=word_escaped)
+    )
+
+
+def _partner_catalog_query_words(search_query: str):
+    """
+    Слова для AND-поиска. Один токен из цифр (00016, 16) — целиком, чтобы не терять ведущие нули.
+    """
+    s = (search_query or '').strip()
+    if not s:
+        return []
+    parts = s.split()
+    if len(parts) == 1 and parts[0].isdigit():
+        return [parts[0]]
+    words = [p for p in parts if len(p) >= 2]
+    return words if words else [s]
+
+
 class PartnerRequiredMixin(LoginRequiredMixin):
     """Миксин для проверки, что пользователь является активным партнёром или админом."""
     login_url = '/partners/login/'
@@ -627,57 +675,12 @@ class PublicPartnerCatalogView(ListView):
         else:
             self.current_category = None
         
-        # Поиск (по частичным совпадениям слов)
+        # Поиск (по частичным совпадениям слов; внутренний артикул — supplier_article + характеристики + id 1С)
         search_query = self.request.GET.get('q', '').strip()
         if search_query:
-            # Разбиваем запрос на отдельные слова (минимум 2 символа)
-            query_words = [word.strip() for word in search_query.split() if len(word.strip()) >= 2]
-            
-            if not query_words:
-                # Если слово слишком короткое, ищем весь запрос целиком
-                query_words = [search_query]
-            
-            # Для каждого слова создаём условие поиска
-            # Используем AND - товар должен содержать ВСЕ слова из запроса
+            query_words = _partner_catalog_query_words(search_query)
             for word in query_words:
-                # Названия товаров хранятся с большой буквы (кириллица)
-                # Преобразуем первую букву в заглавную вручную для надежности
-                if word:
-                    # Преобразуем первую букву в заглавную (работает для кириллицы)
-                    word_capitalize = word[0].upper() + word[1:].lower() if len(word) > 1 else word.upper()
-                else:
-                    word_capitalize = word
-                word_upper = word.upper()
-                word_escaped = word.replace('\\', '\\\\').replace('(', '\\(').replace(')', '\\)').replace('[', '\\[').replace(']', '\\]')
-                
-                # Для name (название) - используем contains с преобразованием первой буквы в заглавную
-                # Для остальных полей - используем icontains/iregex (работает для латиницы и цифр)
-                word_q = (
-                    # Название товара - ищем с заглавной буквы (как хранится в базе: "Крестовина")
-                    # "крестовина" -> "Крестовина" -> найдет товары
-                    Q(name__contains=word_capitalize) |
-                    # Также пробуем в верхнем регистре (на случай, если есть варианты "КРЕСТОВИНА")
-                    Q(name__contains=word_upper) |
-                    # И исходный регистр (на случай, если пользователь ввел с большой буквы)
-                    Q(name__contains=word) |
-                    # Остальные поля - регистронезависимый поиск
-                    Q(article__icontains=word) |
-                    Q(supplier_article__icontains=word) |
-                    Q(brand__icontains=word) |
-                    Q(cross_numbers__icontains=word) |
-                    Q(applicability__icontains=word) |
-                    Q(description__icontains=word) |
-                    Q(short_description__icontains=word) |
-                    # Также пробуем iregex для надежности
-                    Q(article__iregex=word_escaped) |
-                    Q(supplier_article__iregex=word_escaped) |
-                    Q(brand__iregex=word_escaped) |
-                    Q(cross_numbers__iregex=word_escaped) |
-                    Q(applicability__iregex=word_escaped) |
-                    Q(description__iregex=word_escaped) |
-                    Q(short_description__iregex=word_escaped)
-                )
-                queryset = queryset.filter(word_q)
+                queryset = queryset.filter(_partner_catalog_search_word_q(word))
             
             self.search_query = search_query
         else:
@@ -923,57 +926,12 @@ class PartnerCatalogView(PartnerRequiredMixin, ListView):
         else:
             self.current_category = None
         
-        # Поиск (по частичным совпадениям слов)
+        # Поиск (по частичным совпадениям слов; внутренний артикул — supplier_article + характеристики + id 1С)
         search_query = self.request.GET.get('q', '').strip()
         if search_query:
-            # Разбиваем запрос на отдельные слова (минимум 2 символа)
-            query_words = [word.strip() for word in search_query.split() if len(word.strip()) >= 2]
-            
-            if not query_words:
-                # Если слово слишком короткое, ищем весь запрос целиком
-                query_words = [search_query]
-            
-            # Для каждого слова создаём условие поиска
-            # Используем AND - товар должен содержать ВСЕ слова из запроса
+            query_words = _partner_catalog_query_words(search_query)
             for word in query_words:
-                # Названия товаров хранятся с большой буквы (кириллица)
-                # Преобразуем первую букву в заглавную вручную для надежности
-                if word:
-                    # Преобразуем первую букву в заглавную (работает для кириллицы)
-                    word_capitalize = word[0].upper() + word[1:].lower() if len(word) > 1 else word.upper()
-                else:
-                    word_capitalize = word
-                word_upper = word.upper()
-                word_escaped = word.replace('\\', '\\\\').replace('(', '\\(').replace(')', '\\)').replace('[', '\\[').replace(']', '\\]')
-                
-                # Для name (название) - используем contains с преобразованием первой буквы в заглавную
-                # Для остальных полей - используем icontains/iregex (работает для латиницы и цифр)
-                word_q = (
-                    # Название товара - ищем с заглавной буквы (как хранится в базе: "Крестовина")
-                    # "крестовина" -> "Крестовина" -> найдет товары
-                    Q(name__contains=word_capitalize) |
-                    # Также пробуем в верхнем регистре (на случай, если есть варианты "КРЕСТОВИНА")
-                    Q(name__contains=word_upper) |
-                    # И исходный регистр (на случай, если пользователь ввел с большой буквы)
-                    Q(name__contains=word) |
-                    # Остальные поля - регистронезависимый поиск
-                    Q(article__icontains=word) |
-                    Q(supplier_article__icontains=word) |
-                    Q(brand__icontains=word) |
-                    Q(cross_numbers__icontains=word) |
-                    Q(applicability__icontains=word) |
-                    Q(description__icontains=word) |
-                    Q(short_description__icontains=word) |
-                    # Также пробуем iregex для надежности
-                    Q(article__iregex=word_escaped) |
-                    Q(supplier_article__iregex=word_escaped) |
-                    Q(brand__iregex=word_escaped) |
-                    Q(cross_numbers__iregex=word_escaped) |
-                    Q(applicability__iregex=word_escaped) |
-                    Q(description__iregex=word_escaped) |
-                    Q(short_description__iregex=word_escaped)
-                )
-                queryset = queryset.filter(word_q)
+                queryset = queryset.filter(_partner_catalog_search_word_q(word))
             
             self.search_query = search_query
         else:
@@ -1251,14 +1209,17 @@ class PartnerOrdersView(PartnerRequiredMixin, ListView):
             except ValueError:
                 pass
         
-        # Поиск по названию, OEM, артикулу
+        # Поиск по названию, OEM, внутреннему артикулу (supplier_article), характеристикам
         search_query = self.request.GET.get('q', '').strip()
         if search_query:
             queryset = queryset.filter(
                 Q(items__product__name__icontains=search_query) |
                 Q(items__product__article__icontains=search_query) |
+                Q(items__product__supplier_article__icontains=search_query) |
                 Q(items__product__brand__icontains=search_query) |
-                Q(items__product__cross_numbers__icontains=search_query)
+                Q(items__product__cross_numbers__icontains=search_query) |
+                Q(items__product__characteristics__icontains=search_query) |
+                Q(items__product__external_id__icontains=search_query)
             ).distinct()
         
         return queryset.order_by('-created_at')
@@ -1745,7 +1706,10 @@ def partner_orders_export_xls(request):
         queryset = queryset.filter(
             Q(items__product__name__icontains=search_query) |
             Q(items__product__article__icontains=search_query) |
-            Q(items__product__brand__icontains=search_query)
+            Q(items__product__supplier_article__icontains=search_query) |
+            Q(items__product__brand__icontains=search_query) |
+            Q(items__product__characteristics__icontains=search_query) |
+            Q(items__product__external_id__icontains=search_query)
         ).distinct()
     
     queryset = queryset.order_by('-created_at')
