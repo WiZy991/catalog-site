@@ -599,8 +599,8 @@
                             {% for product in products %}
                             <tr class="products-table__row">
                                 <td class="products-table__article">
-                                    {% if product.article %}
-                                        {{ product.article }}
+                                    {% if product.catalog_part_code %}
+                                        {{ product.catalog_part_code }}
                                     {% else %}
                                         <span class="text-muted">—</span>
                                     {% endif %}

@@ -2085,9 +2085,9 @@ document.addEventListener('DOMContentLoaded', function() {
                         <tbody>
                             {% for product in products %}
                             <tr class="products-table__row">
-                                <td class="products-table__article" title="{% if product.article %}{{ product.article }}{% endif %}">
-                                    {% if product.article %}
-                                        {{ product.article|truncatechars:20 }}
+                                <td class="products-table__article" title="{% if product.catalog_part_code %}{{ product.catalog_part_code }}{% endif %}">
+                                    {% if product.catalog_part_code %}
+                                        {{ product.catalog_part_code|truncatechars:20 }}
                                     {% else %}
                                         <span class="text-muted">—</span>
                                     {% endif %}

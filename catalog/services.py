@@ -3579,14 +3579,10 @@ def farpost_export_brand(product):
     return ''
 
 
-def farpost_export_article(product):
+def product_part_number_value(product):
     """
-    Артикул для колонки «Артикул» в Farpost.
-    Приоритет:
-    1) «Номер» из характеристик/свойств (данные обмена 1С),
-    2) product.article,
-    3) product.supplier_article,
-    4) эвристика из названия.
+    Поле «Номер» из 1С: характеристики товара или JSON properties.
+    Используется в оптовом каталоге в колонке «Код детали» (отдельно от артикула).
     """
     def _clean(v):
         return str(v or '').strip().lstrip('/')
@@ -3600,6 +3596,33 @@ def farpost_export_article(product):
                     return val
     except Exception:
         pass
+
+    props = getattr(product, 'properties', None) or {}
+    if isinstance(props, dict):
+        for key, value in props.items():
+            kn = str(key or '').strip().lower()
+            if kn in ('номер', 'number', 'номер детали', 'part number', 'partnumber'):
+                val = _clean(value)
+                if val:
+                    return val
+    return ''
+
+
+def farpost_export_article(product):
+    """
+    Артикул для колонки «Артикул» в Farpost.
+    Приоритет:
+    1) «Номер» из характеристик/свойств (данные обмена 1С),
+    2) product.article,
+    3) product.supplier_article,
+    4) эвристика из названия.
+    """
+    def _clean(v):
+        return str(v or '').strip().lstrip('/')
+
+    val = product_part_number_value(product)
+    if val:
+        return val
 
     val = _clean(getattr(product, 'article', ''))
     if val:

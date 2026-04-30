@@ -19,7 +19,7 @@ from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 
 from catalog.models import Category, Product
-from catalog.services import build_farpost_compact_name, format_models_multiline
+from catalog.services import build_farpost_compact_name, format_models_multiline, product_part_number_value
 from .models import PartnerRequest, Partner, PartnerSettings, PartnerOrder, PartnerOrderItem
 from .forms import PartnerRequestForm, PartnerLoginForm, PartnerProfileForm, PartnerPasswordChangeForm, PartnerPasswordResetForm, PartnerSetPasswordForm
 from django.http import JsonResponse
@@ -690,6 +690,7 @@ class PublicPartnerCatalogView(ListView):
         partner = get_partner_or_none(self.request.user)
         for product in context.get('products', []):
             product.compact_name = build_farpost_compact_name(product)
+            product.catalog_part_code = product_part_number_value(product)
             base_price = product.wholesale_price or product.price or 0
             pricing = get_partner_pricing(partner, base_price)
             product.partner_wholesale_price = pricing['wholesale_price']
@@ -998,6 +999,7 @@ class PartnerCatalogView(PartnerRequiredMixin, ListView):
         partner = get_partner_or_none(self.request.user)
         for product in context.get('products', []):
             product.compact_name = build_farpost_compact_name(product)
+            product.catalog_part_code = product_part_number_value(product)
             base_price = product.wholesale_price or product.price or 0
             pricing = get_partner_pricing(partner, base_price)
             product.partner_wholesale_price = pricing['wholesale_price']
