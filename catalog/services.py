@@ -2033,6 +2033,63 @@ def get_category_for_product(product_name, use_db_subcategories: bool = True):
     return _ensure_non_root_category(main_category, '') or main_category
 
 
+def learn_subcategory_keyword_from_product(product: Product, category: Category):
+    """
+    Дообучает keywords выбранной ПОДкатегории по ручной правке товара в админке.
+    Это позволяет новым похожим позициям из 1С автоматически попадать
+    в ту же подкатегорию при следующем обмене.
+
+    Возвращает список добавленных ключевых слов (lowercase).
+    """
+    if not product or not category or category.parent_id is None:
+        return []
+
+    existing = [k.strip().lower() for k in str(category.keywords or '').split(',') if k and k.strip()]
+    existing_set = set(existing)
+    added = []
+
+    def _add_kw(raw: str):
+        kw = str(raw or '').strip().lower()
+        if not kw:
+            return
+        if len(kw) < 3 or len(kw) > 60:
+            return
+        if re.search(r'\d', kw):
+            return
+        if kw in {'и', 'или', 'для', 'под', 'над', 'на', 'в', 'по', 'к', 'от', 'до'}:
+            return
+        if kw in existing_set:
+            return
+        existing_set.add(kw)
+        added.append(kw)
+
+    # Базовый ключ из имени подкатегории (если подкатегория создана вручную и keywords пустые).
+    subcategory_name_kw = _sanitize_subcategory_name(category.name or '')
+    if subcategory_name_kw:
+        _add_kw(subcategory_name_kw)
+
+    # Дополнительный ключ: первый буквенный токен из названия товара.
+    clean_name = _sanitize_subcategory_name(clean_product_name(getattr(product, 'name', '') or ''))
+    brand_tokens = {str(b).strip().lower() for b in KNOWN_BRANDS if str(b).strip()}
+    for token in re.split(r'[\s/\\,;:()\-]+', clean_name):
+        t = (token or '').strip().lower()
+        if not t:
+            continue
+        if t in brand_tokens:
+            continue
+        if len(t) < 3 or re.search(r'\d', t):
+            continue
+        _add_kw(t)
+        break
+
+    if not added:
+        return []
+
+    category.keywords = ', '.join(dict.fromkeys(existing + added))
+    category.save(update_fields=['keywords', 'updated_at'])
+    return added
+
+
 def get_or_create_subcategory(product_name, parent_category):
     """
     Получает существующую подкатегорию или создаёт новую на основе названия товара.

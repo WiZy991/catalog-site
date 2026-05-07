@@ -290,8 +290,8 @@ def process_product(product_data, sync_log=None):
         if validated_data.get('old_price'):
             product.old_price = validated_data['old_price']
         
-        # Категория
-        if validated_data.get('category'):
+        # Категория: не перетираем ручную категорию у существующих товаров.
+        if validated_data.get('category') and (was_created or not product.category_id):
             category = get_or_create_category(validated_data['category'])
             if category:
                 product.category = category

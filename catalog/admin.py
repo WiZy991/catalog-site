@@ -1321,6 +1321,36 @@ class ProductAdmin(ImportExportModelAdmin, FarpostExportMixin, admin.ModelAdmin)
                 )
     sync_to_farpost_api.short_description = 'Синхронизировать с API Farpost'
 
+    def save_model(self, request, obj, form, change):
+        """
+        При ручной смене подкатегории дообучаем её keywords по товару.
+        Это сохраняет логику админа: новые похожие товары из 1С будут
+        автоматически раскладываться в ту же подкатегорию.
+        """
+        old_category_id = None
+        if change and obj.pk:
+            try:
+                old_category_id = Product.objects.only('category_id').get(pk=obj.pk).category_id
+            except Product.DoesNotExist:
+                old_category_id = None
+
+        super().save_model(request, obj, form, change)
+
+        category_changed = (not change) or (old_category_id != obj.category_id)
+        if category_changed and obj.category_id:
+            try:
+                from catalog.services import learn_subcategory_keyword_from_product
+                added = learn_subcategory_keyword_from_product(obj, obj.category)
+                if added:
+                    self.message_user(
+                        request,
+                        f'Автоправило подкатегории "{obj.category.name}" обновлено: {", ".join(added)}',
+                        level=messages.INFO,
+                    )
+            except Exception:
+                # Не блокируем сохранение товара из-за авто-дообучения.
+                pass
+
 
 @admin.register(ProductImage)
 class ProductImageAdmin(admin.ModelAdmin):

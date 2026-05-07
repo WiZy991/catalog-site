@@ -2494,7 +2494,10 @@ def process_offers_file_single_pass(root, namespaces, filename, request=None):
                 product.quantity = quantity
                 product.availability = 'in_stock' if quantity > 0 else 'out_of_stock'
                 product.is_active = quantity > 0
-                if category and (not product.category_id or product.category_id != category.id):
+                # Не перетираем ручную категорию из админки при каждом обмене 1С.
+                # Категорию из 1С/автораспределения ставим только для новых товаров
+                # или если у существующего товара категория еще не задана.
+                if category and (created or not product.category_id):
                     product.category = category
                 if catalog_type == 'retail' and retail_price is not None:
                     product.price = retail_price
@@ -2505,7 +2508,9 @@ def process_offers_file_single_pass(root, namespaces, filename, request=None):
                     save_with_retry(product)
                     stats[catalog_type]['created'] += 1
                 else:
-                    fields = ['name', 'article', 'supplier_article', 'brand', 'characteristics', 'applicability', 'quantity', 'availability', 'is_active', 'category']
+                    fields = ['name', 'article', 'supplier_article', 'brand', 'characteristics', 'applicability', 'quantity', 'availability', 'is_active']
+                    if created or not product.category_id:
+                        fields.append('category')
                     fields.append('price' if catalog_type == 'retail' else 'wholesale_price')
                     save_with_retry(product, update_fields=fields)
                     stats[catalog_type]['updated'] += 1
