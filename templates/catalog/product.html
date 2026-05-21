@@ -221,9 +221,9 @@
                 <h1 class="product-info__title">{{ display_name|default:product.name }}</h1>
                 
                 <div class="product-info__meta">
-                    {% if product.supplier_article %}
+                    {% if product.get_display_article %}
                     <span class="product-meta__item">
-                        <strong>Артикул:</strong> {{ product.supplier_article }}
+                        <strong>Артикул:</strong> {{ product.get_display_article }}
                     </span>
                     {% endif %}
                     <span class="product-meta__item">

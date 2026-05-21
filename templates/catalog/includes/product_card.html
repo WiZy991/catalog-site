@@ -25,8 +25,8 @@
                 <h3 class="product-card__title" itemprop="name">{{ product.compact_name|default:product.name|truncatechars:80 }}</h3>
                 
                 <div class="product-card__meta">
-                    {% if product.article %}
-                    <span class="product-card__article">Артикул: {{ product.article }}</span>
+                    {% if product.get_display_article %}
+                    <span class="product-card__article">Артикул: {{ product.get_display_article }}</span>
                     {% endif %}
                     <span class="product-card__manufacturer">Производитель: Onesimus</span>
                 </div>

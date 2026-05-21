@@ -282,8 +282,9 @@ def send_order_email(order):
     # Формируем список товаров
     items_list = []
     for item in order.items.all():
+        article = item.product.get_display_article() or 'не указан'
         items_list.append(
-            f"- {item.product.name} (Кросс-номер: {item.product.article or 'не указан'})\n"
+            f"- {item.product.name} (Артикул: {article})\n"
             f"  Количество: {item.quantity} шт.\n"
             f"  Цена: {item.price} руб. за шт.\n"
             f"  Сумма: {item.get_total()} руб."
@@ -332,7 +333,7 @@ def send_order_email(order):
                 {''.join([f'''
                 <div class="item">
                     <p><strong>{escape(item.product.name)}</strong></p>
-                    <p>Кросс-номер: {escape(item.product.article) if item.product.article else 'не указан'}</p>
+                    <p>Артикул: {escape(item.product.get_display_article() or 'не указан')}</p>
                     <p>Количество: {item.quantity} шт. × {item.price} руб. = {item.get_total()} руб.</p>
                 </div>
                 ''' for item in order.items.all()])}

@@ -233,6 +233,13 @@ class Product(models.Model):
     def __str__(self):
         return self.name
 
+    def get_display_article(self):
+        """
+        Артикул для витрины и писем о заказе (поле supplier_article из 1С).
+        Не путать с article — это кросс-номер / OEM.
+        """
+        return (self.supplier_article or '').strip()
+
     def save(self, *args, **kwargs):
         if not self.slug:
             base_slug = transliterate_slug(f'{self.name}-{self.article}' if self.article else self.name)
