@@ -24,6 +24,7 @@ from catalog.services import (
     format_models_multiline,
     product_part_number_value,
     sort_display_characteristics,
+    ensure_display_part_number,
 )
 from .models import PartnerRequest, Partner, PartnerSettings, PartnerOrder, PartnerOrderItem
 from .forms import PartnerRequestForm, PartnerLoginForm, PartnerProfileForm, PartnerPasswordChangeForm, PartnerPasswordResetForm, PartnerSetPasswordForm
@@ -427,7 +428,7 @@ class PartnerProductView(PartnerRequiredMixin, DetailView):
         product = self.object
         
         # Получаем характеристики в едином формате с розницей.
-        all_characteristics = product.get_characteristics_list()
+        all_characteristics = product.get_display_characteristics_list()
         def _format_models_multiline(v: str) -> str:
             return format_models_multiline(v)
         article2_keys = ('артикул2', 'article2', 'oem', 'oem номер', 'oem-номер')
@@ -508,6 +509,7 @@ class PartnerProductView(PartnerRequiredMixin, DetailView):
             if not has_voltage:
                 characteristics.append(('Напряжение', voltage))
 
+        characteristics = ensure_display_part_number(characteristics, product)
         characteristics = sort_display_characteristics(characteristics)
         context['characteristics'] = characteristics
         context['applicability'] = product.get_applicability_list()
@@ -769,7 +771,7 @@ class PublicPartnerProductView(DetailView):
         
         # Получаем характеристики в едином формате с розницей.
         product = self.object
-        all_characteristics = product.get_characteristics_list()
+        all_characteristics = product.get_display_characteristics_list()
         def _format_models_multiline(v: str) -> str:
             return format_models_multiline(v)
         article2_keys = ('артикул2', 'article2', 'oem', 'oem номер', 'oem-номер')
@@ -844,6 +846,7 @@ class PublicPartnerProductView(DetailView):
             has_voltage = any(key.lower() in ['вольтаж', 'voltage', 'напряжение'] for key, _ in characteristics)
             if not has_voltage:
                 characteristics.append(('Напряжение', voltage))
+        characteristics = ensure_display_part_number(characteristics, product)
         characteristics = sort_display_characteristics(characteristics)
         context['characteristics'] = characteristics
         context['article2_value'] = article2_value

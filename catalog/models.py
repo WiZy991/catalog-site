@@ -357,6 +357,29 @@ class Product(models.Model):
             parts.append(f'Цена: {self.price} руб.')
         return '. '.join(parts)
 
+    def get_display_characteristics_list(self):
+        """
+        Характеристики для карточки и Farpost — все строки из 1С без агрессивной фильтрации.
+        Иначе «R», «F/R», «RH/LH» пропадали, если буква встречалась в тексте применимости.
+        """
+        if not self.characteristics:
+            return []
+        result = []
+        excluded_keys = ['прокладка', 'gasket', 'паронит', 'paronit', 'материал', 'material']
+        for line in self.characteristics.strip().split('\n'):
+            if ':' not in line:
+                continue
+            key, value = line.split(':', 1)
+            key_stripped = key.strip()
+            value_stripped = value.strip()
+            if not value_stripped:
+                continue
+            key_lower = key_stripped.lower()
+            if any(excluded in key_lower for excluded in excluded_keys):
+                continue
+            result.append((key_stripped, value_stripped))
+        return result
+
     def get_characteristics_list(self):
         """Преобразует характеристики в список кортежей (ключ, значение) с фильтрацией."""
         if not self.characteristics:
@@ -366,39 +389,76 @@ class Product(models.Model):
         
         # Исключаем материалы и другие ненужные характеристики
         excluded_keys = ['прокладка', 'gasket', 'паронит', 'paronit', 'материал', 'material']
-        
+        # Поля из выгрузки 1С (ЗначенияСвойств) — не фильтровать (в т.ч. «Характеристика: R»)
+        passthrough_keys = (
+            'номер', 'number', 'oem', 'артикул2', 'article2',
+            'характеристика', 'характеристики', 'размер', 'size',
+            'применимо для моделей', 'применимо для двигателей',
+            'кросс-номера', 'кросс-номер', 'кросс номер',
+            'кузов', 'body', 'двигатель', 'engine',
+        )
+
         for line in self.characteristics.strip().split('\n'):
             if ':' in line:
                 key, value = line.split(':', 1)
                 key_stripped = key.strip()
                 value_stripped = value.strip()
                 key_lower = key_stripped.lower()
-                
+
+                if not value_stripped:
+                    continue
+
                 # Пропускаем материалы и другие ненужные характеристики
                 if any(excluded in key_lower for excluded in excluded_keys):
                     continue
-                
+
+                if (
+                    key_lower in passthrough_keys
+                    or key_lower.startswith('применимо для')
+                    or 'кросс' in key_lower
+                ):
+                    result.append((key_stripped, value_stripped))
+                    continue
+
                 # ВАЖНО: "Размер" всегда должен попадать в характеристики БЕЗ фильтрации!
-                # Значение может быть любым: "12V/80А/ПЛ. РЕМ.5Д/ОВ.Ф./ЗКОНТ", "20*450" и т.д.
-                if 'размер' not in key_lower and 'size' not in key_lower:
-                    # Кузов/двигатель из 1С дублируются в applicability намеренно — их нельзя
-                    # выкидывать из характеристик, иначе на карточке «Двигатель» теряется,
-                    # а код ошибочно попадает в фолбэк «Применимо для моделей».
-                    is_body_or_engine_key = any(
-                        token in key_lower
-                        for token in ('двигател', 'engine', 'мотор', 'кузов', 'body', 'тип кузова')
-                    )
-                    if not is_body_or_engine_key:
-                        # Проверяем, что значение не является кодом модели/применимости
-                        # Коды моделей обычно: 1-4 цифры + буквы (например, 1GEN, 1NZF, 2GR, 4AFE)
-                        # Или только буквы+цифры без * или x
-                        if re.match(r'^[A-Z0-9#\-/]{1,10}$', value_stripped.upper()) and not re.search(r'[*x]', value_stripped):
-                            # Это похоже на код модели, а не на характеристику
-                            # Проверяем, не является ли это применимостью
-                            if self.applicability and value_stripped.upper() in self.applicability.upper():
-                                # Это применимость, не характеристика
-                                continue
-                
+                if 'размер' in key_lower or 'size' in key_lower:
+                    result.append((key_stripped, value_stripped))
+                    continue
+
+                is_body_or_engine_key = any(
+                    token in key_lower
+                    for token in ('двигател', 'engine', 'мотор', 'кузов', 'body', 'тип кузова')
+                )
+                if is_body_or_engine_key:
+                    result.append((key_stripped, value_stripped))
+                    continue
+
+                from .services import (
+                    _looks_like_model_code_not_characteristic,
+                    is_side_or_position_characteristic,
+                )
+                if is_side_or_position_characteristic(value_stripped):
+                    result.append((key_stripped, value_stripped))
+                    continue
+
+                if _looks_like_model_code_not_characteristic(value_stripped):
+                    # Не используем substring: «R» есть внутри слова Toyota/Funcargo
+                    if self.applicability:
+                        import re
+                        app_upper = self.applicability.upper()
+                        val_upper = value_stripped.upper()
+                        if len(val_upper) <= 4:
+                            if not re.search(
+                                rf'(?:^|[,;\s]){re.escape(val_upper)}(?:[,;\s]|$)',
+                                app_upper,
+                            ):
+                                result.append((key_stripped, value_stripped))
+                        elif val_upper not in app_upper:
+                            result.append((key_stripped, value_stripped))
+                    else:
+                        result.append((key_stripped, value_stripped))
+                    continue
+
                 result.append((key_stripped, value_stripped))
         
         return result

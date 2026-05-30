@@ -3383,6 +3383,9 @@ def build_farpost_compact_name(product):
         if not characteristic_raw and key in ('размер', 'size', 'характеристика', 'характеристики'):
             characteristic_raw = val
 
+    if not characteristic_raw:
+        characteristic_raw = get_product_characteristic_display_value(product)
+
     engine_raw = augment_engine_raw_for_export(product, engine_raw, article, oem, model_raw)
 
     def _first_model_and_body(raw: str) -> str:
@@ -3469,6 +3472,34 @@ def display_characteristics_order_is_canonical(characteristics) -> bool:
         return True
     keys = [display_characteristic_sort_key(k) for k, _ in characteristics]
     return keys == sorted(keys)
+
+
+def _norm_part_code(val):
+    import re
+    return re.sub(r'[^A-Za-z0-9]+', '', str(val or '').upper())
+
+
+def ensure_display_part_number(characteristics, product):
+    """
+    Добавляет «Номер» из 1С (характеристики или properties), если его ещё нет в списке
+    и он не совпадает с OEM.
+    """
+    if not product:
+        return characteristics
+    part_keys = ('номер', 'number', 'номер детали', 'part number', 'partnumber')
+    if any(str(k).strip().lower() in part_keys for k, _ in characteristics):
+        return characteristics
+    part_num = product_part_number_value(product)
+    if not part_num:
+        return characteristics
+    oem_norms = {
+        _norm_part_code(v)
+        for k, v in characteristics
+        if str(k).strip().lower() == 'oem' and _norm_part_code(v)
+    }
+    if _norm_part_code(part_num) in oem_norms:
+        return characteristics
+    return [('Номер', part_num)] + list(characteristics)
 
 
 def format_models_multiline(value: str) -> str:
@@ -3561,6 +3592,167 @@ def _farpost_char_key_is_cross_column(key_norm: str) -> bool:
     if 'аналог' in kn or 'взаимозамен' in kn:
         return True
     return False
+
+
+_SIDE_CHARACTERISTIC_TOKENS = frozenset({
+    'RH', 'LH', 'R', 'L', 'F', 'FR', 'FL', 'RR', 'RL',
+})
+
+
+def is_side_or_position_characteristic(value: str) -> bool:
+    """
+    Сторона/позиция (RH, LH, F/R, R/R/L) — это «Характеристика», не код модели.
+    Такие значения раньше ошибочно отбрасывались при импорте из 1С.
+    """
+    v = str(value or '').strip().upper()
+    if not v:
+        return False
+    if v in _SIDE_CHARACTERISTIC_TOKENS:
+        return True
+    if '/' in v:
+        parts = [p.strip().upper() for p in v.split('/') if p.strip()]
+        if parts and all(len(p) <= 3 and p in _SIDE_CHARACTERISTIC_TOKENS for p in parts):
+            return True
+    if re.fullmatch(r'^F/R(?:/L)?$', v):
+        return True
+    return False
+
+
+def _looks_like_model_code_not_characteristic(value: str) -> bool:
+    """Эвристика «код модели» из импорта 1С — не применять к стороне/позиции."""
+    value_stripped = str(value or '').strip()
+    if not value_stripped:
+        return False
+    if is_side_or_position_characteristic(value_stripped):
+        return False
+    value_upper = value_stripped.upper()
+    return bool(
+        re.match(r'^[A-Z0-9#\-/]{1,10}$', value_upper)
+        and not re.search(r'[*x]', value_stripped, re.IGNORECASE)
+    )
+
+
+def get_product_characteristic_display_value(product) -> str:
+    """
+    Значение «Характеристика» для карточки и Farpost: из поля characteristics,
+    иначе из применимости (RH/LH) или хвоста названия (F/R, R/R/L).
+    """
+    if not product:
+        return ''
+
+    for key, value in product.get_display_characteristics_list():
+        key_lower = str(key).strip().lower()
+        if key_lower in ('размер', 'size', 'характеристика', 'характеристики'):
+            val = str(value).strip()
+            if val:
+                return val
+
+    # Сырой текст characteristics (запасной путь)
+    if product.characteristics:
+        for line in str(product.characteristics).strip().split('\n'):
+            if ':' not in line:
+                continue
+            key, value = line.split(':', 1)
+            key_lower = key.strip().lower()
+            if key_lower in ('размер', 'size', 'характеристика', 'характеристики'):
+                val = value.strip()
+                if val:
+                    return val
+
+    side_parts = []
+    for item in product.get_applicability_list():
+        if is_side_or_position_characteristic(item):
+            side_parts.append(str(item).strip().upper())
+    if side_parts:
+        uniq = []
+        for s in side_parts:
+            if s not in uniq:
+                uniq.append(s)
+        if set(uniq) == {'RH', 'LH'}:
+            return 'RH/LH'
+        if len(uniq) == 1:
+            return uniq[0]
+        return '/'.join(uniq)
+
+    name_parts = [p.strip() for p in str(product.name or '').split(',') if p and p.strip()]
+    if name_parts:
+        for candidate in reversed(name_parts):
+            cand = candidate.strip()
+            if is_side_or_position_characteristic(cand):
+                return cand
+            if '/' in cand:
+                segs = [p.strip() for p in cand.split('/') if p.strip()]
+                if segs and all(len(p) <= 2 for p in segs):
+                    if all(is_side_or_position_characteristic(p) or p.upper() in _SIDE_CHARACTERISTIC_TOKENS for p in segs):
+                        return cand
+
+    return ''
+
+
+def parse_farpost_export_fields(product):
+    """
+    Поля для CSV/XLS Farpost из product.characteristics + fallback для «Характеристика».
+    Возвращает (characteristics_text, models_value, engines_value, export_cross_numbers).
+    """
+    characteristics = ''
+    models_value = ''
+    engines_value = ''
+    export_cross_numbers = (product.cross_numbers or '').strip()
+
+    if product.characteristics:
+        char_list = product.get_display_characteristics_list()
+        normalized_lines = []
+        seen = set()
+        extracted_cross = []
+        has_characteristic_line = False
+        for k, v in char_list:
+            key_norm = str(k).strip().lower()
+            val_str = str(v).strip()
+            if _farpost_char_key_skip_duplicate_of_article_columns(key_norm):
+                continue
+            if _farpost_char_key_is_cross_column(key_norm):
+                extracted_cross.extend([x.strip() for x in val_str.replace('\n', ',').split(',') if x.strip()])
+                continue
+            if key_norm in ('артикул2', 'article2', 'oem', 'oem номер', 'oem-номер'):
+                extracted_cross.extend([x.strip() for x in val_str.replace('\n', ',').split(',') if x.strip()])
+                continue
+            if _farpost_char_key_is_models_column(key_norm):
+                if not models_value:
+                    models_value = val_str
+                continue
+            if _farpost_char_key_is_engines_column(key_norm):
+                if not engines_value:
+                    engines_value = val_str
+                continue
+            if key_norm in ('размер', 'size', 'характеристика', 'характеристики'):
+                line = f'Характеристика: {val_str}'
+                has_characteristic_line = True
+            else:
+                line = f'{k}: {val_str}'
+            if line not in seen:
+                seen.add(line)
+                normalized_lines.append(line)
+        characteristics = '\n'.join(normalized_lines)
+        if not export_cross_numbers and extracted_cross:
+            uniq = []
+            seen_x = set()
+            for x in extracted_cross:
+                xl = x.lower()
+                if xl not in seen_x:
+                    seen_x.add(xl)
+                    uniq.append(x)
+            export_cross_numbers = ', '.join(uniq)
+
+    if not characteristics or 'Характеристика:' not in characteristics:
+        display_val = get_product_characteristic_display_value(product)
+        if display_val:
+            line = f'Характеристика: {display_val}'
+            if characteristics:
+                characteristics = f'{characteristics}\n{line}'
+            else:
+                characteristics = line
+
+    return characteristics, models_value, engines_value, export_cross_numbers
 
 
 def generate_farpost_description(product, site_url=''):
@@ -3812,59 +4004,17 @@ def generate_farpost_api_file(products, file_format='xls', request=None):
             while len(photo_urls) < 5:
                 photo_urls.append('')
             
-            characteristics = ''
-            models_value = ''
-            engines_value = ''
-            export_cross_numbers = (product.cross_numbers or '').strip()
-            if product.characteristics:
-                char_list = product.get_characteristics_list()
-                normalized_lines = []
-                seen = set()
-                extracted_cross = []
-                for k, v in char_list:
-                    key_norm = str(k).strip().lower()
-                    val_str = str(v).strip()
-                    if _farpost_char_key_skip_duplicate_of_article_columns(key_norm):
-                        continue
-                    if _farpost_char_key_is_cross_column(key_norm):
-                        extracted_cross.extend([x.strip() for x in val_str.replace('\n', ',').split(',') if x.strip()])
-                        continue
-                    if key_norm in ('артикул2', 'article2', 'oem', 'oem номер', 'oem-номер'):
-                        extracted_cross.extend([x.strip() for x in val_str.replace('\n', ',').split(',') if x.strip()])
-                        continue
-                    if _farpost_char_key_is_models_column(key_norm):
-                        if not models_value:
-                            models_value = val_str
-                        continue
-                    if _farpost_char_key_is_engines_column(key_norm):
-                        if not engines_value:
-                            engines_value = val_str
-                        continue
-                    if key_norm in ('размер', 'size', 'характеристика', 'характеристики'):
-                        line = f'Характеристика: {val_str}'
-                    else:
-                        line = f'{k}: {val_str}'
-                    if line not in seen:
-                        seen.add(line)
-                        normalized_lines.append(line)
-                characteristics = '\n'.join(normalized_lines)
-                if not export_cross_numbers and extracted_cross:
-                    uniq = []
-                    seen_x = set()
-                    for x in extracted_cross:
-                        xl = x.lower()
-                        if xl not in seen_x:
-                            seen_x.add(xl)
-                            uniq.append(x)
-                    export_cross_numbers = ', '.join(uniq)
-            
+            characteristics, models_value, engines_value, export_cross_numbers = (
+                parse_farpost_export_fields(product)
+            )
+
             # Количество: если товар неактивен или снят с продажи — отправляем 0 (сигнал для удаления на Farpost)
             quantity = product.quantity if product.is_active else 0
-            
+
             # ВАЖНО: Используем полное название товара, а не очищенное
             # Фарпост должен видеть полное наименование товара
             full_name = build_farpost_compact_name(product)
-            
+
             writer.writerow([
                 full_name,  # Полное наименование товара (первый столбец)
                 str(farpost_export_unit_price(product)),
@@ -3923,59 +4073,17 @@ def generate_farpost_api_file(products, file_format='xls', request=None):
             while len(photo_urls) < 5:
                 photo_urls.append('')
             
-            characteristics = ''
-            models_value = ''
-            engines_value = ''
-            export_cross_numbers = (product.cross_numbers or '').strip()
-            if product.characteristics:
-                char_list = product.get_characteristics_list()
-                normalized_lines = []
-                seen = set()
-                extracted_cross = []
-                for k, v in char_list:
-                    key_norm = str(k).strip().lower()
-                    val_str = str(v).strip()
-                    if _farpost_char_key_skip_duplicate_of_article_columns(key_norm):
-                        continue
-                    if _farpost_char_key_is_cross_column(key_norm):
-                        extracted_cross.extend([x.strip() for x in val_str.replace('\n', ',').split(',') if x.strip()])
-                        continue
-                    if key_norm in ('артикул2', 'article2', 'oem', 'oem номер', 'oem-номер'):
-                        extracted_cross.extend([x.strip() for x in val_str.replace('\n', ',').split(',') if x.strip()])
-                        continue
-                    if _farpost_char_key_is_models_column(key_norm):
-                        if not models_value:
-                            models_value = val_str
-                        continue
-                    if _farpost_char_key_is_engines_column(key_norm):
-                        if not engines_value:
-                            engines_value = val_str
-                        continue
-                    if key_norm in ('размер', 'size', 'характеристика', 'характеристики'):
-                        line = f'Характеристика: {val_str}'
-                    else:
-                        line = f'{k}: {val_str}'
-                    if line not in seen:
-                        seen.add(line)
-                        normalized_lines.append(line)
-                characteristics = '\n'.join(normalized_lines)
-                if not export_cross_numbers and extracted_cross:
-                    uniq = []
-                    seen_x = set()
-                    for x in extracted_cross:
-                        xl = x.lower()
-                        if xl not in seen_x:
-                            seen_x.add(xl)
-                            uniq.append(x)
-                    export_cross_numbers = ', '.join(uniq)
-            
+            characteristics, models_value, engines_value, export_cross_numbers = (
+                parse_farpost_export_fields(product)
+            )
+
             # Количество: если товар неактивен — отправляем 0 (сигнал для удаления на Farpost)
             quantity = product.quantity if product.is_active else 0
-            
+
             # ВАЖНО: Используем полное название товара, а не очищенное
             # Фарпост должен видеть полное наименование товара
             full_name = build_farpost_compact_name(product)
-            
+
             ws.append([
                 full_name,  # Полное наименование товара (первый столбец)
                 float(farpost_export_unit_price(product)),

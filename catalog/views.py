@@ -15,6 +15,8 @@ from .services import (
     extract_engine_from_description,
     augment_engine_raw_for_export,
     sort_display_characteristics,
+    ensure_display_part_number,
+    get_product_characteristic_display_value,
 )
 
 
@@ -543,7 +545,7 @@ class ProductView(DetailView):
         context['images'] = product.images.all()
         
         # Получаем характеристики и фильтруем ненужные
-        all_characteristics = product.get_characteristics_list()
+        all_characteristics = product.get_display_characteristics_list()
         article2_value = ''
         # OEM в верхней строке показываем из cross_numbers (если есть),
         # чтобы не терять несколько OEM-номеров.
@@ -885,6 +887,12 @@ class ProductView(DetailView):
                 )
             ]
 
+        if not any(str(k).strip().lower() in ('характеристика', 'характеристики', 'размер', 'size') for k, _ in characteristics):
+            char_val = get_product_characteristic_display_value(product)
+            if char_val:
+                characteristics.append(('Характеристика', char_val))
+
+        characteristics = ensure_display_part_number(characteristics, product)
         characteristics = sort_display_characteristics(characteristics)
         context['characteristics'] = characteristics
 

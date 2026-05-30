@@ -195,10 +195,7 @@ class FarpostExportMixin:
             farpost_export_unit_price,
             farpost_export_article,
             farpost_export_brand,
-            _farpost_char_key_is_models_column,
-            _farpost_char_key_is_engines_column,
-            _farpost_char_key_is_cross_column,
-            _farpost_char_key_skip_duplicate_of_article_columns,
+            parse_farpost_export_fields,
         )
         import csv
         import io as _io
@@ -225,53 +222,10 @@ class FarpostExportMixin:
             while len(photo_urls) < 5:
                 photo_urls.append('')
             
-            characteristics = ''
-            models_value = ''
-            engines_value = ''
-            export_cross_numbers = (product.cross_numbers or '').strip()
-            if product.characteristics:
-                char_list = product.get_characteristics_list()
-                normalized_lines = []
-                seen = set()
-                extracted_cross = []
-                for k, v in char_list:
-                    key_norm = str(k).strip().lower()
-                    val_str = str(v).strip()
-                    if _farpost_char_key_skip_duplicate_of_article_columns(key_norm):
-                        continue
-                    if _farpost_char_key_is_cross_column(key_norm):
-                        extracted_cross.extend([x.strip() for x in val_str.replace('\n', ',').split(',') if x.strip()])
-                        continue
-                    if key_norm in ('артикул2', 'article2', 'oem', 'oem номер', 'oem-номер'):
-                        extracted_cross.extend([x.strip() for x in val_str.replace('\n', ',').split(',') if x.strip()])
-                        continue
-                    if _farpost_char_key_is_models_column(key_norm):
-                        if not models_value:
-                            models_value = val_str
-                        continue
-                    if _farpost_char_key_is_engines_column(key_norm):
-                        if not engines_value:
-                            engines_value = val_str
-                        continue
-                    if key_norm in ('размер', 'size', 'характеристика', 'характеристики'):
-                        line = f'Характеристика: {val_str}'
-                    else:
-                        line = f'{k}: {val_str}'
-                    if line not in seen:
-                        seen.add(line)
-                        normalized_lines.append(line)
-                characteristics = '\n'.join(normalized_lines)
+            characteristics, models_value, engines_value, export_cross_numbers = (
+                parse_farpost_export_fields(product)
+            )
 
-                if not export_cross_numbers and extracted_cross:
-                    uniq = []
-                    seen_x = set()
-                    for x in extracted_cross:
-                        xl = x.lower()
-                        if xl not in seen_x:
-                            seen_x.add(xl)
-                            uniq.append(x)
-                    export_cross_numbers = ', '.join(uniq)
-            
             quantity = product.quantity if product.is_active else 0
             
             if not product.article:

@@ -1913,13 +1913,10 @@ def parse_commerceml_product(product_elem, namespaces, root_elem=None, groups_ca
                         if any(material in char_name_lower for material in excluded_materials):
                             continue
                         
-                        # Проверяем, что значение не является кодом модели/применимости
-                        # Коды моделей обычно: 1-4 цифры + буквы (например, 1GEN, 1NZF, 2GR, 4AFE)
-                        # Или только буквы+цифры без * или x
-                        if re.match(r'^[A-Z0-9#\-/]{1,10}$', char_value_upper) and not re.search(r'[*x]', char_value):
-                            # Это похоже на код модели, а не на характеристику - пропускаем
+                        from catalog.services import _looks_like_model_code_not_characteristic
+                        if _looks_like_model_code_not_characteristic(char_value):
                             continue
-                        
+
                         characteristics.append({
                             'name': char_name,
                             'value': char_value
@@ -2101,32 +2098,30 @@ def parse_commerceml_product(product_elem, namespaces, root_elem=None, groups_ca
                                     'value': prop_val
                                 })
                         
-                        # Все остальные свойства добавляем в список
-                        # ВАЖНО: Фильтруем неправильные значения (коды моделей, материалы и т.д.)
-                        # ВАЖНО: Добавляем обычные характеристики только если characteristics пуст,
-                        # чтобы избежать дублирования с ХарактеристикиТовара
+                        # Свойства карточки из 1С (ЗначенияСвойств) — всегда сохраняем
+                        elif prop_name_lower in (
+                            'номер', 'number', 'oem', 'артикул', 'article',
+                            'характеристика', 'характеристики',
+                            'применимо для моделей', 'применимо для двигателей',
+                            'кросс-номера', 'кросс-номер', 'кросс номер',
+                        ) or prop_name_lower.startswith('применимо для'):
+                            characteristics.append({
+                                'name': prop_name,
+                                'value': prop_val,
+                            })
+
+                        # Остальные свойства — с фильтрацией кодов моделей
                         else:
-                            # Добавляем только если characteristics пуст (нет ХарактеристикиТовара)
-                            if not characteristics:
-                                # Исключаем материалы
-                                excluded_materials = ['прокладка', 'gasket', 'паронит', 'paronit', 'материал', 'material']
-                                
-                                # Пропускаем материалы
-                                if any(material in prop_name_lower for material in excluded_materials):
-                                    continue
-                                
-                                # Проверяем, что значение не является кодом модели/применимости
-                                # Коды моделей обычно: 1-4 цифры + буквы (например, 1GEN, 1NZF, 2GR, 4AFE)
-                                # Или только буквы+цифры без * или x
-                                prop_val_upper = prop_val.upper()
-                                if re.match(r'^[A-Z0-9#\-/]{1,10}$', prop_val_upper) and not re.search(r'[*x]', prop_val):
-                                    # Это похоже на код модели, а не на характеристику - пропускаем
-                                    continue
-                                
-                        characteristics.append({
-                            'name': prop_name,
-                            'value': prop_val
-                        })
+                            from catalog.services import _looks_like_model_code_not_characteristic
+                            excluded_materials = ['прокладка', 'gasket', 'паронит', 'paronit', 'материал', 'material']
+                            if any(material in prop_name_lower for material in excluded_materials):
+                                continue
+                            if _looks_like_model_code_not_characteristic(prop_val):
+                                continue
+                            characteristics.append({
+                                'name': prop_name,
+                                'value': prop_val,
+                            })
     
     if characteristics:
         product_data['characteristics'] = characteristics
@@ -4384,6 +4379,12 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
                                 if process_product_from_commerceml._log_size_count <= 3:
                                     logger.info(f"  Добавлено значение из 'Размер' в 'Характеристика': '{char_str}'")
                                 continue
+
+                            if char_name_lower in ('характеристика', 'характеристики') and char_value:
+                                char_str = f'Характеристика: {char_value}'
+                                if char_str not in characteristics_parts:
+                                    characteristics_parts.append(char_str)
+                                continue
                             
                             # Пропускаем служебные характеристики
                             if char_name_lower in excluded_chars:
@@ -4397,12 +4398,10 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
                             if not char_value:
                                 continue
                             
-                            char_value_upper = char_value.upper()
-                            # Коды моделей обычно: 1-4 цифры + буквы (например, 1GEN, 1NZF, 2GR, 4AFE)
-                            if re.match(r'^[A-Z0-9#\-/]{1,10}$', char_value_upper) and not re.search(r'[*x]', char_value):
-                                # Это похоже на код модели, а не на характеристику - пропускаем
+                            from catalog.services import _looks_like_model_code_not_characteristic
+                            if _looks_like_model_code_not_characteristic(char_value):
                                 continue
-                            
+
                             # Добавляем характеристику
                             char_str = f"{char_name}: {char_value}"
                             # Проверяем, нет ли уже такой характеристики
@@ -4425,7 +4424,36 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
                 # Проверяем, нет ли уже такой характеристики
                 if not any('Напряжение:' in char and voltage_value in char for char in characteristics_parts):
                     characteristics_parts.append(voltage_char)
-        
+
+        # Сохраняем «Характеристика» из предыдущей выгрузки, если в этом XML поля нет
+        if not any(p.startswith('Характеристика:') for p in characteristics_parts):
+            for line in (old_characteristics or '').split('\n'):
+                line = line.strip()
+                if line.lower().startswith('характеристика:'):
+                    if line not in characteristics_parts:
+                        characteristics_parts.append(line)
+                    break
+
+        # RH/LH/F/R из применимости 1С → в «Характеристика» (часто в 1С это не поле «Размер»)
+        if not any(p.startswith('Характеристика:') for p in characteristics_parts):
+            from catalog.services import is_side_or_position_characteristic
+            side_parts = []
+            for item in (unique_applicability or []):
+                if is_side_or_position_characteristic(item):
+                    side_parts.append(str(item).strip().upper())
+            if side_parts:
+                uniq = []
+                for s in side_parts:
+                    if s not in uniq:
+                        uniq.append(s)
+                if set(uniq) == {'RH', 'LH'}:
+                    side_val = 'RH/LH'
+                elif len(uniq) == 1:
+                    side_val = uniq[0]
+                else:
+                    side_val = '/'.join(uniq)
+                characteristics_parts.append(f'Характеристика: {side_val}')
+
         # Объединяем все характеристики
         # ВАЖНО: Всегда обновляем характеристики при импорте из XML, чтобы исправить неправильные значения
         # ВАЖНО: Обновляем характеристики ВСЕГДА из данных 1С, даже если они пустые
