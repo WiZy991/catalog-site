@@ -14,6 +14,7 @@ from .services import (
     extract_engine_hint_from_product_name,
     extract_engine_from_description,
     augment_engine_raw_for_export,
+    sort_display_characteristics,
 )
 
 
@@ -883,7 +884,8 @@ class ProductView(DetailView):
                     and str(v).strip().lower() in eng_display_vals
                 )
             ]
-        
+
+        characteristics = sort_display_characteristics(characteristics)
         context['characteristics'] = characteristics
 
         # Для h1 убираем хвост с кросс-номерами, чтобы не дублировать блок "Кросс-номер" ниже.

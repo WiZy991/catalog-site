@@ -19,7 +19,12 @@ from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 
 from catalog.models import Category, Product
-from catalog.services import build_farpost_compact_name, format_models_multiline, product_part_number_value
+from catalog.services import (
+    build_farpost_compact_name,
+    format_models_multiline,
+    product_part_number_value,
+    sort_display_characteristics,
+)
 from .models import PartnerRequest, Partner, PartnerSettings, PartnerOrder, PartnerOrderItem
 from .forms import PartnerRequestForm, PartnerLoginForm, PartnerProfileForm, PartnerPasswordChangeForm, PartnerPasswordResetForm, PartnerSetPasswordForm
 from django.http import JsonResponse
@@ -502,7 +507,8 @@ class PartnerProductView(PartnerRequiredMixin, DetailView):
             has_voltage = any(key.lower() in ['вольтаж', 'voltage', 'напряжение'] for key, _ in characteristics)
             if not has_voltage:
                 characteristics.append(('Напряжение', voltage))
-        
+
+        characteristics = sort_display_characteristics(characteristics)
         context['characteristics'] = characteristics
         context['applicability'] = product.get_applicability_list()
         context['article2_value'] = article2_value
@@ -838,6 +844,7 @@ class PublicPartnerProductView(DetailView):
             has_voltage = any(key.lower() in ['вольтаж', 'voltage', 'напряжение'] for key, _ in characteristics)
             if not has_voltage:
                 characteristics.append(('Напряжение', voltage))
+        characteristics = sort_display_characteristics(characteristics)
         context['characteristics'] = characteristics
         context['article2_value'] = article2_value
 

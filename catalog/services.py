@@ -3433,6 +3433,44 @@ def build_farpost_compact_name(product):
     return result
 
 
+# Порядок полей в блоке «Применимость и характеристики» на карточке товара.
+DISPLAY_CHARACTERISTIC_SORT_GROUPS = (
+    ('номер', 'number', 'номер детали', 'part number', 'partnumber'),
+    ('oem', 'артикул2', 'article2', 'oem номер', 'oem-номер'),
+    ('применимо для моделей', 'кузов', 'body', 'тип кузова'),
+    ('применимо для двигателей', 'двигатель', 'engine', 'мотор'),
+    ('кросс-номера', 'кросс-номер', 'кросс номер', 'примечание', 'note'),
+    ('характеристика', 'характеристики', 'размер', 'size'),
+    ('напряжение', 'вольтаж', 'voltage'),
+)
+
+
+def display_characteristic_sort_key(key: str) -> int:
+    """Индекс группы для сортировки полей карточки товара."""
+    k = str(key or '').strip().lower()
+    for idx, aliases in enumerate(DISPLAY_CHARACTERISTIC_SORT_GROUPS):
+        if k in aliases:
+            return idx
+    return len(DISPLAY_CHARACTERISTIC_SORT_GROUPS)
+
+
+def sort_display_characteristics(characteristics):
+    """Сортирует поля карточки в каноническом порядке, сохраняя порядок внутри группы."""
+    if not characteristics:
+        return characteristics
+    indexed = list(enumerate(characteristics))
+    indexed.sort(key=lambda item: (display_characteristic_sort_key(item[1][0]), item[0]))
+    return [pair for _, pair in indexed]
+
+
+def display_characteristics_order_is_canonical(characteristics) -> bool:
+    """True, если ключи уже идут в каноническом порядке."""
+    if not characteristics:
+        return True
+    keys = [display_characteristic_sort_key(k) for k, _ in characteristics]
+    return keys == sorted(keys)
+
+
 def format_models_multiline(value: str) -> str:
     """
     Форматирует применимость для моделей в многострочный вид:
