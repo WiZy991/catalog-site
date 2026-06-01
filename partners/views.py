@@ -25,6 +25,9 @@ from catalog.services import (
     product_part_number_value,
     sort_display_characteristics,
     ensure_display_part_number,
+    apply_characteristic_display_labels,
+    normalize_characteristic_display_key,
+    PART_NUMBER_SOURCE_KEYS,
 )
 from .models import PartnerRequest, Partner, PartnerSettings, PartnerOrder, PartnerOrderItem
 from .forms import PartnerRequestForm, PartnerLoginForm, PartnerProfileForm, PartnerPasswordChangeForm, PartnerPasswordResetForm, PartnerSetPasswordForm
@@ -479,8 +482,10 @@ class PartnerProductView(PartnerRequiredMixin, DetailView):
                     first_characteristic = val
             elif key_lower in ('кросс-номер', 'кросс номер'):
                 characteristics.append(('Кросс-номера', val))
+            elif key_lower in PART_NUMBER_SOURCE_KEYS:
+                characteristics.append((normalize_characteristic_display_key(key), val))
             else:
-                characteristics.append((key, value))
+                characteristics.append((normalize_characteristic_display_key(key), val))
         
         # Если модели и двигатели совпадают — убираем строку двигателей как дубль.
         def _norm_app_value(raw: str):
@@ -511,6 +516,7 @@ class PartnerProductView(PartnerRequiredMixin, DetailView):
 
         characteristics = ensure_display_part_number(characteristics, product)
         characteristics = sort_display_characteristics(characteristics)
+        characteristics = apply_characteristic_display_labels(characteristics)
         context['characteristics'] = characteristics
         context['applicability'] = product.get_applicability_list()
         context['article2_value'] = article2_value
@@ -818,8 +824,10 @@ class PublicPartnerProductView(DetailView):
                     first_characteristic = val
             elif key_lower in ('кросс-номер', 'кросс номер'):
                 characteristics.append(('Кросс-номера', val))
+            elif key_lower in PART_NUMBER_SOURCE_KEYS:
+                characteristics.append((normalize_characteristic_display_key(key), val))
             else:
-                characteristics.append((key, value))
+                characteristics.append((normalize_characteristic_display_key(key), val))
 
         # Если модели и двигатели совпадают — убираем строку двигателей как дубль.
         def _norm_app_value(raw: str):
@@ -848,6 +856,7 @@ class PublicPartnerProductView(DetailView):
                 characteristics.append(('Напряжение', voltage))
         characteristics = ensure_display_part_number(characteristics, product)
         characteristics = sort_display_characteristics(characteristics)
+        characteristics = apply_characteristic_display_labels(characteristics)
         context['characteristics'] = characteristics
         context['article2_value'] = article2_value
 

@@ -3362,6 +3362,30 @@ def build_farpost_compact_name(product):
     article_norm = _norm(article)
     if article and article_norm and article_norm in title_norm:
         article = ''
+
+    # Номер производителя — внутри title_base (как «Амортизатор HONDA 331048»),
+    # а не отдельным фрагментом «, 40BWD17 / DAC40750039,» после запятой.
+    part_number_raw = product_part_number_value(product)
+    if part_number_raw:
+        part_number = part_number_raw.split('/')[0].strip() or part_number_raw.strip()
+        pn_norm = _norm(part_number)
+        if pn_norm and pn_norm not in title_norm and (not oem or pn_norm != _norm(oem)):
+            tokens = [t for t in title_base.split() if t]
+            brand_upper = str(product.brand or '').strip().upper()
+            if len(tokens) >= 3 and brand_upper and tokens[-1].upper() == brand_upper:
+                # «Подшипник ступичный ONESIMUS» → «Подшипник ступичный ONESIMUS 40BWD17»
+                tokens.append(part_number)
+                title_base = ' '.join(tokens)
+            elif len(tokens) == 2:
+                tokens.append(part_number)
+                title_base = ' '.join(tokens)
+            elif len(tokens) >= 3 and not re.search(r'\d', tokens[-1]):
+                tokens[-1] = part_number
+                title_base = ' '.join(tokens)
+            else:
+                title_base = f'{title_base} {part_number}'.strip()
+            title_norm = _norm(title_base)
+
     # Если OEM уже содержится в title_base — не дублируем.
     if oem and _norm(oem) in title_norm:
         oem = ''
@@ -3438,7 +3462,7 @@ def build_farpost_compact_name(product):
 
 # Порядок полей в блоке «Применимость и характеристики» на карточке товара.
 DISPLAY_CHARACTERISTIC_SORT_GROUPS = (
-    ('номер', 'number', 'номер детали', 'part number', 'partnumber'),
+    ('номер производителя', 'номер', 'number', 'номер детали', 'part number', 'partnumber'),
     ('oem', 'артикул2', 'article2', 'oem номер', 'oem-номер'),
     ('применимо для моделей', 'кузов', 'body', 'тип кузова'),
     ('применимо для двигателей', 'двигатель', 'engine', 'мотор'),
@@ -3479,6 +3503,27 @@ def _norm_part_code(val):
     return re.sub(r'[^A-Za-z0-9]+', '', str(val or '').upper())
 
 
+PART_NUMBER_DISPLAY_LABEL = 'номер производителя'
+PART_NUMBER_SOURCE_KEYS = frozenset({
+    'номер', 'number', 'номер детали', 'part number', 'partnumber',
+})
+
+
+def normalize_characteristic_display_key(key: str) -> str:
+    """Подпись поля на карточке (1С «Номер» → «номер производителя»)."""
+    kn = str(key or '').strip().lower()
+    if kn in PART_NUMBER_SOURCE_KEYS:
+        return PART_NUMBER_DISPLAY_LABEL
+    return str(key or '').strip()
+
+
+def apply_characteristic_display_labels(characteristics):
+    """Применяет подписи для вывода на сайте."""
+    if not characteristics:
+        return characteristics
+    return [(normalize_characteristic_display_key(k), v) for k, v in characteristics]
+
+
 def ensure_display_part_number(characteristics, product):
     """
     Добавляет «Номер» из 1С (характеристики или properties), если его ещё нет в списке
@@ -3486,7 +3531,7 @@ def ensure_display_part_number(characteristics, product):
     """
     if not product:
         return characteristics
-    part_keys = ('номер', 'number', 'номер детали', 'part number', 'partnumber')
+    part_keys = PART_NUMBER_SOURCE_KEYS | {PART_NUMBER_DISPLAY_LABEL.lower()}
     if any(str(k).strip().lower() in part_keys for k, _ in characteristics):
         return characteristics
     part_num = product_part_number_value(product)
@@ -3499,7 +3544,7 @@ def ensure_display_part_number(characteristics, product):
     }
     if _norm_part_code(part_num) in oem_norms:
         return characteristics
-    return [('Номер', part_num)] + list(characteristics)
+    return [(PART_NUMBER_DISPLAY_LABEL, part_num)] + list(characteristics)
 
 
 def format_models_multiline(value: str) -> str:
@@ -3875,9 +3920,9 @@ def product_part_number_value(product):
         return str(v or '').strip().lstrip('/')
 
     try:
-        for key, value in product.get_characteristics_list():
+        for key, value in product.get_display_characteristics_list():
             kn = str(key or '').strip().lower()
-            if kn in ('номер', 'number', 'номер детали', 'part number', 'partnumber'):
+            if kn in PART_NUMBER_SOURCE_KEYS:
                 val = _clean(value)
                 if val:
                     return val
@@ -3888,7 +3933,7 @@ def product_part_number_value(product):
     if isinstance(props, dict):
         for key, value in props.items():
             kn = str(key or '').strip().lower()
-            if kn in ('номер', 'number', 'номер детали', 'part number', 'partnumber'):
+            if kn in PART_NUMBER_SOURCE_KEYS:
                 val = _clean(value)
                 if val:
                     return val

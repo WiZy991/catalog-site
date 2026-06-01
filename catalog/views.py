@@ -17,6 +17,9 @@ from .services import (
     sort_display_characteristics,
     ensure_display_part_number,
     get_product_characteristic_display_value,
+    apply_characteristic_display_labels,
+    normalize_characteristic_display_key,
+    PART_NUMBER_SOURCE_KEYS,
 )
 
 
@@ -666,6 +669,8 @@ class ProductView(DetailView):
                             first_engine = str(value).strip()
                     elif key_lower in ('кросс-номер', 'кросс номер'):
                         out_key = 'Кросс-номера'
+                    elif key_lower in PART_NUMBER_SOURCE_KEYS:
+                        out_key = normalize_characteristic_display_key(key)
                     characteristics.append((out_key, value))
 
         if article2_value and not has_oem_row:
@@ -687,7 +692,7 @@ class ProductView(DetailView):
                 (k, v)
                 for k, v in characteristics
                 if not (
-                    str(k).strip().lower() in ('номер', 'number', 'номер детали', 'part number', 'partnumber')
+                    str(k).strip().lower() in PART_NUMBER_SOURCE_KEYS
                     and _norm_code(v) in oem_norm_values
                 )
             ]
@@ -894,6 +899,7 @@ class ProductView(DetailView):
 
         characteristics = ensure_display_part_number(characteristics, product)
         characteristics = sort_display_characteristics(characteristics)
+        characteristics = apply_characteristic_display_labels(characteristics)
         context['characteristics'] = characteristics
 
         # Для h1 убираем хвост с кросс-номерами, чтобы не дублировать блок "Кросс-номер" ниже.
