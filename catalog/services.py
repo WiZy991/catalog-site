@@ -3363,27 +3363,17 @@ def build_farpost_compact_name(product):
     if article and article_norm and article_norm in title_norm:
         article = ''
 
-    # Номер производителя — внутри title_base (как «Амортизатор HONDA 331048»),
-    # а не отдельным фрагментом «, 40BWD17 / DAC40750039,» после запятой.
+    # Номер производителя — в конец title_base (как «Амортизатор HONDA 331048»),
+    # дописываем, не подменяем бренд (ONESIMUS → 40BWD17 ломало заголовок подшипника).
     part_number_raw = product_part_number_value(product)
     if part_number_raw:
         part_number = part_number_raw.split('/')[0].strip() or part_number_raw.strip()
         pn_norm = _norm(part_number)
         if pn_norm and pn_norm not in title_norm and (not oem or pn_norm != _norm(oem)):
             tokens = [t for t in title_base.split() if t]
-            brand_upper = str(product.brand or '').strip().upper()
-            if len(tokens) >= 3 and brand_upper and tokens[-1].upper() == brand_upper:
-                # «Подшипник ступичный ONESIMUS» → «Подшипник ступичный ONESIMUS 40BWD17»
+            if tokens and not any(_norm(t) == pn_norm for t in tokens):
                 tokens.append(part_number)
                 title_base = ' '.join(tokens)
-            elif len(tokens) == 2:
-                tokens.append(part_number)
-                title_base = ' '.join(tokens)
-            elif len(tokens) >= 3 and not re.search(r'\d', tokens[-1]):
-                tokens[-1] = part_number
-                title_base = ' '.join(tokens)
-            else:
-                title_base = f'{title_base} {part_number}'.strip()
             title_norm = _norm(title_base)
 
     # Если OEM уже содержится в title_base — не дублируем.
