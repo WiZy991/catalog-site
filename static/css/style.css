@@ -1541,6 +1541,27 @@ h1, h2, h3, h4, h5, h6 {
     line-height: 1.6;
 }
 
+.footer__credit {
+    margin-top: var(--space-sm);
+}
+
+.footer__studio-link {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-sm);
+    color: var(--color-gray-400);
+    transition: color var(--transition-fast);
+}
+
+.footer__studio-link:hover {
+    color: var(--color-gray-300);
+}
+
+.footer__studio-icon {
+    flex-shrink: 0;
+    border-radius: 4px;
+}
+
 .footer__title {
     font-size: 1rem;
     font-weight: 600;
