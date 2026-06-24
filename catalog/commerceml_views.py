@@ -2239,42 +2239,42 @@ def process_offers_file_single_pass(root, namespaces, filename, request=None):
         return retail_price, wholesale_price
 
     def _parse_quantity(offer_elem):
+        tag_total = 0
+        tag_found = False
         if namespace:
             qty_elems = offer_elem.findall(f'.//{{{namespace}}}Количество')
         else:
             qty_elems = []
         if not qty_elems:
             qty_elems = offer_elem.findall('.//Количество')
-        total = 0
-        found = False
         for q in qty_elems:
             if q is None or q.text is None:
                 continue
             try:
-                total += int(float(q.text.strip().replace(',', '.')))
-                found = True
+                tag_total += int(float(q.text.strip().replace(',', '.')))
+                tag_found = True
             except (ValueError, TypeError):
                 continue
-        if found:
-            return total
+        wh_total = 0
         if namespace:
             warehouse_elems = offer_elem.findall(f'.//{{{namespace}}}Склад')
         else:
             warehouse_elems = []
         if not warehouse_elems:
             warehouse_elems = offer_elem.findall('.//Склад')
-        total = 0
-        found = False
         for w in warehouse_elems:
             raw = w.get('КоличествоНаСкладе') or w.get('QuantityInStock')
             if not raw:
                 continue
             try:
-                total += int(float(str(raw).strip().replace(',', '.')))
-                found = True
+                wh_total += int(float(str(raw).strip().replace(',', '.')))
             except (ValueError, TypeError):
                 continue
-        return total if found else 0
+        if tag_total > 0:
+            return tag_total
+        if wh_total > 0:
+            return wh_total
+        return tag_total if tag_found else wh_total
 
     def _extract_supplier_article(offer_elem):
         # 1) Пытаемся найти Артикул1/Артикул в ХарактеристикиТовара

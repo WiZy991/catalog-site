@@ -137,7 +137,26 @@ def _parse_prices(offer_elem: ET.Element, namespace: Optional[str]) -> Tuple[Opt
     return retail_price, wholesale_price
 
 
-def _parse_quantity(offer_elem: ET.Element, namespace: Optional[str]) -> int:
+def _warehouse_quantity(offer_elem: ET.Element, namespace: Optional[str]) -> int:
+    if namespace:
+        warehouse_elems = offer_elem.findall(f'.//{{{namespace}}}Склад')
+    else:
+        warehouse_elems = []
+    if not warehouse_elems:
+        warehouse_elems = offer_elem.findall('.//Склад')
+    total = 0
+    for w in warehouse_elems:
+        raw = w.get('КоличествоНаСкладе') or w.get('QuantityInStock')
+        if not raw:
+            continue
+        try:
+            total += int(float(str(raw).strip().replace(',', '.')))
+        except (ValueError, TypeError):
+            continue
+    return total
+
+
+def _tag_quantity(offer_elem: ET.Element, namespace: Optional[str]) -> Tuple[int, bool]:
     if namespace:
         qty_elems = offer_elem.findall(f'.//{{{namespace}}}Количество')
     else:
@@ -154,26 +173,17 @@ def _parse_quantity(offer_elem: ET.Element, namespace: Optional[str]) -> int:
             found = True
         except (ValueError, TypeError):
             continue
-    if found:
-        return total
-    if namespace:
-        warehouse_elems = offer_elem.findall(f'.//{{{namespace}}}Склад')
-    else:
-        warehouse_elems = []
-    if not warehouse_elems:
-        warehouse_elems = offer_elem.findall('.//Склад')
-    total = 0
-    found = False
-    for w in warehouse_elems:
-        raw = w.get('КоличествоНаСкладе') or w.get('QuantityInStock')
-        if not raw:
-            continue
-        try:
-            total += int(float(str(raw).strip().replace(',', '.')))
-            found = True
-        except (ValueError, TypeError):
-            continue
-    return total if found else 0
+    return total, found
+
+
+def _parse_quantity(offer_elem: ET.Element, namespace: Optional[str]) -> int:
+    tag_total, tag_found = _tag_quantity(offer_elem, namespace)
+    wh_total = _warehouse_quantity(offer_elem, namespace)
+    if tag_total > 0:
+        return tag_total
+    if wh_total > 0:
+        return wh_total
+    return tag_total if tag_found else wh_total
 
 
 def parse_offer_element(offer_elem: ET.Element, namespace: Optional[str] = None) -> Dict[str, Any]:
@@ -193,6 +203,8 @@ def parse_offer_element(offer_elem: ET.Element, namespace: Optional[str] = None)
     article = (supplier_article or number_article or '').strip()
     oem_keys = _extract_cross_number_keys(offer_elem, namespace)
     quantity = _parse_quantity(offer_elem, namespace)
+    tag_qty, _ = _tag_quantity(offer_elem, namespace)
+    warehouse_qty = _warehouse_quantity(offer_elem, namespace)
     retail_price, wholesale_price = _parse_prices(offer_elem, namespace)
 
     article_keys = []
@@ -215,6 +227,8 @@ def parse_offer_element(offer_elem: ET.Element, namespace: Optional[str] = None)
         'oem_keys': oem_keys,
         'article_keys': article_keys,
         'quantity': quantity,
+        'tag_quantity': tag_qty,
+        'warehouse_quantity': warehouse_qty,
         'retail_price': retail_price,
         'wholesale_price': wholesale_price,
     }
