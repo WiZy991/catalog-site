@@ -1284,6 +1284,7 @@ def process_commerceml_file(file_path, filename, request=None):
                 # - offers.xml содержит цены и количества
                 # - Оба файла обрабатываются параллельно, и товары должны быть видны, если они есть хотя бы в одном из них
                 import_ids_count = len(processed_external_ids)
+                processed_articles = set()
                 if request and hasattr(request, '_offers_processed_external_ids'):
                     offers_ids = request._offers_processed_external_ids.get(current_catalog_type, set())
                     if offers_ids:
@@ -1293,6 +1294,10 @@ def process_commerceml_file(file_path, filename, request=None):
                         logger.info(f"⚠ Нет external_id из offers.xml для каталога {current_catalog_type} (возможно, offers.xml еще не обработан)")
                 else:
                     logger.info(f"⚠ Нет сохраненных external_id из offers.xml (request=None или offers.xml не обработан)")
+                if request and hasattr(request, '_offers_processed_articles'):
+                    processed_articles = set(
+                        request._offers_processed_articles.get(current_catalog_type, set())
+                    )
                 
                 # ВАЖНО: Скрываем товары, если есть валидный набор external_id для текущего каталога
                 # (из import + offers), и если количество ошибок не слишком большое
@@ -1316,6 +1321,14 @@ def process_commerceml_file(file_path, filename, request=None):
                         external_id__isnull=False,
                         external_id__gt=''
                     ).exclude(external_id__in=processed_external_ids)
+                    if processed_articles:
+                        art_list = list(processed_articles)
+                        art_lower = [a.lower() for a in art_list]
+                        products_to_hide = products_to_hide.exclude(
+                            Q(article__in=art_list) | Q(supplier_article__in=art_list)
+                        ).exclude(
+                            Q(article__in=art_lower) | Q(supplier_article__in=art_lower)
+                        )
                     
                     deleted_count = products_to_hide.count()
                     if deleted_count > 0:
@@ -1345,7 +1358,19 @@ def process_commerceml_file(file_path, filename, request=None):
                         total_deleted += deleted_count
                         # Обновляем результаты для текущего каталога
                         results[current_catalog_type]['deleted'] = deleted_count
-                    else:
+
+                    reactivated = Product.objects.filter(
+                        catalog_type=current_catalog_type,
+                        external_id__in=processed_external_ids,
+                        quantity__gt=0,
+                        is_active=False,
+                    ).update(is_active=True, availability='in_stock')
+                    if reactivated:
+                        logger.info(
+                            f"✓ Повторно активировано {reactivated} товаров в каталоге "
+                            f"{current_catalog_type} (есть в exchange и qty>0)"
+                        )
+                    if deleted_count == 0:
                         logger.info(
                             f"Все товары из 1С присутствуют в текущем обмене для каталога {current_catalog_type} "
                             f"(по external_id) - скрывать нечего"
@@ -2314,6 +2339,49 @@ def process_offers_file_single_pass(root, namespaces, filename, request=None):
                     return v
         return ''
 
+    def _extract_cross_numbers(offer_elem):
+        """OEM / Артикул1 / Артикул2 → cross_numbers для поиска на сайте."""
+        parts = []
+        seen = set()
+        cross_names = (
+            'артикул2', 'артикул 2', 'article2', 'article 2',
+            'oem', 'oem номер',
+            'артикул1', 'артикул 1', 'article1', 'article 1',
+        )
+
+        def _add(value):
+            v = (value or '').strip()
+            if not v:
+                return
+            key = v.upper()
+            if key not in seen:
+                seen.add(key)
+                parts.append(v)
+
+        for root_name in ('ХарактеристикиТовара', 'ЗначенияСвойств'):
+            root_elem = _find(offer_elem, root_name)
+            if root_elem is None:
+                continue
+            if root_name == 'ЗначенияСвойств':
+                if namespace:
+                    items = root_elem.findall(f'{{{namespace}}}ЗначенияСвойства')
+                else:
+                    items = []
+                if not items:
+                    items = root_elem.findall('ЗначенияСвойства')
+            else:
+                items = root_elem.findall('.//*')
+            for item in items:
+                name_elem = _find(item, 'Наименование')
+                value_elem = _find(item, 'Значение')
+                if name_elem is None or value_elem is None or not name_elem.text or not value_elem.text:
+                    continue
+                n = name_elem.text.strip().lower()
+                v = value_elem.text.strip()
+                if n in cross_names:
+                    _add(v)
+        return ', '.join(parts)
+
     def _extract_brand(offer_elem):
         # 1) Пытаемся взять бренд из наименования: "Название (БРЕНД, АРТИКУЛ, ...)"
         name_elem = _find(offer_elem, 'Наименование')
@@ -2445,6 +2513,7 @@ def process_offers_file_single_pass(root, namespaces, filename, request=None):
         article = (supplier_article or number_article or '').strip()
         brand = _extract_brand(offer_elem)
         characteristics_text, applicability_text = _extract_characteristics_and_applicability(offer_elem)
+        cross_numbers_text = _extract_cross_numbers(offer_elem)
         quantity = _parse_quantity(offer_elem)
         retail_price, wholesale_price = _parse_prices(offer_elem)
 
@@ -2455,8 +2524,6 @@ def process_offers_file_single_pass(root, namespaces, filename, request=None):
                     product = Product.objects.filter(
                         article=article, catalog_type=catalog_type
                     ).first()
-                    if product:
-                        product.external_id = product_id
                 created = product is None
                 category = get_category_for_product(offer_name, use_db_subcategories=True)
                 if not category:
@@ -2472,11 +2539,13 @@ def process_offers_file_single_pass(root, namespaces, filename, request=None):
                         catalog_type=catalog_type,
                         characteristics=characteristics_text,
                         applicability=applicability_text,
+                        cross_numbers=cross_numbers_text,
                         quantity=0,
                         availability='out_of_stock',
                         is_active=False,
                     )
 
+                product.external_id = product_id
                 product.name = offer_name
                 if article:
                     product.article = article
@@ -2486,6 +2555,8 @@ def process_offers_file_single_pass(root, namespaces, filename, request=None):
                     product.brand = brand
                 product.characteristics = characteristics_text
                 product.applicability = applicability_text
+                if cross_numbers_text:
+                    product.cross_numbers = cross_numbers_text
                 product.quantity = quantity
                 product.availability = 'in_stock' if quantity > 0 else 'out_of_stock'
                 product.is_active = quantity > 0
@@ -2503,7 +2574,12 @@ def process_offers_file_single_pass(root, namespaces, filename, request=None):
                     save_with_retry(product)
                     stats[catalog_type]['created'] += 1
                 else:
-                    fields = ['name', 'article', 'supplier_article', 'brand', 'characteristics', 'applicability', 'quantity', 'availability', 'is_active']
+                    fields = [
+                        'external_id', 'name', 'article', 'supplier_article', 'brand',
+                        'characteristics', 'applicability', 'quantity', 'availability', 'is_active',
+                    ]
+                    if cross_numbers_text:
+                        fields.append('cross_numbers')
                     if created or not product.category_id:
                         fields.append('category')
                     fields.append('price' if catalog_type == 'retail' else 'wholesale_price')
@@ -2512,8 +2588,9 @@ def process_offers_file_single_pass(root, namespaces, filename, request=None):
 
                 stats[catalog_type]['processed'] += 1
                 stats[catalog_type]['processed_external_ids'].add(product_id)
-                if article and str(article).strip():
-                    stats[catalog_type]['processed_articles'].add(str(article).strip().upper())
+                for art_key in (article, supplier_article):
+                    if art_key and str(art_key).strip():
+                        stats[catalog_type]['processed_articles'].add(str(art_key).strip().upper())
             except Exception as e:
                 stats[catalog_type]['errors'].append({'offer_id': product_id, 'error': str(e)})
 
@@ -2522,6 +2599,10 @@ def process_offers_file_single_pass(root, namespaces, filename, request=None):
             request._offers_processed_external_ids = {}
         request._offers_processed_external_ids['retail'] = stats['retail']['processed_external_ids']
         request._offers_processed_external_ids['wholesale'] = stats['wholesale']['processed_external_ids']
+        if not hasattr(request, '_offers_processed_articles'):
+            request._offers_processed_articles = {}
+        request._offers_processed_articles['retail'] = stats['retail']['processed_articles']
+        request._offers_processed_articles['wholesale'] = stats['wholesale']['processed_articles']
 
     # Скрываем товары, которых нет в текущем offers-файле.
     # Это основной путь обмена в проекте (import.xml здесь не участвует).
@@ -2553,6 +2634,14 @@ def process_offers_file_single_pass(root, namespaces, filename, request=None):
                 external_id__gt='',
                 is_active=True,
             ).exclude(external_id__in=ids_in_exchange)
+            if articles_in_exchange:
+                art_list = list(articles_in_exchange)
+                art_lower = [a.lower() for a in art_list]
+                products_to_hide = products_to_hide.exclude(
+                    Q(article__in=art_list) | Q(supplier_article__in=art_list)
+                ).exclude(
+                    Q(article__in=art_lower) | Q(supplier_article__in=art_lower)
+                )
             hidden_count = products_to_hide.count()
             if hidden_count:
                 products_to_hide.update(is_active=False, availability='out_of_stock')
@@ -2561,6 +2650,19 @@ def process_offers_file_single_pass(root, namespaces, filename, request=None):
                     f"которых нет в текущем exchange"
                 )
                 stats[catalog_type]['deleted'] = hidden_count
+
+            # Safety net: позиции из текущего обмена с остатком должны быть активны.
+            reactivated = Product.objects.filter(
+                catalog_type=catalog_type,
+                external_id__in=ids_in_exchange,
+                quantity__gt=0,
+                is_active=False,
+            ).update(is_active=True, availability='in_stock')
+            if reactivated:
+                logger.info(
+                    f"✓ offers.xml: повторно активировано {reactivated} товаров "
+                    f"в каталоге {catalog_type} (есть в exchange и qty>0)"
+                )
 
             # Дополнительно скрываем "старые хвосты" без external_id по артикулу.
             # Это покрывает исторические карточки, которые не попадают под скрытие по external_id.
