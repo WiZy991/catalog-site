@@ -597,7 +597,7 @@
                         </thead>
                         <tbody>
                             {% for product in products %}
-                            <tr class="products-table__row">
+                            <tr class="products-table__row{% if product.is_out_of_stock %} products-table__row--out-of-stock{% endif %}">
                                 <td class="products-table__article">
                                     {% if product.catalog_part_code %}
                                         {{ product.catalog_part_code }}

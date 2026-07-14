@@ -119,11 +119,8 @@ class Category(MPTTModel):
         if not descendant_ids:
             return 0
         
-        count = Product.objects.filter(
+        count = Product.for_site_catalog('retail').filter(
             category_id__in=descendant_ids,
-            is_active=True,
-            catalog_type='retail',
-            quantity__gt=0,
         ).count()
         
         return count
@@ -232,6 +229,27 @@ class Product(models.Model):
 
     def __str__(self):
         return self.name
+
+    @classmethod
+    def for_site_catalog(cls, catalog_type='retail'):
+        """Товары, видимые на сайте (включая отсутствующие на складе)."""
+        return cls.objects.filter(is_active=True, catalog_type=catalog_type)
+
+    @classmethod
+    def for_purchase(cls, catalog_type='retail'):
+        """Товары, доступные для добавления в корзину."""
+        return cls.for_site_catalog(catalog_type).filter(
+            quantity__gt=0,
+            availability='in_stock',
+        )
+
+    @property
+    def is_out_of_stock(self):
+        return self.quantity == 0 or self.availability == 'out_of_stock'
+
+    @property
+    def is_purchasable(self):
+        return self.quantity > 0 and self.availability == 'in_stock'
 
     def get_display_article(self):
         """

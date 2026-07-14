@@ -2084,7 +2084,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         </thead>
                         <tbody>
                             {% for product in products %}
-                            <tr class="products-table__row">
+                            <tr class="products-table__row{% if product.is_out_of_stock %} products-table__row--out-of-stock{% endif %}">
                                 <td class="products-table__article" title="{% if product.catalog_part_code %}{{ product.catalog_part_code }}{% endif %}">
                                     {% if product.catalog_part_code %}
                                         {{ product.catalog_part_code|truncatechars:20 }}
@@ -2152,6 +2152,7 @@ document.addEventListener('DOMContentLoaded', function() {
                                     {% endif %}
                                 </td>
                                 <td class="products-table__quantity">
+                                    {% if product.is_purchasable %}
                                     <div class="quantity-control-wrapper">
                                         <div class="quantity-control">
                                             <button type="button" class="quantity-btn quantity-btn--minus" 
@@ -2172,6 +2173,9 @@ document.addEventListener('DOMContentLoaded', function() {
                                             <i class="bi bi-cart-plus"></i> В корз.
                                         </button>
                                     </div>
+                                    {% else %}
+                                    <span class="text-muted" style="font-size: 0.8rem;">Недоступно</span>
+                                    {% endif %}
                                 </td>
                             </tr>
                             {% endfor %}

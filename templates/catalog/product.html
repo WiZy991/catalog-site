@@ -186,7 +186,7 @@
 {% block content %}
 <section class="product-section">
     <div class="container">
-        <div class="product-page">
+        <div class="product-page{% if product.is_out_of_stock %} product-page--out-of-stock{% endif %}">
             <!-- Галерея -->
             <div class="product-gallery">
                 <div class="product-gallery__main">
@@ -260,7 +260,7 @@
                 </div>
 
                 <div class="product-info__actions" style="margin: 1rem 0 1.25rem 0;">
-                    {% if product.availability == 'in_stock' %}
+                    {% if product.is_purchasable %}
                     <button class="btn btn--primary btn--lg btn-add-cart" type="button" data-product-id="{{ product.id }}">
                         <i class="bi bi-cart-plus"></i> В корзину
                     </button>

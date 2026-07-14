@@ -1,4 +1,4 @@
-<article class="product-card" itemscope itemtype="https://schema.org/Product">
+<article class="product-card{% if product.is_out_of_stock %} product-card--out-of-stock{% endif %}" itemscope itemtype="https://schema.org/Product">
     <div class="product-card__wrapper">
         <a href="{{ product.get_absolute_url }}" class="product-card__link">
             <div class="product-card__image">
@@ -70,7 +70,7 @@
             </div>
         </a>
         
-        {% if product.availability == 'in_stock' %}
+        {% if product.is_purchasable %}
         <div class="product-card__actions">
             <button class="product-card__add-cart" type="button" data-product-id="{{ product.id }}" title="Добавить в корзину">
                 <i class="bi bi-cart-plus"></i>

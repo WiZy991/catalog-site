@@ -354,7 +354,7 @@
             <i class="bi bi-arrow-left"></i> Назад в каталог
         </a>
         
-        <div class="product-page">
+        <div class="product-page{% if product.is_out_of_stock %} product-page--out-of-stock{% endif %}">
             <!-- Галерея -->
             <div class="product-gallery">
                 <div class="product-gallery__main">

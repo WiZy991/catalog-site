@@ -1292,6 +1292,29 @@ h1, h2, h3, h4, h5, h6 {
     transform: translateY(-3px);
 }
 
+.product-card--out-of-stock {
+    filter: grayscale(1);
+    opacity: 0.75;
+}
+
+.product-card--out-of-stock:hover {
+    transform: none;
+}
+
+.product-page--out-of-stock {
+    filter: grayscale(1);
+    opacity: 0.85;
+}
+
+.products-table__row--out-of-stock {
+    filter: grayscale(1);
+    opacity: 0.75;
+}
+
+.products-table__row--out-of-stock .products-table__link {
+    color: var(--color-gray-600);
+}
+
 .product-card__link {
     display: block;
     color: inherit;

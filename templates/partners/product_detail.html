@@ -396,7 +396,7 @@
 
 <section class="product-section">
     <div class="container">
-        <div class="product-page">
+        <div class="product-page{% if product.is_out_of_stock %} product-page--out-of-stock{% endif %}">
             <!-- Gallery -->
             <div class="product-gallery">
                 <div class="product-gallery__main">

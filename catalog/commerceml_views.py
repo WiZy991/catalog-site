@@ -1362,9 +1362,8 @@ def process_commerceml_file(file_path, filename, request=None):
                     reactivated = Product.objects.filter(
                         catalog_type=current_catalog_type,
                         external_id__in=processed_external_ids,
-                        quantity__gt=0,
                         is_active=False,
-                    ).update(is_active=True, availability='in_stock')
+                    ).update(is_active=True)
                     if reactivated:
                         logger.info(
                             f"✓ Повторно активировано {reactivated} товаров в каталоге "
@@ -2559,7 +2558,7 @@ def process_offers_file_single_pass(root, namespaces, filename, request=None):
                     product.cross_numbers = cross_numbers_text
                 product.quantity = quantity
                 product.availability = 'in_stock' if quantity > 0 else 'out_of_stock'
-                product.is_active = quantity > 0
+                product.is_active = True
                 # Не перетираем ручную категорию из админки при каждом обмене 1С.
                 # Категорию из 1С/автораспределения ставим только для новых товаров
                 # или если у существующего товара категория еще не задана.
@@ -2655,9 +2654,8 @@ def process_offers_file_single_pass(root, namespaces, filename, request=None):
             reactivated = Product.objects.filter(
                 catalog_type=catalog_type,
                 external_id__in=ids_in_exchange,
-                quantity__gt=0,
                 is_active=False,
-            ).update(is_active=True, availability='in_stock')
+            ).update(is_active=True)
             if reactivated:
                 logger.info(
                     f"✓ offers.xml: повторно активировано {reactivated} товаров "
@@ -3477,7 +3475,7 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                         quantity = 0
                     product.quantity = quantity
                     product.availability = 'in_stock' if quantity > 0 else 'out_of_stock'
-                    product.is_active = quantity > 0
+                    product.is_active = True
                     # Сохраняем товар после обновления активности
                     update_fields = ['quantity', 'availability', 'is_active', 'name']
                     if catalog_type == 'wholesale':
@@ -3490,7 +3488,7 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
                     # и определяем активность ТОЛЬКО по нему (цена не участвует).
                     existing_quantity = product.quantity or 0
                     product.availability = 'in_stock' if existing_quantity > 0 else 'out_of_stock'
-                    product.is_active = existing_quantity > 0
+                    product.is_active = True
                     save_with_retry(product, update_fields=['availability', 'is_active', 'name'])
                 
                 # ВАЖНО: НЕ переопределяем категорию при каждом обмене из offers.xml!
@@ -4121,7 +4119,7 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
             if price_updated:
                 current_quantity = product.quantity or 0
                 product.availability = 'in_stock' if current_quantity > 0 else 'out_of_stock'
-                product.is_active = current_quantity > 0
+                product.is_active = True
             # ВАЖНО: Всегда обновляем категорию из данных 1С, чтобы товары правильно распределялись по категориям
             # НО: только если категория активна, чтобы товары не попадали в неактивные категории
             if category:

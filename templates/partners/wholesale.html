@@ -644,7 +644,7 @@
         
         <div class="products-grid">
             {% for product in preview_products %}
-            <article class="product-card">
+            <article class="product-card{% if product.is_out_of_stock %} product-card--out-of-stock{% endif %}">
                 <a href="{% if is_partner %}{% url 'partners:product' product.slug %}{% else %}{% url 'partners:public_product' product.slug %}{% endif %}" class="product-card__link">
                     <div class="product-card__image">
                         {% with main_image=product.get_main_image %}

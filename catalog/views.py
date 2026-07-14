@@ -61,11 +61,8 @@ class CategoryView(ListView):
 
     def _visible_products_count_for_branch(self, category):
         descendants = category.get_descendants(include_self=True)
-        return Product.objects.filter(
+        return Product.for_site_catalog('retail').filter(
             category__in=descendants,
-            is_active=True,
-            catalog_type='retail',
-            quantity__gt=0,
         ).count()
 
     def get_category(self):
@@ -111,11 +108,8 @@ class CategoryView(ListView):
         # Это выравнивает "Найдено" с суммой по подкатегориям.
         if self.category.children.filter(is_active=True).exists():
             descendants = descendants.exclude(id=self.category.id)
-        queryset = Product.objects.filter(
+        queryset = Product.for_site_catalog('retail').filter(
             category__in=descendants,
-            is_active=True,
-            catalog_type='retail',  # Только товары из основного каталога
-            quantity__gt=0,  # Только с остатком; «под заказ» при нуле на складе не показываем
         ).select_related('category').prefetch_related('images')
         
         # Применяем фильтры
@@ -161,11 +155,8 @@ class CategoryView(ListView):
         context['found_count'] = total_in_subcategories if subcategories else paginator.count
         
         # Данные для фильтров
-        all_products = Product.objects.filter(
+        all_products = Product.for_site_catalog('retail').filter(
             category__in=self.category.get_descendants(include_self=True),
-            is_active=True,
-            catalog_type='retail',  # Только товары из основного каталога
-            quantity__gt=0  # Только товары с количеством больше 0
         )
         context['brands'] = get_brand_choices(self.category)
         context['price_range'] = all_products.aggregate(min_price=Min('price'), max_price=Max('price'))
@@ -182,11 +173,8 @@ class CatalogItemView(ListView):
 
     def _visible_products_count_for_branch(self, category):
         descendants = category.get_descendants(include_self=True)
-        return Product.objects.filter(
+        return Product.for_site_catalog('retail').filter(
             category__in=descendants,
-            is_active=True,
-            catalog_type='retail',
-            quantity__gt=0,
         ).count()
     
     def dispatch(self, request, *args, **kwargs):
@@ -217,11 +205,9 @@ class CatalogItemView(ListView):
                     except Category.DoesNotExist:
                         # Это не категория, проверяем, является ли это товаром
                         descendants = parent_category.get_descendants(include_self=True)
-                        product = Product.objects.filter(
+                        product = Product.for_site_catalog('retail').filter(
                             slug=slug,
                             category__in=descendants,
-                            is_active=True,
-                            quantity__gt=0,
                         ).first()
                         
                         if product:
@@ -254,11 +240,8 @@ class CatalogItemView(ListView):
             # Это выравнивает "Найдено" с суммой по подкатегориям.
             if category.children.filter(is_active=True).exists():
                 descendants = descendants.exclude(id=category.id)
-            queryset = Product.objects.filter(
+            queryset = Product.for_site_catalog('retail').filter(
                 category__in=descendants,
-                is_active=True,
-                catalog_type='retail',
-                quantity__gt=0,
             ).select_related('category').prefetch_related('images')
             
             # Применяем фильтры
@@ -304,11 +287,8 @@ class CatalogItemView(ListView):
             context['found_count'] = total_in_subcategories if subcategories else paginator.count
             
             # Данные для фильтров
-            all_products = Product.objects.filter(
+            all_products = Product.for_site_catalog('retail').filter(
                 category__in=self.category.get_descendants(include_self=True),
-                is_active=True,
-                catalog_type='retail',  # Только товары из основного каталога
-                quantity__gt=0  # Только товары с количеством больше 0
             )
             context['brands'] = get_brand_choices(self.category)
             context['price_range'] = all_products.aggregate(min_price=Min('price'), max_price=Max('price'))
@@ -404,11 +384,7 @@ class ProductView(DetailView):
     def get_queryset(self):
         # ВАЖНО: Фильтруем товары так же, как в каталоге - только активные с количеством > 0 и в наличии
         # Это гарантирует, что если товар показывается в каталоге, он будет доступен и на странице товара
-        return Product.objects.filter(
-            is_active=True,
-            catalog_type='retail',  # Только товары из основного каталога
-            quantity__gt=0,  # Только с остатком; «под заказ» при нуле на складе не показываем
-        ).select_related('category').prefetch_related('images')
+        return Product.for_site_catalog('retail').select_related('category').prefetch_related('images')
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -956,18 +932,11 @@ def filter_products_ajax(request):
     if category_slug:
         category = get_object_or_404(Category, slug=category_slug, is_active=True)
         descendants = category.get_descendants(include_self=True)
-        queryset = Product.objects.filter(
+        queryset = Product.for_site_catalog('retail').filter(
             category__in=descendants,
-            is_active=True,
-            catalog_type='retail',
-            quantity__gt=0,
         )
     else:
-        queryset = Product.objects.filter(
-            is_active=True,
-            catalog_type='retail',
-            quantity__gt=0,
-        )
+        queryset = Product.for_site_catalog('retail')
     
     # Применяем фильтры
     filterset = ProductFilter(request.GET, queryset=queryset)
@@ -1022,11 +991,7 @@ def search_products(request):
         
         # Используем комбинацию методов для надежного регистронезависимого поиска
         # Для SQLite лучше использовать iregex, для других БД - icontains
-        products = Product.objects.filter(
-            is_active=True,
-            catalog_type='retail',
-            quantity__gt=0,
-        )
+        products = Product.for_site_catalog('retail')
         
         # Для каждого слова создаём условие поиска
         # Используем AND - товар должен содержать ВСЕ слова из запроса

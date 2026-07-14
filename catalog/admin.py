@@ -185,6 +185,11 @@ class FarpostExportMixin:
     
     def export_farpost(self, request, queryset):
         """Экспорт выбранных товаров в формат Farpost согласно ТЗ."""
+        queryset = queryset.filter(
+            is_active=True,
+            catalog_type='retail',
+            quantity__gt=0,
+        )
         from .services import (
             generate_farpost_title,
             generate_farpost_images,
@@ -1191,6 +1196,11 @@ class ProductAdmin(ImportExportModelAdmin, FarpostExportMixin, admin.ModelAdmin)
     
     def sync_to_farpost_api(self, request, queryset):
         """Синхронизировать выбранные товары с API Farpost."""
+        queryset = queryset.filter(
+            is_active=True,
+            catalog_type='retail',
+            quantity__gt=0,
+        )
         from .models import FarpostAPISettings
         from .services import sync_to_farpost_api, generate_farpost_api_file
         

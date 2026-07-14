@@ -166,12 +166,7 @@ class WholesaleView(TemplateView):
         context['is_partner'] = self.is_partner()
         
         # Несколько товаров для превью (ТОЛЬКО из партнёрского каталога с остатком!)
-        context['preview_products'] = Product.objects.filter(
-            is_active=True,
-            catalog_type='wholesale'
-        ).filter(
-            Q(quantity__gt=0) | Q(wholesale_price__gt=0)  # Товары с остатком ИЛИ оптовой ценой
-        ).select_related('category').prefetch_related('images')[:6]
+        context['preview_products'] = Product.for_site_catalog('wholesale').select_related('category').prefetch_related('images')[:6]
         
         return context
     
@@ -417,11 +412,7 @@ class PartnerProductView(PartnerRequiredMixin, DetailView):
     
     def get_queryset(self):
         # ТОЛЬКО товары из партнёрского каталога с количеством > 0!
-        return Product.objects.filter(
-            is_active=True,
-            catalog_type='wholesale',
-            quantity__gt=0  # Только товары с количеством больше 0
-        ).select_related('category').prefetch_related('images')
+        return Product.for_site_catalog('wholesale').select_related('category').prefetch_related('images')
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -672,12 +663,7 @@ class PublicPartnerCatalogView(ListView):
     
     def get_queryset(self):
         # ТОЛЬКО товары из партнёрского каталога с остатком!
-        queryset = Product.objects.filter(
-            is_active=True,
-            catalog_type='wholesale'
-        ).filter(
-            Q(quantity__gt=0) | Q(wholesale_price__gt=0)  # Товары с остатком ИЛИ оптовой ценой
-        ).select_related('category').prefetch_related('images')
+        queryset = Product.for_site_catalog('wholesale').select_related('category').prefetch_related('images')
         
         # Фильтр по категории
         category_slug = self.kwargs.get('category_slug')
@@ -735,12 +721,8 @@ class PublicPartnerCatalogView(ListView):
             descendants = category.get_descendants(include_self=True)
             descendant_ids = list(descendants.values_list('id', flat=True))
             if descendant_ids:
-                product_count = Product.objects.filter(
+                product_count = Product.for_site_catalog('wholesale').filter(
                     category_id__in=descendant_ids,
-                    is_active=True,
-                    catalog_type='wholesale'
-                ).filter(
-                    Q(quantity__gt=0) | Q(wholesale_price__gt=0)
                 ).count()
             else:
                 product_count = 0
@@ -766,10 +748,7 @@ class PublicPartnerProductView(DetailView):
     
     def get_queryset(self):
         # ТОЛЬКО товары из партнёрского каталога!
-        return Product.objects.filter(
-            is_active=True,
-            catalog_type='wholesale'
-        ).select_related('category').prefetch_related('images')
+        return Product.for_site_catalog('wholesale').select_related('category').prefetch_related('images')
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -922,17 +901,7 @@ class PartnerCatalogView(PartnerRequiredMixin, ListView):
     paginate_by = 24
     
     def get_queryset(self):
-        # ТОЛЬКО товары из партнёрского каталога с остатком!
-        # Исключаем товары не в наличии
-        queryset = Product.objects.filter(
-            is_active=True,
-            catalog_type='wholesale',
-        ).select_related('category').prefetch_related('images')
-        queryset = queryset.filter(
-            availability__in=['in_stock', 'order']  # Только в наличии или под заказ
-        ).filter(
-            Q(quantity__gt=0) | Q(wholesale_price__gt=0)  # Товары с остатком ИЛИ оптовой ценой
-        )
+        queryset = Product.for_site_catalog('wholesale').select_related('category').prefetch_related('images')
         
         # Фильтр по категории
         category_slug = self.kwargs.get('category_slug')
@@ -1008,24 +977,16 @@ class PartnerCatalogView(PartnerRequiredMixin, ListView):
                 from django.db.models import Count
                 
                 # Сначала проверяем товары в самой категории
-                direct_count = Product.objects.filter(
+                direct_count = Product.for_site_catalog('wholesale').filter(
                     category=category,
-                    is_active=True,
-                    catalog_type='wholesale'
-                ).filter(
-                    Q(quantity__gt=0) | Q(wholesale_price__gt=0) | Q(availability__in=['in_stock', 'order'])
                 ).count()
                 
                 # Затем проверяем товары в подкатегориях
                 if category.active_children.exists():
                     subcategory_ids = list(category.active_children.values_list('id', flat=True))
                     if subcategory_ids:
-                        subcategory_count = Product.objects.filter(
+                        subcategory_count = Product.for_site_catalog('wholesale').filter(
                             category_id__in=subcategory_ids,
-                            is_active=True,
-                            catalog_type='wholesale'
-                        ).filter(
-                            Q(quantity__gt=0) | Q(wholesale_price__gt=0) | Q(availability__in=['in_stock', 'order'])
                         ).count()
                         product_count = direct_count + subcategory_count
                     else:
@@ -1067,6 +1028,11 @@ def partner_cart_add(request, product_id):
             is_active=True,
             catalog_type='wholesale'
         )
+        if not product.is_purchasable:
+            return JsonResponse({
+                'success': False,
+                'error': 'Товар отсутствует на складе',
+            }, status=400)
         partner = get_partner_or_none(request.user)
         cart = get_partner_cart(request)
         

@@ -27,7 +27,16 @@ def set_cart(request, cart):
 def cart_add(request, product_id):
     """Добавить товар в корзину."""
     if request.method == 'POST':
-        product = get_object_or_404(Product, id=product_id, is_active=True)
+        product = get_object_or_404(Product, id=product_id, is_active=True, catalog_type='retail')
+        if not product.is_purchasable:
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Товар отсутствует на складе',
+                }, status=400)
+            messages.error(request, 'Товар отсутствует на складе')
+            return redirect(request.META.get('HTTP_REFERER', 'catalog:index'))
+        
         cart = get_cart(request)
         
         product_id_str = str(product_id)
