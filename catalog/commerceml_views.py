@@ -1349,10 +1349,14 @@ def process_commerceml_file(file_path, filename, request=None):
                                 f"price={price_val}, quantity={product.quantity})"
                             )
                         
-                        # Скрываем все товары, которых нет в текущем обмене
-                        products_to_hide.update(is_active=False, availability='out_of_stock')
+                        # Нет в offers: показываем на сайте как «нет в наличии», qty=0 (не уходит на Farpost)
+                        products_to_hide.update(
+                            quantity=0,
+                            is_active=True,
+                            availability='out_of_stock',
+                        )
                         logger.info(
-                            f"✓ Скрыто товаров в каталоге {current_catalog_type}: {deleted_count} "
+                            f"✓ Отмечено как нет в наличии в каталоге {current_catalog_type}: {deleted_count} "
                             f"(external_id НЕ входят в список из текущего обмена)"
                         )
                         total_deleted += deleted_count
@@ -2643,9 +2647,13 @@ def process_offers_file_single_pass(root, namespaces, filename, request=None):
                 )
             hidden_count = products_to_hide.count()
             if hidden_count:
-                products_to_hide.update(is_active=False, availability='out_of_stock')
+                products_to_hide.update(
+                    quantity=0,
+                    is_active=True,
+                    availability='out_of_stock',
+                )
                 logger.info(
-                    f"✓ offers.xml: скрыто {hidden_count} товаров в каталоге {catalog_type}, "
+                    f"✓ offers.xml: нет в наличии {hidden_count} товаров в каталоге {catalog_type}, "
                     f"которых нет в текущем exchange"
                 )
                 stats[catalog_type]['deleted'] = hidden_count
@@ -2682,9 +2690,13 @@ def process_offers_file_single_pass(root, namespaces, filename, request=None):
                 )
                 stale_count = stale_by_article.count()
                 if stale_count:
-                    stale_by_article.update(is_active=False, availability='out_of_stock')
+                    stale_by_article.update(
+                        quantity=0,
+                        is_active=True,
+                        availability='out_of_stock',
+                    )
                     logger.info(
-                        f"✓ offers.xml: скрыто {stale_count} товаров без external_id "
+                        f"✓ offers.xml: нет в наличии {stale_count} товаров без external_id "
                         f"в каталоге {catalog_type} (по отсутствию артикула в текущем exchange)"
                     )
                     stats[catalog_type]['deleted'] = stats[catalog_type].get('deleted', 0) + stale_count
