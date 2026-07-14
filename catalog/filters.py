@@ -4,6 +4,12 @@ from django.db import models
 from .models import Product, Category
 
 
+SITE_AVAILABILITY_CHOICES = [
+    ('in_stock', 'В наличии'),
+    ('out_of_stock', 'Нет в наличии'),
+]
+
+
 class ProductFilter(django_filters.FilterSet):
     """Фильтр для товаров."""
     
@@ -27,8 +33,9 @@ class ProductFilter(django_filters.FilterSet):
         label='Состояние'
     )
     availability = django_filters.ChoiceFilter(
-        choices=Product.AVAILABILITY_CHOICES,
-        label='Наличие'
+        method='filter_availability',
+        choices=SITE_AVAILABILITY_CHOICES,
+        label='Наличие',
     )
     search = django_filters.CharFilter(
         method='filter_search',
@@ -48,6 +55,18 @@ class ProductFilter(django_filters.FilterSet):
     class Meta:
         model = Product
         fields = ['brand', 'condition', 'availability']
+
+    def filter_availability(self, queryset, name, value):
+        """На сайте только «в наличии» и «нет в наличии» (без «под заказ»)."""
+        if not value:
+            return queryset
+        if value == 'order':
+            value = 'out_of_stock'
+        if value == 'in_stock':
+            return queryset.filter(quantity__gt=0, availability='in_stock')
+        if value == 'out_of_stock':
+            return queryset.exclude(quantity__gt=0, availability='in_stock')
+        return queryset
 
     def filter_search(self, queryset, name, value):
         """Поиск по названию, артикулу, бренду и кросс-номерам (по частичным совпадениям слов)."""

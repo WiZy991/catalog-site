@@ -45,11 +45,9 @@
                 </div>
                 {% endif %}
                 
-                <div class="product-card__availability availability--{{ product.availability }}">
-                    {% if product.availability == 'in_stock' %}
+                <div class="product-card__availability availability--{% if product.is_purchasable %}in_stock{% else %}out_of_stock{% endif %}">
+                    {% if product.is_purchasable %}
                     <i class="bi bi-check-circle"></i> В наличии
-                    {% elif product.availability == 'order' %}
-                    <i class="bi bi-clock"></i> Под заказ
                     {% else %}
                     <i class="bi bi-x-circle"></i> Нет в наличии
                     {% endif %}

@@ -141,7 +141,7 @@
                         <select name="availability" class="filter-select">
                             <option value="">Любое</option>
                             <option value="in_stock" {% if request.GET.availability == 'in_stock' %}selected{% endif %}>В наличии</option>
-                            <option value="order" {% if request.GET.availability == 'order' %}selected{% endif %}>Под заказ</option>
+                            <option value="out_of_stock" {% if request.GET.availability == 'out_of_stock' %}selected{% endif %}>Нет в наличии</option>
                         </select>
                     </div>
                     

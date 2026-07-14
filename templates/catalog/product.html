@@ -40,7 +40,7 @@
         "priceCurrency": "RUB",
         "price": "{{ product.price }}",
         "priceValidUntil": "{{ product.updated_at|date:'Y-m-d' }}",
-        "availability": "{% if product.availability == 'in_stock' %}https://schema.org/InStock{% elif product.availability == 'order' %}https://schema.org/PreOrder{% else %}https://schema.org/OutOfStock{% endif %}",
+        "availability": "{% if product.is_purchasable %}https://schema.org/InStock{% else %}https://schema.org/OutOfStock{% endif %}",
         "seller": {
             "@type": "Organization",
             "name": "{{ SITE_NAME }}"
@@ -245,11 +245,9 @@
                     {% endif %}
                 </div>
                 
-                <div class="product-info__availability availability--{{ product.availability }}">
-                    {% if product.availability == 'in_stock' %}
+                <div class="product-info__availability availability--{% if product.is_purchasable %}in_stock{% else %}out_of_stock{% endif %}">
+                    {% if product.is_purchasable %}
                     <i class="bi bi-check-circle-fill"></i> В наличии
-                    {% elif product.availability == 'order' %}
-                    <i class="bi bi-clock-fill"></i> Под заказ
                     {% else %}
                     <i class="bi bi-x-circle-fill"></i> Нет в наличии
                     {% endif %}
