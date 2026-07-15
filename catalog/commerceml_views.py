@@ -4012,8 +4012,6 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
                 if product:
                     logger.info(f"✓ Товар найден по external_id={external_id}: {product.article} - {product.name[:50]}")
                 else:
-                    # NOTE: import.xml может приходить раньше offers.xml. В этой версии логики
-                    # мы НЕ создаём новые товары из import.xml — только обновляем существующие.
                     logger.info(f"⚠ Товар не найден по external_id={external_id}")
         
         was_created = product is None
@@ -4192,6 +4190,8 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
                         else:
                             if process_product_from_commerceml._log_count <= 3:
                                 logger.warning(f"  ⚠ Категория '{category.name}' неактивна и нет активной родительской, категория товара не обновлена (остается: '{product.category.name if product.category else 'НЕТ'}')")
+        
+        old_characteristics = product.characteristics or ''
         
         # Описание (отображается как "Применимость") — заполняем из "Кузов" и "Двигатель" из 1С
         description_parts = []
@@ -4577,7 +4577,6 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
         # ВАЖНО: Всегда обновляем характеристики при импорте из XML, чтобы исправить неправильные значения
         # ВАЖНО: Обновляем характеристики ВСЕГДА из данных 1С, даже если они пустые
         # Это позволяет синхронизировать изменения характеристик из 1С
-        old_characteristics = product.characteristics or ''
         if characteristics_parts:
             new_characteristics = '\n'.join(characteristics_parts)
             # Логируем изменение характеристик для отладки (только первые 3 товара)
