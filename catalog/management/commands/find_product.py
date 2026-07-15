@@ -32,19 +32,23 @@ class Command(BaseCommand):
             return
 
         for p in all_matches[:20]:
-            visible = p.is_active and p.catalog_type == 'retail'
+            visible_retail = p.catalog_type == 'retail' and p.is_active
+            visible_wholesale = p.catalog_type == 'wholesale' and p.is_active
             purchasable = p.is_purchasable
             reasons = []
             if not p.is_active:
                 reasons.append('is_active=False (скрыт обменом 1С)')
-            if p.catalog_type != 'retail':
-                reasons.append(f'catalog_type={p.catalog_type} (не розница)')
             if p.quantity == 0 and p.is_active:
                 reasons.append('qty=0 — виден ч/б, в корзину нельзя')
             elif p.quantity > 0 and not p.is_active:
                 reasons.append(f'устаревший остаток qty={p.quantity}')
 
-            status = self.style.SUCCESS('ВИДЕН на сайте') if visible else self.style.WARNING('НЕ ВИДЕН')
+            if visible_retail:
+                status = self.style.SUCCESS('ВИДЕН в рознице')
+            elif visible_wholesale:
+                status = self.style.SUCCESS('ВИДЕН в опте')
+            else:
+                status = self.style.WARNING('НЕ ВИДЕН')
             self.stdout.write('')
             self.stdout.write(f'[{p.catalog_type}] id={p.pk} {status}')
             self.stdout.write(f'  name: {p.name[:70]}')
@@ -58,6 +62,9 @@ class Command(BaseCommand):
 
         retail_visible = all_matches.filter(
             catalog_type='retail', is_active=True
+        ).count()
+        wholesale_visible = all_matches.filter(
+            catalog_type='wholesale', is_active=True
         ).count()
         self.stdout.write('')
         self.stdout.write('=' * 72)
@@ -73,3 +80,7 @@ class Command(BaseCommand):
                     f'  {stale} записей со «старым» остатком — выполните:\n'
                     '  python manage.py reactivate_out_of_stock_products'
                 )
+        if wholesale_visible:
+            self.stdout.write(self.style.SUCCESS(f'Видимых в опте: {wholesale_visible}'))
+        elif all_matches.filter(catalog_type='wholesale').exists():
+            self.stdout.write(self.style.WARNING('В опте на сайте не отображается.'))

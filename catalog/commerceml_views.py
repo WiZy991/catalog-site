@@ -75,30 +75,26 @@ def save_with_retry(instance, update_fields=None, max_retries=5, delay=0.2):
     Надёжное сохранение объекта с повтором при 'database is locked' (SQLite).
     Используется во всех местах обмена с 1С, чтобы единичные блокировки БД
     не ломали весь процесс импорта.
-    
-    ВАЖНО: Если вызывается внутри transaction.atomic(), использует savepoint.
-    Если вызывается вне транзакции, создаёт новую транзакцию.
+
+    ВАЖНО: внутри transaction.atomic() нельзя закрывать/переоткрывать соединение —
+    это ломает SQLite и даёт «Cannot operate on a closed database».
     """
     from django.db import connection
-    
-    # Проверяем, есть ли активная транзакция
+
     in_atomic_block = connection.in_atomic_block
-    
+
     for attempt in range(max_retries):
         try:
-            # Гарантируем активное соединение перед сохранением
-            try:
-                db_alias = getattr(getattr(instance, '_state', None), 'db', None) or 'default'
-                conn = connections[db_alias]
-                # Закрыть "битые" соединения и удостовериться, что соединение установлено
-                conn.close_if_unusable_or_obsolete()
-                conn.ensure_connection()
-            except Exception:
-                # Игнорируем, пробуем сохранить — если будет ошибка, поймаем ниже
-                pass
+            # Вне atomic можно безопасно обновить соединение (CONN_MAX_AGE=0 для SQLite).
+            if not in_atomic_block:
+                try:
+                    db_alias = getattr(getattr(instance, '_state', None), 'db', None) or 'default'
+                    conn = connections[db_alias]
+                    conn.close_if_unusable_or_obsolete()
+                    conn.ensure_connection()
+                except Exception:
+                    pass
 
-            # Не используем контекстные менеджеры транзакций здесь, чтобы избежать проблем
-            # с несовместимыми реализациями. Вызов находится внутри atomic-обёрток выше по стеку.
             if update_fields is not None:
                 instance.save(update_fields=update_fields)
             else:
@@ -108,28 +104,23 @@ def save_with_retry(instance, update_fields=None, max_retries=5, delay=0.2):
             msg = str(e).lower()
             is_locked = 'database is locked' in msg or 'database table is locked' in msg
             is_closed = 'closed database' in msg or 'cannot operate on a closed database' in msg
+
+            # Внутри atomic переподключение невозможно — сразу пробрасываем ошибку.
+            if in_atomic_block:
+                raise
+
             if is_locked and attempt < max_retries - 1:
-                # Закрываем старые соединения и ждём с exponential backoff
                 close_old_connections()
                 backoff = delay * (2 ** attempt)
                 jitter = random.uniform(0, delay)
                 time.sleep(backoff + jitter)
                 continue
             if is_closed and attempt < max_retries - 1:
-                # Переподключаемся и пробуем снова (конкретно для БД экземпляра)
-                try:
-                    db_alias = getattr(getattr(instance, '_state', None), 'db', None) or 'default'
-                    conn = connections[db_alias]
-                    conn.close()
-                except Exception:
-                    pass
-                finally:
-                    close_old_connections()
+                close_old_connections()
                 backoff = delay * (2 ** attempt)
                 jitter = random.uniform(0, delay)
                 time.sleep(backoff + jitter)
                 continue
-            # Если не database is locked или превышен лимит попыток - пробрасываем ошибку
             raise
 
 # Настройки
@@ -1129,58 +1120,58 @@ def process_commerceml_file(file_path, filename, request=None):
                 )
 
                 for idx, product_data in enumerate(batch):
-                    # Каждый товар обрабатывается в отдельной транзакции
-                    # Это гарантирует, что ошибка одного товара не повлияет на обработку остальных
+                    # Каждый товар — отдельное сохранение без transaction.atomic():
+                    # save_with_retry при CONN_MAX_AGE=0 закрывает соединение, что ломает SQLite внутри atomic.
                     try:
-                        with transaction.atomic():
-                            # Логируем данные товара перед обработкой (для первых 3)
-                            if idx < 3:
-                                logger.info(
-                                    f"Обработка товара #{idx+1} для {current_catalog_type}: "
-                                    f"sku={product_data.get('sku')}, "
-                                    f"name={product_data.get('name')[:50] if product_data.get('name') else 'N/A'}"
-                                )
+                        close_old_connections()
 
-                            product, error, was_created = process_product_from_commerceml(
-                                product_data, catalog_type=current_catalog_type
+                        # Логируем данные товара перед обработкой (для первых 3)
+                        if idx < 3:
+                            logger.info(
+                                f"Обработка товара #{idx+1} для {current_catalog_type}: "
+                                f"sku={product_data.get('sku')}, "
+                                f"name={product_data.get('name')[:50] if product_data.get('name') else 'N/A'}"
                             )
-                            if product:
-                                processed_count += 1
-                                # ВАЖНО: Добавляем external_id только если товар успешно обработан для текущего типа каталога
-                                external_id = product.external_id or product_data.get('external_id') or product_data.get('sku')
-                                if external_id:
-                                    processed_external_ids.add(str(external_id).strip())
 
-                                if was_created:
-                                    created_count += 1
+                        product, error, was_created = process_product_from_commerceml(
+                            product_data, catalog_type=current_catalog_type
+                        )
+                        if product:
+                            processed_count += 1
+                            # ВАЖНО: Добавляем external_id только если товар успешно обработан для текущего типа каталога
+                            external_id = product.external_id or product_data.get('external_id') or product_data.get('sku')
+                            if external_id:
+                                processed_external_ids.add(str(external_id).strip())
+
+                            if was_created:
+                                created_count += 1
+                                logger.info(
+                                    f"✓ Создан товар в каталоге {current_catalog_type}: "
+                                    f"{product.article} - {product.name[:50]}"
+                                )
+                            else:
+                                updated_count += 1
+                                if idx < 10:  # Логируем первые 10 обновлений
                                     logger.info(
-                                        f"✓ Создан товар в каталоге {current_catalog_type}: "
+                                        f"✓ Обновлен товар в каталоге {current_catalog_type}: "
                                         f"{product.article} - {product.name[:50]}"
                                     )
-                                else:
-                                    updated_count += 1
-                                    if idx < 10:  # Логируем первые 10 обновлений
-                                        logger.info(
-                                            f"✓ Обновлен товар в каталоге {current_catalog_type}: "
-                                            f"{product.article} - {product.name[:50]}"
-                                        )
-                            elif error:
-                                # Ошибка внутри process_product_from_commerceml
-                                error_info = {
-                                    'sku': product_data.get('sku', 'unknown'),
-                                    'catalog_type': current_catalog_type,
-                                    'error': error
-                                }
-                                errors.append(error_info)
-                                logger.warning(
-                                    f"✗ Ошибка обработки товара {product_data.get('sku', 'unknown')} "
-                                    f"для {current_catalog_type}: {error}"
-                                )
-                                # Выводим данные товара при ошибке (только для первых 5)
-                                if idx < 5:
-                                    logger.warning(f"  Данные товара: {product_data}")
+                        elif error:
+                            # Ошибка внутри process_product_from_commerceml
+                            error_info = {
+                                'sku': product_data.get('sku', 'unknown'),
+                                'catalog_type': current_catalog_type,
+                                'error': error
+                            }
+                            errors.append(error_info)
+                            logger.warning(
+                                f"✗ Ошибка обработки товара {product_data.get('sku', 'unknown')} "
+                                f"для {current_catalog_type}: {error}"
+                            )
+                            # Выводим данные товара при ошибке (только для первых 5)
+                            if idx < 5:
+                                logger.warning(f"  Данные товара: {product_data}")
                     except Exception as e:
-                        # Исключение при обработке товара - транзакция автоматически откатывается
                         error_msg = str(e)
                         logger.error(
                             f"✗ Исключение при обработке товара {product_data.get('sku', 'unknown')} "
@@ -1192,11 +1183,10 @@ def process_commerceml_file(file_path, filename, request=None):
                             'catalog_type': current_catalog_type,
                             'error': error_msg
                         })
-                        # Выводим данные товара при ошибке (только для первых 5)
                         if idx < 5:
                             logger.warning(f"  Данные товара: {product_data}")
-                        # Транзакция автоматически откатывается при исключении
-                        # Продолжаем обработку следующего товара
+                    finally:
+                        close_old_connections()
 
             logger.info(
                 f"Обработка для {current_catalog_type} завершена: обработано={processed_count}, "
@@ -3907,9 +3897,6 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
             # - выбираем "правильный" товар (предпочтительно по ПОЛНОМУ external_id из 1С)
             # - удаляем остальные дубликаты в этом catalog_type
             candidates = list(Product.objects.filter(article=article, catalog_type=catalog_type))
-            if not candidates:
-                # Если не нашли в нужном типе каталога, ищем в любом каталоге (редкий fallback)
-                candidates = list(Product.objects.filter(article=article))
             if candidates:
                 # Выбор целевого товара
                 product = None
@@ -4001,18 +3988,21 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
                 catalog_type=catalog_type
             ).first()
             
-            # Если не нашли в нужном типе каталога, ищем в любом каталоге
-            if not product:
-                product = Product.objects.filter(
-                    external_id=external_id
-                ).first()
-            
             # Логируем результат поиска для диагностики
             if process_product_from_commerceml._log_count <= 3:
                 if product:
                     logger.info(f"✓ Товар найден по external_id={external_id}: {product.article} - {product.name[:50]}")
                 else:
                     logger.info(f"⚠ Товар не найден по external_id={external_id}")
+        
+        # retail и wholesale — отдельные карточки; не обновляем товар из другого каталога.
+        if product is not None and product.catalog_type != catalog_type:
+            if process_product_from_commerceml._log_count <= 3:
+                logger.info(
+                    f"⚠ Найден товар id={product.id} в каталоге {product.catalog_type}, "
+                    f"но обрабатываем {catalog_type} — создаём отдельную карточку"
+                )
+            product = None
         
         was_created = product is None
         
@@ -4036,7 +4026,7 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
                 product.price = price
             if process_product_from_commerceml._log_count <= 3:
                 logger.info(
-                    f"✓ Создан товар из import.xml: external_id={external_id}, "
+                    f"✓ Создан товар из import.xml ({catalog_type}): external_id={external_id}, "
                     f"article={article}, name={product_name[:50]}"
                 )
         else:
