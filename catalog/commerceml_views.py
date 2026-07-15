@@ -1094,16 +1094,11 @@ def process_commerceml_file(file_path, filename, request=None):
             )
             return {'status': 'partial', 'message': 'Товары не найдены в файле', 'processed': 0, 'created': 0, 'updated': 0}
         
-        # ВАЖНО: НОВАЯ ЛОГИКА ДЛЯ import.xml — НИЧЕГО не создаём и не обновляем.
-        logger.info("Обнаружен файл каталога товаров (import.xml) — создание/обновление отключено (всё создаём из offers.xml)")
-        return {
-            'status': 'success',
-            'processed': 0,
-            'created': 0,
-            'updated': 0,
-            'errors': []
-        }
-        
+        # import.xml: создаём/обновляем каталог (в т.ч. товары без остатка, которых нет в offers.xml).
+        logger.info(
+            f"Обработка import.xml: {len(products_data)} товаров "
+            f"(создание отсутствующих карточек для показа «нет в наличии»)"
+        )
         for current_catalog_type in ['retail', 'wholesale']:
             logger.info("=" * 80)
             logger.info(f"ОБРАБОТКА ДЛЯ КАТАЛОГА: {current_catalog_type.upper()}")
@@ -3885,14 +3880,13 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
             except (ValueError, TypeError):
                 quantity = 0
         
-        # Наличие на сайте только по остатку из import (остаток из offers обновит позже).
-        # Цена > 0 при нуле на складе не включает карточку в витрину.
+        # Наличие при создании из import: без остатка, но видим на сайте (остаток обновит offers.xml).
         if quantity > 0:
             availability = 'in_stock'
             is_active = True
         else:
             availability = 'out_of_stock'
-            is_active = False
+            is_active = True
         
         # Ищем товар по external_id или по артикулу в нужном типе каталога
         # ВАЖНО: 1С может давать новое Ид одному и тому же товару, поэтому поиск по артикулу имеет приоритет
@@ -4025,15 +4019,28 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
         was_created = product is None
         
         if was_created:
-            # ВАЖНО: Товары из import.xml НЕ создаются, только обновляются существующие.
-            # Новые товары создаются из offers.xml, где есть название, цена и остаток.
-            # Это гарантирует, что товары создаются с правильными данными о наличии.
+            product_name = (clean_name or name or '').strip()
+            product = Product(
+                external_id=external_id,
+                article=article or '',
+                name=product_name,
+                brand=brand or '',
+                category=category,
+                catalog_type=catalog_type,
+                quantity=0,
+                availability='out_of_stock',
+                is_active=True,
+            )
+            if catalog_type == 'wholesale':
+                if price > 0:
+                    product.wholesale_price = price
+            elif price > 0:
+                product.price = price
             if process_product_from_commerceml._log_count <= 3:
-                logger.info(f"⚠ Товар с external_id={external_id} не найден в базе. "
-                           f"Товар НЕ будет создан из import.xml - он будет создан из offers.xml, "
-                           f"где есть название, цена и остаток.")
-            # Возвращаем None, чтобы указать, что товар не был создан/обновлен
-            return None, "Товар не найден в базе. Будет создан из offers.xml", False
+                logger.info(
+                    f"✓ Создан товар из import.xml: external_id={external_id}, "
+                    f"article={article}, name={product_name[:50]}"
+                )
         else:
             # Обновляем существующий товар
             # ВАЖНО: Всегда обновляем ВСЕ данные из 1С, даже если они уже были установлены

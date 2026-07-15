@@ -86,7 +86,7 @@ class Command(BaseCommand):
                 is_active=False,
                 availability='out_of_stock',
                 quantity__gt=0,
-            ).exclude(category__isnull=True)
+            )
 
         filters = {'quantity': 0, 'is_active': False}
         if catalog_type != 'all':
