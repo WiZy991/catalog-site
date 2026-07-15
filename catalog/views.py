@@ -976,43 +976,13 @@ def filter_products_ajax(request):
 
 def search_products(request):
     """Поиск товаров (регистронезависимый, включая кириллицу, по частичным совпадениям слов)."""
-    from django.db.models.functions import Lower
+    from .search_utils import apply_product_search
     
     query = request.GET.get('q', '').strip()
     page = request.GET.get('page', 1)
     
     if query:
-        # Разбиваем запрос на отдельные слова (минимум 2 символа)
-        query_words = [word.strip() for word in query.split() if len(word.strip()) >= 2]
-        
-        if not query_words:
-            # Если слово слишком короткое, ищем весь запрос целиком
-            query_words = [query.strip()]
-        
-        # Используем комбинацию методов для надежного регистронезависимого поиска
-        # Для SQLite лучше использовать iregex, для других БД - icontains
-        products = Product.for_site_catalog('retail')
-        
-        # Для каждого слова создаём условие поиска
-        # Используем AND - товар должен содержать ВСЕ слова из запроса
-        for word in query_words:
-            word_escaped = word.replace('\\', '\\\\').replace('(', '\\(').replace(')', '\\)').replace('[', '\\[').replace(']', '\\]')
-            word_q = (
-                # Используем iregex для регистронезависимого поиска (лучше работает с кириллицей в SQLite)
-                Q(name__iregex=word_escaped) |
-                Q(article__iregex=word_escaped) |
-                Q(brand__iregex=word_escaped) |
-                Q(cross_numbers__iregex=word_escaped) |
-                Q(applicability__iregex=word_escaped) |
-                # Резервный вариант с icontains (на случай проблем с regex)
-                Q(name__icontains=word) |
-                Q(article__icontains=word) |
-                Q(brand__icontains=word) |
-                Q(cross_numbers__icontains=word) |
-                Q(applicability__icontains=word)
-            )
-            products = products.filter(word_q)
-        
+        products = apply_product_search(Product.for_site_catalog('retail'), query)
         products = products.select_related('category').prefetch_related('images').distinct()
     else:
         products = Product.objects.none()

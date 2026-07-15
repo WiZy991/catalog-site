@@ -2,6 +2,7 @@ import django_filters
 from django import forms
 from django.db import models
 from .models import Product, Category
+from .search_utils import apply_product_search
 
 
 SITE_AVAILABILITY_CHOICES = [
@@ -69,30 +70,10 @@ class ProductFilter(django_filters.FilterSet):
         return queryset
 
     def filter_search(self, queryset, name, value):
-        """Поиск по названию, артикулу, бренду и кросс-номерам (по частичным совпадениям слов)."""
+        """Поиск по названию, артикулам, бренду, кросс-номерам и характеристикам."""
         if not value or not value.strip():
             return queryset
-        
-        # Разбиваем запрос на отдельные слова (минимум 2 символа)
-        query_words = [word.strip() for word in value.split() if len(word.strip()) >= 2]
-        
-        if not query_words:
-            # Если слово слишком короткое, ищем весь запрос целиком
-            query_words = [value.strip()]
-        
-        # Для каждого слова создаём условие поиска
-        # Используем AND - товар должен содержать ВСЕ слова из запроса
-        for word in query_words:
-            word_q = (
-                models.Q(name__icontains=word) |
-                models.Q(article__icontains=word) |
-                models.Q(brand__icontains=word) |
-                models.Q(cross_numbers__icontains=word) |
-                models.Q(applicability__icontains=word)
-            )
-            queryset = queryset.filter(word_q)
-        
-        return queryset
+        return apply_product_search(queryset, value)
 
 
 def get_brand_choices(category=None):
