@@ -1085,129 +1085,47 @@ def process_commerceml_file(file_path, filename, request=None):
             )
             return {'status': 'partial', 'message': 'Товары не найдены в файле', 'processed': 0, 'created': 0, 'updated': 0}
         
-        # import.xml: создаём/обновляем каталог (в т.ч. товары без остатка, которых нет в offers.xml).
+        # import.xml: быстро создаём отсутствующие карточки (retail + wholesale).
+        # offers.xml обновляет цены/остатки; товары с qty=0 часто есть только в import.xml.
         logger.info(
             f"Обработка import.xml: {len(products_data)} товаров "
-            f"(создание отсутствующих карточек для показа «нет в наличии»)"
+            f"(быстрый режим: создание отсутствующих карточек «нет в наличии»)"
         )
         for current_catalog_type in ['retail', 'wholesale']:
             logger.info("=" * 80)
             logger.info(f"ОБРАБОТКА ДЛЯ КАТАЛОГА: {current_catalog_type.upper()}")
             logger.info("=" * 80)
 
-            # ВАЖНО: Сбрасываем счетчики для каждого каталога
-            # Иначе данные из retail будут смешиваться с данными из wholesale
-            processed_count = 0
-            created_count = 0
-            updated_count = 0
-            errors = []
-            # ВАЖНО: Собираем external_id только из успешно обработанных товаров для текущего типа каталога
-            processed_external_ids = set()
-
-            logger.info(
-                f"Начало обработки {len(products_data)} товаров для каталога {current_catalog_type} "
-                f"(оптимизированная обработка)"
+            bulk_result = bulk_ensure_missing_import_products(
+                products_data, catalog_type=current_catalog_type
             )
 
-            # ВАЖНО: Обрабатываем товары батчами для производительности
-            # Но все равно в отдельных транзакциях для надежности
-            batch_size = 100  # Обрабатываем по 100 товаров за раз
-            for batch_start in range(0, len(products_data), batch_size):
-                batch_end = min(batch_start + batch_size, len(products_data))
-                batch = products_data[batch_start:batch_end]
-                logger.info(
-                    f"Обработка батча {batch_start+1}-{batch_end} из {len(products_data)} товаров для {current_catalog_type}"
-                )
-
-                for idx, product_data in enumerate(batch):
-                    # Каждый товар — отдельное сохранение без transaction.atomic():
-                    # save_with_retry при CONN_MAX_AGE=0 закрывает соединение, что ломает SQLite внутри atomic.
-                    try:
-                        close_old_connections()
-
-                        # Логируем данные товара перед обработкой (для первых 3)
-                        if idx < 3:
-                            logger.info(
-                                f"Обработка товара #{idx+1} для {current_catalog_type}: "
-                                f"sku={product_data.get('sku')}, "
-                                f"name={product_data.get('name')[:50] if product_data.get('name') else 'N/A'}"
-                            )
-
-                        product, error, was_created = process_product_from_commerceml(
-                            product_data, catalog_type=current_catalog_type
-                        )
-                        if product:
-                            processed_count += 1
-                            # ВАЖНО: Добавляем external_id только если товар успешно обработан для текущего типа каталога
-                            external_id = product.external_id or product_data.get('external_id') or product_data.get('sku')
-                            if external_id:
-                                processed_external_ids.add(str(external_id).strip())
-
-                            if was_created:
-                                created_count += 1
-                                logger.info(
-                                    f"✓ Создан товар в каталоге {current_catalog_type}: "
-                                    f"{product.article} - {product.name[:50]}"
-                                )
-                            else:
-                                updated_count += 1
-                                if idx < 10:  # Логируем первые 10 обновлений
-                                    logger.info(
-                                        f"✓ Обновлен товар в каталоге {current_catalog_type}: "
-                                        f"{product.article} - {product.name[:50]}"
-                                    )
-                        elif error:
-                            # Ошибка внутри process_product_from_commerceml
-                            error_info = {
-                                'sku': product_data.get('sku', 'unknown'),
-                                'catalog_type': current_catalog_type,
-                                'error': error
-                            }
-                            errors.append(error_info)
-                            logger.warning(
-                                f"✗ Ошибка обработки товара {product_data.get('sku', 'unknown')} "
-                                f"для {current_catalog_type}: {error}"
-                            )
-                            # Выводим данные товара при ошибке (только для первых 5)
-                            if idx < 5:
-                                logger.warning(f"  Данные товара: {product_data}")
-                    except Exception as e:
-                        error_msg = str(e)
-                        logger.error(
-                            f"✗ Исключение при обработке товара {product_data.get('sku', 'unknown')} "
-                            f"для {current_catalog_type}: {error_msg}",
-                            exc_info=True
-                        )
-                        errors.append({
-                            'sku': product_data.get('sku', 'unknown'),
-                            'catalog_type': current_catalog_type,
-                            'error': error_msg
-                        })
-                        if idx < 5:
-                            logger.warning(f"  Данные товара: {product_data}")
-                    finally:
-                        close_old_connections()
+            created_count = bulk_result['created']
+            updated_count = bulk_result['updated']
+            skipped_existing = bulk_result['skipped_existing']
+            processed_count = created_count + skipped_existing
+            errors = bulk_result['errors']
+            processed_external_ids = bulk_result['processed_external_ids']
 
             logger.info(
-                f"Обработка для {current_catalog_type} завершена: обработано={processed_count}, "
-                f"создано={created_count}, обновлено={updated_count}, ошибок={len(errors)}"
+                f"Обработка для {current_catalog_type} завершена: "
+                f"создано={created_count}, уже в базе={skipped_existing}, "
+                f"ошибок={len(errors)}"
             )
             logger.info(
-                f"Обработано товаров в обмене: {len(processed_external_ids)} с external_id "
-                f"для каталога {current_catalog_type}"
+                f"Товаров в файле с external_id для {current_catalog_type}: "
+                f"{len(processed_external_ids)}"
             )
 
-            # Сохраняем результаты для текущего каталога
             results[current_catalog_type] = {
                 'processed': processed_count,
                 'created': created_count,
                 'updated': updated_count,
-                'deleted': 0,  # Будет обновлено после скрытия товаров
-                'errors': errors.copy(),  # Копируем список ошибок
-                'processed_external_ids': processed_external_ids.copy()  # Сохраняем для скрытия товаров
+                'deleted': 0,
+                'errors': errors.copy(),
+                'processed_external_ids': processed_external_ids.copy(),
             }
 
-            # Суммируем общие результаты
             total_processed += processed_count
             total_created += created_count
             total_updated += updated_count
@@ -2593,7 +2511,6 @@ def process_offers_file_single_pass(root, namespaces, filename, request=None):
         request._offers_processed_articles['wholesale'] = stats['wholesale']['processed_articles']
 
     # Скрываем товары, которых нет в текущем offers-файле.
-    # Это основной путь обмена в проекте (import.xml здесь не участвует).
     if getattr(settings, 'ONE_C_HIDE_MISSING_PRODUCTS', False):
         for catalog_type in ('retail', 'wholesale'):
             ids_in_exchange = set(stats[catalog_type]['processed_external_ids'])
@@ -3661,6 +3578,154 @@ def process_offers_file(root, namespaces, filename, request=None, catalog_type='
         'updated': updated_count,
         'errors': len(errors),
         'processed_external_ids': processed_external_ids.copy()  # Сохраняем для возможного использования
+    }
+
+
+def _build_import_category_matcher():
+    """Загружает категории один раз для быстрого import.xml."""
+    default = Category.objects.filter(parent__isnull=True, is_active=True).order_by('id').first()
+    matchers = []
+    for cat in Category.objects.filter(is_active=True, parent__isnull=False):
+        name_kw = (cat.name or '').strip().lower()
+        if name_kw:
+            matchers.append((len(name_kw), name_kw, cat))
+        try:
+            for kw in cat.get_keywords_list():
+                kw_l = (kw or '').strip().lower()
+                if kw_l:
+                    matchers.append((len(kw_l), kw_l, cat))
+        except Exception:
+            pass
+    matchers.sort(key=lambda x: x[0], reverse=True)
+    return default, matchers
+
+
+def _import_category_for_name(name, default_cat, matchers, cache):
+    key = (name or '')[:100].lower()
+    if key in cache:
+        return cache[key]
+    nl = (name or '').lower()
+    for _ln, kw, cat in matchers:
+        if kw in nl:
+            cache[key] = cat
+            return cat
+    cache[key] = default_cat
+    return default_cat
+
+
+def _import_slug_for_product(external_id, catalog_type, existing_slugs):
+    from .models import transliterate_slug
+    base = transliterate_slug(f"{catalog_type}-{external_id}".replace('#', '-'))[:480]
+    slug = base
+    n = 1
+    while slug in existing_slugs:
+        slug = f"{base}-{n}"[:500]
+        n += 1
+    existing_slugs.add(slug)
+    return slug
+
+
+def _format_import_characteristics(product_data):
+    parts = []
+    for c in product_data.get('characteristics') or []:
+        if isinstance(c, dict):
+            n = (c.get('name') or '').strip()
+            v = (c.get('value') or '').strip()
+            if n and v:
+                parts.append(f"{n}: {v}")
+    return '\n'.join(parts)
+
+
+def bulk_ensure_missing_import_products(products_data, catalog_type, batch_size=500):
+    """
+    Быстрый import.xml: создаёт только отсутствующие карточки (qty=0, видимы на сайте).
+    Существующие товары пропускаются — их обновляет offers.xml.
+    """
+    existing_ids = set(
+        Product.objects.filter(catalog_type=catalog_type)
+        .exclude(external_id__isnull=True)
+        .exclude(external_id='')
+        .values_list('external_id', flat=True)
+    )
+
+    default_cat, cat_matchers = _build_import_category_matcher()
+    category_cache = {}
+    existing_slugs = set(Product.objects.values_list('slug', flat=True))
+
+    to_create = []
+    created = 0
+    skipped_existing = 0
+    errors = []
+    seen_in_file = set()
+
+    for pd in products_data:
+        ext_id = _get_full_external_id_from_product_data(pd)
+        if not ext_id:
+            errors.append({'sku': pd.get('sku'), 'error': 'нет external_id'})
+            continue
+        if ext_id in seen_in_file:
+            continue
+        seen_in_file.add(ext_id)
+
+        if ext_id in existing_ids:
+            skipped_existing += 1
+            continue
+
+        name = (pd.get('name') or '').strip()
+        if not name:
+            errors.append({'external_id': ext_id, 'error': 'нет названия'})
+            continue
+
+        article = (pd.get('article') or '').strip()
+        brand = (pd.get('brand') or '').strip()
+        cross = pd.get('cross_numbers') or []
+        if isinstance(cross, list):
+            cross_text = ', '.join(str(x).strip() for x in cross if str(x).strip())
+        else:
+            cross_text = str(cross).strip()
+
+        category = _import_category_for_name(name, default_cat, cat_matchers, category_cache)
+        slug = _import_slug_for_product(ext_id, catalog_type, existing_slugs)
+
+        to_create.append(Product(
+            external_id=ext_id,
+            name=name[:500],
+            slug=slug,
+            article=article,
+            brand=brand,
+            category=category,
+            catalog_type=catalog_type,
+            quantity=0,
+            availability='out_of_stock',
+            is_active=True,
+            cross_numbers=cross_text,
+            characteristics=_format_import_characteristics(pd),
+        ))
+        existing_ids.add(ext_id)
+
+        if len(to_create) >= batch_size:
+            with transaction.atomic():
+                Product.objects.bulk_create(to_create, batch_size=batch_size)
+            created += len(to_create)
+            logger.info(f"[import fast/{catalog_type}] создано {created} новых карточек...")
+            to_create = []
+
+    if to_create:
+        with transaction.atomic():
+            Product.objects.bulk_create(to_create, batch_size=batch_size)
+        created += len(to_create)
+
+    logger.info(
+        f"[import fast/{catalog_type}] готово: создано={created}, "
+        f"уже были={skipped_existing}, ошибок={len(errors)}"
+    )
+
+    return {
+        'created': created,
+        'skipped_existing': skipped_existing,
+        'updated': 0,
+        'errors': errors,
+        'processed_external_ids': seen_in_file,
     }
 
 
