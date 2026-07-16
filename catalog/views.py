@@ -449,9 +449,7 @@ class ProductView(DetailView):
                 if product_model_codes or product_applicability_strings:
                     # Получаем ВСЕ активные товары с применимостью (кроме текущего)
                     # ВАЖНО: не ограничиваемся категорией, чтобы показать все товары для этой машины
-                    all_candidates = list(Product.objects.filter(
-                        is_active=True,
-                        catalog_type='retail',  # Только товары из основного каталога
+                    all_candidates = list(Product.for_site_catalog('retail').filter(
                         applicability__isnull=False
                     ).exclude(
                         pk=product.pk,
@@ -494,30 +492,24 @@ class ProductView(DetailView):
         # Приоритет 2: Если не нашли по применимости, ищем товары того же бренда в той же категории
         if not related_products.exists() and product.brand and product.category:
             brand_normalized = product.brand.strip()
-            related_products = Product.objects.filter(
+            related_products = Product.for_site_catalog('retail').filter(
                 brand__iexact=brand_normalized,
                 category=product.category,
-                is_active=True,
-                catalog_type='retail'  # Только товары из основного каталога
             ).exclude(pk=product.pk).select_related('category').prefetch_related('images')[:12]
         
         # Приоритет 3: Если не нашли, ищем товары того же бренда в дочерних категориях
         if not related_products.exists() and product.brand and product.category:
             brand_normalized = product.brand.strip()
             descendants = product.category.get_descendants(include_self=True)
-            related_products = Product.objects.filter(
+            related_products = Product.for_site_catalog('retail').filter(
                 brand__iexact=brand_normalized,
                 category__in=descendants,
-                is_active=True,
-                catalog_type='retail'  # Только товары из основного каталога
             ).exclude(pk=product.pk).select_related('category').prefetch_related('images')[:12]
         
         # Приоритет 4: Если не нашли, берем из той же категории (только если нет бренда)
         if not related_products.exists() and product.category and not product.brand:
-            related_products = Product.objects.filter(
+            related_products = Product.for_site_catalog('retail').filter(
                 category=product.category,
-                is_active=True,
-                catalog_type='retail'  # Только товары из основного каталога
             ).exclude(pk=product.pk).select_related('category').prefetch_related('images')[:12]
         
         context['related_products'] = related_products[:6]  # Показываем максимум 6

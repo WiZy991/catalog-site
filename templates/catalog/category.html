@@ -135,16 +135,6 @@
                         </select>
                     </div>
                     
-                    <!-- Наличие -->
-                    <div class="filter-group">
-                        <label class="filter-label">Наличие</label>
-                        <select name="availability" class="filter-select">
-                            <option value="">Любое</option>
-                            <option value="in_stock" {% if request.GET.availability == 'in_stock' %}selected{% endif %}>В наличии</option>
-                            <option value="out_of_stock" {% if request.GET.availability == 'out_of_stock' %}selected{% endif %}>Нет в наличии</option>
-                        </select>
-                    </div>
-                    
                     <!-- Кросс-номер -->
                     <div class="filter-group">
                         <label class="filter-label">Кросс-номер</label>

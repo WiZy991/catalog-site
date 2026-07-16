@@ -32,7 +32,12 @@ class Command(BaseCommand):
             return
 
         for p in all_matches[:20]:
-            visible_retail = p.catalog_type == 'retail' and p.is_active
+            visible_retail = (
+                p.catalog_type == 'retail'
+                and p.is_active
+                and p.quantity > 0
+                and p.availability == 'in_stock'
+            )
             visible_wholesale = p.catalog_type == 'wholesale' and p.is_active
             purchasable = p.is_purchasable
             reasons = []
@@ -44,7 +49,9 @@ class Command(BaseCommand):
                 reasons.append(f'устаревший остаток qty={p.quantity}')
 
             if visible_retail:
-                status = self.style.SUCCESS('ВИДЕН в рознице')
+                status = self.style.SUCCESS('ВИДЕН в рознице (в наличии)')
+            elif p.catalog_type == 'retail' and p.is_active:
+                status = self.style.WARNING('НЕ ВИДЕН в рознице (нет в наличии)')
             elif visible_wholesale:
                 status = self.style.SUCCESS('ВИДЕН в опте')
             else:
@@ -60,11 +67,11 @@ class Command(BaseCommand):
             if reasons:
                 self.stdout.write(f'  причина: {"; ".join(reasons)}')
 
-        retail_visible = all_matches.filter(
-            catalog_type='retail', is_active=True
+        retail_visible = Product.for_site_catalog('retail').filter(
+            pk__in=all_matches.values_list('pk', flat=True)
         ).count()
-        wholesale_visible = all_matches.filter(
-            catalog_type='wholesale', is_active=True
+        wholesale_visible = Product.for_site_catalog('wholesale').filter(
+            pk__in=all_matches.values_list('pk', flat=True)
         ).count()
         self.stdout.write('')
         self.stdout.write('=' * 72)

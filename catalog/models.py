@@ -232,8 +232,12 @@ class Product(models.Model):
 
     @classmethod
     def for_site_catalog(cls, catalog_type='retail'):
-        """Товары, видимые на сайте (включая отсутствующие на складе)."""
-        return cls.objects.filter(is_active=True, catalog_type=catalog_type)
+        """Товары, видимые на сайте."""
+        qs = cls.objects.filter(is_active=True, catalog_type=catalog_type)
+        if catalog_type == 'retail':
+            # Розница: только в наличии. Опт: все активные, включая qty=0.
+            qs = qs.filter(quantity__gt=0, availability='in_stock')
+        return qs
 
     @classmethod
     def for_purchase(cls, catalog_type='retail'):

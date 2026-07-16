@@ -1085,13 +1085,19 @@ def process_commerceml_file(file_path, filename, request=None):
             )
             return {'status': 'partial', 'message': 'Товары не найдены в файле', 'processed': 0, 'created': 0, 'updated': 0}
         
-        # import.xml: быстро создаём отсутствующие карточки (retail + wholesale).
-        # offers.xml обновляет цены/остатки; товары с qty=0 часто есть только в import.xml.
+        total_processed = 0
+        total_created = 0
+        total_updated = 0
+        all_errors = []
+        results = {}
+
+        # import.xml: быстро создаём отсутствующие карточки только для ОПТА (нет в наличии).
+        # Розница — только из offers.xml (товары с остатком > 0).
         logger.info(
             f"Обработка import.xml: {len(products_data)} товаров "
-            f"(быстрый режим: создание отсутствующих карточек «нет в наличии»)"
+            f"(быстрый режим: создание отсутствующих карточек опта «нет в наличии»)"
         )
-        for current_catalog_type in ['retail', 'wholesale']:
+        for current_catalog_type in ['wholesale']:
             logger.info("=" * 80)
             logger.info(f"ОБРАБОТКА ДЛЯ КАТАЛОГА: {current_catalog_type.upper()}")
             logger.info("=" * 80)
@@ -3638,8 +3644,8 @@ def _format_import_characteristics(product_data):
 
 def bulk_ensure_missing_import_products(products_data, catalog_type, batch_size=500):
     """
-    Быстрый import.xml: создаёт только отсутствующие карточки (qty=0, видимы на сайте).
-    Существующие товары пропускаются — их обновляет offers.xml.
+    Быстрый import.xml: создаёт только отсутствующие оптовые карточки (qty=0, видимы в опте).
+    Розничные карточки создаются из offers.xml при наличии на складе.
     """
     existing_ids = set(
         Product.objects.filter(catalog_type=catalog_type)
