@@ -1,9 +1,12 @@
 """
 Только отчёт (ничего не меняет в БД и файлах).
 
-Ищет фото, у которых имя файла похоже на артикул, но этот код
-не совпадает с артикулом / кросс-номером / кросс-номерами карточки.
-Так находят редкие «залипшие» фото после смены артикула в 1С.
+Ищет редкие «залипшие» фото: имя файла = код другого товара,
+а на текущей карточке этого кода нет (ни в артикуле, ни в названии).
+
+Не ругается на нормальные случаи:
+  - Django-суффикс в имени (23731-35U10_1_AbCdEfGh.jpg)
+  - OEM в названии, но не в поле артикула (331008.jpg → «…331008…» в name)
 
   python manage.py audit_mismatched_images
   python manage.py audit_mismatched_images --limit 50
@@ -12,9 +15,17 @@ import os
 import re
 
 from django.core.management.base import BaseCommand
+from django.db.models import Q
 
-from catalog.models import ProductImage
+from catalog.models import Product, ProductImage
 from catalog.services import _bulk_image_basename_for_match, _cross_numbers_tokens, _oem_compact
+
+
+def _extract_file_article_key(basename: str) -> str:
+    """Код из сохранённого имени: снять суффикс Django, затем _1 / (2) как при заливке."""
+    stem = os.path.splitext(os.path.basename(basename or ''))[0].strip()
+    stem = re.sub(r'_[A-Za-z0-9]{7,8}$', '', stem)
+    return _bulk_image_basename_for_match(stem)
 
 
 def _looks_like_article_filename(stem: str) -> bool:
@@ -48,7 +59,7 @@ def _product_has_code(product, key: str) -> bool:
             return True
         if '/' in val or '-' in val:
             head = re.split(r'[/\-]', val, maxsplit=1)[0].strip()
-            if head.lower() == k.lower():
+            if head.lower() == k.lower() or _oem_compact(head) == kc:
                 return True
     for tok in _cross_numbers_tokens(product.cross_numbers or ''):
         if tok.strip().lower() == k.lower() or _oem_compact(tok) == kc:
@@ -56,8 +67,47 @@ def _product_has_code(product, key: str) -> bool:
     return False
 
 
+def _code_in_product_name(product, key: str) -> bool:
+    """Код есть в названии как отдельный фрагмент (OEM в длинном name)."""
+    k = (key or '').strip()
+    if len(k) < 4:
+        return False
+    name = (product.name or '')
+    if not name:
+        return False
+    pattern = re.compile(r'(?<![\w\-/])' + re.escape(k) + r'(?![\w\-/])', re.IGNORECASE)
+    return bool(pattern.search(name))
+
+
+def _find_other_product_with_code(key: str, exclude_pk: int):
+    """Другая карточка, у которой key — артикул или кросс-номер."""
+    k = (key or '').strip().lstrip('/')
+    if not k:
+        return None
+    kc = _oem_compact(k)
+    base = Product.objects.exclude(pk=exclude_pk).filter(is_active=True)
+
+    hit = base.filter(Q(supplier_article__iexact=k) | Q(article__iexact=k)).first()
+    if hit:
+        return hit
+
+    norm_article = kc.lower()
+    for p in base.exclude(Q(article='') & Q(supplier_article=''))[:2000]:
+        for field in (p.supplier_article, p.article):
+            val = (field or '').strip()
+            if val and _oem_compact(val) == norm_article:
+                return p
+        for tok in _cross_numbers_tokens(p.cross_numbers or ''):
+            if tok.strip().lower() == k.lower() or _oem_compact(tok) == kc:
+                return p
+    return None
+
+
 class Command(BaseCommand):
-    help = 'Отчёт: фото, имя файла которых не совпадает с кодами товара (без изменений)'
+    help = (
+        'Отчёт: фото, код в имени файла принадлежит другому товару '
+        '(без изменений в БД)'
+    )
 
     def add_arguments(self, parser):
         parser.add_argument(
@@ -71,6 +121,7 @@ class Command(BaseCommand):
         limit = options['limit']
         suspicious = []
         skipped_shared = 0
+        skipped_ok = 0
         checked = 0
 
         qs = (
@@ -84,39 +135,55 @@ class Command(BaseCommand):
             if not product:
                 continue
             basename = os.path.basename(img.image.name or '')
-            stem = _bulk_image_basename_for_match(basename)
-            if not stem:
+            file_key = _extract_file_article_key(basename)
+            if not file_key:
                 continue
-            if stem.lower().endswith('_shared'):
+            if file_key.lower().endswith('_shared'):
                 skipped_shared += 1
                 continue
-            if not _looks_like_article_filename(stem):
+            if not _looks_like_article_filename(file_key):
                 continue
-            if _product_has_code(product, stem):
+
+            if _product_has_code(product, file_key):
+                skipped_ok += 1
                 continue
-            suspicious.append((img, product, stem, basename))
+            if _code_in_product_name(product, file_key):
+                skipped_ok += 1
+                continue
+
+            other = _find_other_product_with_code(file_key, product.pk)
+            if not other:
+                continue
+
+            suspicious.append((img, product, file_key, basename, other))
 
         self.stdout.write(f'Проверено изображений: {checked}')
+        self.stdout.write(f'Совпало с кодами/названием карточки: {skipped_ok}')
         self.stdout.write(f'Пропущено shared-фото: {skipped_shared}')
         self.stdout.write(
             self.style.WARNING(
-                f'Подозрительных (код файла ≠ коды карточки): {len(suspicious)}'
+                f'Подозрительных (код файла = другой товар): {len(suspicious)}'
             )
         )
 
-        for img, product, stem, basename in suspicious[:limit]:
+        for img, product, file_key, basename, other in suspicious[:limit]:
             self.stdout.write(
-                f'  img#{img.pk} file={basename!r} key={stem!r} → '
-                f'product#{product.pk} [{product.catalog_type}] '
-                f'art={product.supplier_article!r} cross={product.article!r} '
-                f'name={(product.name or "")[:80]!r}'
+                f'  img#{img.pk} file={basename!r} key={file_key!r}\n'
+                f'    на карточке: #{product.pk} [{product.catalog_type}] '
+                f'art={product.supplier_article!r} cross={product.article!r}\n'
+                f'    вероятно для: #{other.pk} [{other.catalog_type}] '
+                f'art={other.supplier_article!r} cross={other.article!r} '
+                f'name={(other.name or "")[:60]!r}'
             )
         if len(suspicious) > limit:
             self.stdout.write(f'  ... и ещё {len(suspicious) - limit}')
 
+        if not suspicious:
+            self.stdout.write(self.style.SUCCESS('Подозрительных фото не найдено.'))
+
         self.stdout.write(
             self.style.NOTICE(
-                '\nКоманда ничего не меняет. Чужие фото удаляйте вручную в админке '
-                'и при необходимости перезаливайте файл с именем = артикул товара.'
+                '\nКоманда ничего не меняет. Если строка попала в список — '
+                'проверьте вручную и при необходимости перенесите/удалите фото.'
             )
         )
