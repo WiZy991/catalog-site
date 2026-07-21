@@ -1769,10 +1769,12 @@ def parse_commerceml_product(product_elem, namespaces, root_elem=None, groups_ca
                     char_name_lower = char_name.lower()
                     
                     # Обрабатываем служебные характеристики - они не должны попадать в characteristics
-                    # Артикул1 → article (кросс-номер)
+                    # Артикул1 → article + supplier_article (колонка «Артикул» в опте)
                     if char_name_lower in ['артикул1', 'артикул 1', 'article1', 'article 1']:
                         if not product_data.get('article'):
                             product_data['article'] = char_value
+                        if not product_data.get('supplier_article'):
+                            product_data['supplier_article'] = char_value
                         # Добавляем в кросс-номера, если article уже был заполнен
                         elif product_data.get('article') != char_value:
                             if 'cross_numbers' not in product_data:
@@ -1970,10 +1972,12 @@ def parse_commerceml_product(product_elem, namespaces, root_elem=None, groups_ca
                                 continue
                         
                         # Обрабатываем служебные свойства - они не должны попадать в characteristics
-                        # Артикул1 → article (кросс-номер)
+                        # Артикул1 → article + supplier_article (колонка «Артикул» в опте)
                         if prop_name_lower in ['артикул1', 'артикул 1', 'article1', 'article 1']:
                             if not product_data.get('article'):
                                 product_data['article'] = prop_val
+                            if not product_data.get('supplier_article'):
+                                product_data['supplier_article'] = prop_val
                             # Добавляем в кросс-номера, если article уже был заполнен
                             elif product_data.get('article') != prop_val:
                                 if 'cross_numbers' not in product_data:
@@ -3682,7 +3686,8 @@ def bulk_ensure_missing_import_products(products_data, catalog_type, batch_size=
             errors.append({'external_id': ext_id, 'error': 'нет названия'})
             continue
 
-        article = (pd.get('article') or '').strip()
+        article = (pd.get('article') or pd.get('supplier_article') or '').strip()
+        supplier_article = (pd.get('supplier_article') or article or '').strip()
         brand = (pd.get('brand') or '').strip()
         cross = pd.get('cross_numbers') or []
         if isinstance(cross, list):
@@ -3698,6 +3703,8 @@ def bulk_ensure_missing_import_products(products_data, catalog_type, batch_size=
             name=name[:500],
             slug=slug,
             article=article,
+            # Артикул1 из import.xml — как у offers (колонка «Артикул» в опте)
+            supplier_article=supplier_article,
             brand=brand,
             category=category,
             catalog_type=catalog_type,
@@ -4079,9 +4086,13 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
         
         if was_created:
             product_name = (clean_name or name or '').strip()
+            supplier_article = (
+                product_data.get('supplier_article') or article or ''
+            ).strip()
             product = Product(
                 external_id=external_id,
                 article=article or '',
+                supplier_article=supplier_article,
                 name=product_name,
                 brand=brand or '',
                 category=category,
@@ -4154,6 +4165,12 @@ def process_product_from_commerceml(product_data, catalog_type='retail'):
             elif 'article' in product_data:
                 # Если артикул явно указан в данных (даже если пустой), обновляем его
                 product.article = product_data.get('article', '').strip()
+            supplier_article = (product_data.get('supplier_article') or '').strip()
+            if supplier_article:
+                product.supplier_article = supplier_article
+            elif article and not (product.supplier_article or '').strip():
+                # Для карточек из import без supplier_article — как у offers
+                product.supplier_article = article
             # Если артикул не указан в данных, оставляем существующий (не удаляем)
             # ВАЖНО: Всегда обновляем название товара из 1С, даже если оно уже было установлено
             # Это позволяет синхронизировать изменения названий из 1С

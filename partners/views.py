@@ -23,6 +23,8 @@ from catalog.services import (
     build_farpost_compact_name,
     format_models_multiline,
     product_part_number_value,
+    product_catalog_article_value,
+    enrich_wholesale_catalog_codes,
     sort_display_characteristics,
     ensure_display_part_number,
     apply_characteristic_display_labels,
@@ -32,7 +34,7 @@ from catalog.services import (
 from .models import PartnerRequest, Partner, PartnerSettings, PartnerOrder, PartnerOrderItem
 from .forms import PartnerRequestForm, PartnerLoginForm, PartnerProfileForm, PartnerPasswordChangeForm, PartnerPasswordResetForm, PartnerSetPasswordForm
 from django.http import JsonResponse
-from django.db.models import Q
+from django.db.models import Q, Case, When, IntegerField, Value
 from django.core.mail import EmailMessage
 from django.utils.html import escape, strip_tags
 
@@ -131,6 +133,17 @@ def _partner_catalog_query_words(search_query: str):
     return words if words else [s]
 
 
+def _order_wholesale_in_stock_first(queryset, *extra_fields):
+    """Сначала товары в наличии, затем «нет в наличии», потом остальная сортировка."""
+    return queryset.annotate(
+        _stock_rank=Case(
+            When(quantity__gt=0, availability='in_stock', then=Value(0)),
+            default=Value(1),
+            output_field=IntegerField(),
+        )
+    ).order_by('_stock_rank', *extra_fields)
+
+
 class PartnerRequiredMixin(LoginRequiredMixin):
     """Миксин для проверки, что пользователь является активным партнёром или админом."""
     login_url = '/partners/login/'
@@ -165,8 +178,11 @@ class WholesaleView(TemplateView):
         context['partner_settings'] = PartnerSettings.get_settings()
         context['is_partner'] = self.is_partner()
         
-        # Несколько товаров для превью (ТОЛЬКО из партнёрского каталога с остатком!)
-        context['preview_products'] = Product.for_site_catalog('wholesale').select_related('category').prefetch_related('images')[:6]
+        # Несколько товаров для превью — сначала в наличии
+        context['preview_products'] = _order_wholesale_in_stock_first(
+            Product.for_site_catalog('wholesale').select_related('category').prefetch_related('images'),
+            'name',
+        )[:6]
         
         return context
     
@@ -686,14 +702,14 @@ class PublicPartnerCatalogView(ListView):
         else:
             self.search_query = ''
         
-        return queryset.order_by('name')
+        return _order_wholesale_in_stock_first(queryset, 'name')
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         partner = get_partner_or_none(self.request.user)
         for product in context.get('products', []):
             product.compact_name = build_farpost_compact_name(product)
-            product.catalog_part_code = product_part_number_value(product)
+            product.catalog_part_code, product.catalog_article = enrich_wholesale_catalog_codes(product)
             base_price = product.wholesale_price or product.price or 0
             pricing = get_partner_pricing(partner, base_price)
             product.partner_wholesale_price = pricing['wholesale_price']
@@ -925,18 +941,16 @@ class PartnerCatalogView(PartnerRequiredMixin, ListView):
         else:
             self.search_query = ''
         
-        # Сортировка по умолчанию - по алфавиту
+        # Сначала в наличии, затем «нет в наличии»; внутри группы — выбранная сортировка
         sort = self.request.GET.get('sort', 'name')
         if sort == 'price_asc':
-            queryset = queryset.order_by('wholesale_price', 'price')
+            queryset = _order_wholesale_in_stock_first(queryset, 'wholesale_price', 'price')
         elif sort == 'price_desc':
-            queryset = queryset.order_by('-wholesale_price', '-price')
-        elif sort == 'name':
-            queryset = queryset.order_by('name')
+            queryset = _order_wholesale_in_stock_first(queryset, '-wholesale_price', '-price')
         elif sort == '-created_at':
-            queryset = queryset.order_by('-created_at')
+            queryset = _order_wholesale_in_stock_first(queryset, '-created_at')
         else:
-            queryset = queryset.order_by('name')
+            queryset = _order_wholesale_in_stock_first(queryset, 'name')
         
         return queryset
     
@@ -945,7 +959,7 @@ class PartnerCatalogView(PartnerRequiredMixin, ListView):
         partner = get_partner_or_none(self.request.user)
         for product in context.get('products', []):
             product.compact_name = build_farpost_compact_name(product)
-            product.catalog_part_code = product_part_number_value(product)
+            product.catalog_part_code, product.catalog_article = enrich_wholesale_catalog_codes(product)
             base_price = product.wholesale_price or product.price or 0
             pricing = get_partner_pricing(partner, base_price)
             product.partner_wholesale_price = pricing['wholesale_price']

@@ -3493,14 +3493,15 @@ def _norm_part_code(val):
     return re.sub(r'[^A-Za-z0-9]+', '', str(val or '').upper())
 
 
-PART_NUMBER_DISPLAY_LABEL = 'номер производителя'
+PART_NUMBER_DISPLAY_LABEL = 'Номер производителя'
 PART_NUMBER_SOURCE_KEYS = frozenset({
     'номер', 'number', 'номер детали', 'part number', 'partnumber',
+    'номер производителя',
 })
 
 
 def normalize_characteristic_display_key(key: str) -> str:
-    """Подпись поля на карточке (1С «Номер» → «номер производителя»)."""
+    """Подпись поля на карточке (1С «Номер» → «Номер производителя»)."""
     kn = str(key or '').strip().lower()
     if kn in PART_NUMBER_SOURCE_KEYS:
         return PART_NUMBER_DISPLAY_LABEL
@@ -3909,10 +3910,22 @@ def product_part_number_value(product):
     def _clean(v):
         return str(v or '').strip().lstrip('/')
 
+    part_keys = PART_NUMBER_SOURCE_KEYS | {PART_NUMBER_DISPLAY_LABEL.lower()}
+
     try:
         for key, value in product.get_display_characteristics_list():
             kn = str(key or '').strip().lower()
-            if kn in PART_NUMBER_SOURCE_KEYS:
+            if kn in part_keys:
+                val = _clean(value)
+                if val:
+                    return val
+    except Exception:
+        pass
+
+    try:
+        for key, value in product.get_characteristics_list():
+            kn = str(key or '').strip().lower()
+            if kn in part_keys:
                 val = _clean(value)
                 if val:
                     return val
@@ -3923,11 +3936,51 @@ def product_part_number_value(product):
     if isinstance(props, dict):
         for key, value in props.items():
             kn = str(key or '').strip().lower()
-            if kn in PART_NUMBER_SOURCE_KEYS:
+            if kn in part_keys:
                 val = _clean(value)
                 if val:
                     return val
     return ''
+
+
+def product_catalog_article_value(product):
+    """
+    Колонка «Артикул» в оптовом каталоге.
+    Как у товаров в наличии: supplier_article (Артикул1), иначе article.
+    """
+    val = str(getattr(product, 'supplier_article', '') or '').strip()
+    if val:
+        return val
+    return str(getattr(product, 'article', '') or '').strip()
+
+
+def enrich_wholesale_catalog_codes(product):
+    """
+    Код детали + артикул для таблицы опта.
+    Для товаров «нет в наличии» (созданных из import) подставляем те же поля,
+    что у карточек в наличии; при пустых — из розничного аналога с тем же external_id.
+    """
+    part_code = product_part_number_value(product)
+    article = product_catalog_article_value(product)
+    if (part_code and article) or not getattr(product, 'external_id', None):
+        return part_code, article
+    try:
+        retail = (
+            Product.objects.filter(
+                external_id=product.external_id,
+                catalog_type='retail',
+            )
+            .exclude(pk=getattr(product, 'pk', None))
+            .first()
+        )
+    except Exception:
+        retail = None
+    if retail:
+        if not part_code:
+            part_code = product_part_number_value(retail)
+        if not article:
+            article = product_catalog_article_value(retail)
+    return part_code, article
 
 
 def farpost_export_article(product):

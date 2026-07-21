@@ -2092,9 +2092,9 @@ document.addEventListener('DOMContentLoaded', function() {
                                         <span class="text-muted">—</span>
                                     {% endif %}
                                 </td>
-                                <td class="products-table__article" title="{% if product.supplier_article %}{{ product.supplier_article }}{% endif %}">
-                                    {% if product.supplier_article %}
-                                        {{ product.supplier_article|truncatechars:20 }}
+                                <td class="products-table__article" title="{% if product.catalog_article %}{{ product.catalog_article }}{% endif %}">
+                                    {% if product.catalog_article %}
+                                        {{ product.catalog_article|truncatechars:20 }}
                                     {% else %}
                                         <span class="text-muted">—</span>
                                     {% endif %}
