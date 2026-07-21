@@ -118,6 +118,25 @@ def bulk_image_upload(request):
                         files_list += f' и ещё {len(stats["duplicate_files"]) - 10}...'
                     messages.info(request, f'Дубликаты: {files_list}')
             
+            if stats.get('reassigned', 0):
+                messages.info(
+                    request,
+                    f'↪️ Перенаправлено на другую карточку (код в имени файла): {stats["reassigned"]}',
+                )
+                if stats.get('reassigned_files', [])[:10]:
+                    files_list = ', '.join(stats['reassigned_files'][:10])
+                    messages.info(request, f'Перенаправлены: {files_list}')
+
+            if stats.get('rejected_mismatch', 0):
+                messages.warning(
+                    request,
+                    f'⚠️ Не привязано — код в имени не совпадает с карточкой и есть другой товар: '
+                    f'{stats["rejected_mismatch"]}',
+                )
+                if stats.get('rejected_mismatch_files', [])[:10]:
+                    files_list = ', '.join(stats['rejected_mismatch_files'][:10])
+                    messages.warning(request, f'Пропущены: {files_list}')
+
             if stats['not_matched']:
                 messages.warning(
                     request,

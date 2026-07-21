@@ -2789,7 +2789,7 @@ def match_image_to_product(filename):
     """
     Находит товар по имени файла изображения.
     Имя файла может содержать артикул или часть названия.
-    
+
     Примеры:
     - 23300-78090.jpg -> товар с артикулом 23300-78090
     - ME220745_1.jpg -> товар с артикулом ME220745
@@ -2879,6 +2879,102 @@ def match_image_to_product(filename):
     return None
 
 
+def _product_fields_have_code(product, key: str) -> bool:
+    """Код из имени файла совпадает с артикулом / кросс-номером карточки."""
+    k = (key or '').strip().lstrip('/')
+    if not k or not product:
+        return False
+    kc = _oem_compact(k)
+    for field in (product.supplier_article, product.article):
+        val = (field or '').strip()
+        if not val:
+            continue
+        if val.lower() == k.lower() or _oem_compact(val) == kc:
+            return True
+        if re.fullmatch(r'\d{4,14}', k) and (
+            val.lower().startswith(k.lower() + '(')
+            or val.lower().startswith(k.lower() + '/')
+            or val.lower().startswith(k.lower() + '-')
+            or val.lower().startswith(k.lower() + ' ')
+        ):
+            return True
+        if '/' in val or '-' in val:
+            head = re.split(r'[/\-]', val, maxsplit=1)[0].strip()
+            if head.lower() == k.lower() or _oem_compact(head) == kc:
+                return True
+    for tok in _cross_numbers_tokens(product.cross_numbers or ''):
+        if tok.strip().lower() == k.lower() or _oem_compact(tok) == kc:
+            return True
+    return False
+
+
+def _product_name_has_code_token(product, key: str) -> bool:
+    """OEM в длинном названии (331008.jpg при артикуле 00286, но 331008 в name)."""
+    k = (key or '').strip()
+    if len(k) < 4:
+        return False
+    name = (product.name or '')
+    if not name:
+        return False
+    pattern = re.compile(r'(?<![\w\-/])' + re.escape(k) + r'(?![\w\-/])', re.IGNORECASE)
+    return bool(pattern.search(name))
+
+
+def _find_product_with_field_code(key: str, exclude_pk=None):
+    """Карточка, у которой key — артикул или кросс-номер (сначала розница)."""
+    k = (key or '').strip().lstrip('/')
+    if not k:
+        return None
+    kc = _oem_compact(k)
+    base = Product.objects.filter(is_active=True)
+    if exclude_pk:
+        base = base.exclude(pk=exclude_pk)
+
+    for catalog_type in ('retail', 'wholesale'):
+        hit = base.filter(
+            Q(supplier_article__iexact=k) | Q(article__iexact=k),
+            catalog_type=catalog_type,
+        ).first()
+        if hit:
+            return hit
+
+    for catalog_type in ('retail', 'wholesale'):
+        qs = base.filter(catalog_type=catalog_type).exclude(Q(article='') & Q(supplier_article=''))
+        for p in qs.iterator(chunk_size=500):
+            for field in (p.supplier_article, p.article):
+                val = (field or '').strip()
+                if val and _oem_compact(val) == kc:
+                    return p
+            for tok in _cross_numbers_tokens(p.cross_numbers or ''):
+                if tok.strip().lower() == k.lower() or _oem_compact(tok) == kc:
+                    return p
+    return None
+
+
+def _confirm_bulk_image_product(filename, product):
+    """
+    Только для массовой заливки: перед сохранением убедиться, что фото
+    не «залипнет» на чужой карточке (код в имени = другой товар).
+    """
+    if not product:
+        return None, 'none'
+    key = _bulk_image_basename_for_match(filename)
+    if not key or not _filename_looks_like_part_number(key):
+        return product, 'ok'
+
+    if _product_fields_have_code(product, key):
+        return product, 'ok'
+
+    owner = _find_product_with_field_code(key, exclude_pk=product.pk)
+    if owner:
+        return owner, 'reassigned'
+
+    if _product_name_has_code_token(product, key):
+        return product, 'ok'
+
+    return None, 'rejected'
+
+
 def _normalize_bulk_image_basename_for_dedupe(basename_no_ext: str) -> str:
     """
     Ключ для проверки «тот же файл уже загружен» при массовой загрузке.
@@ -2907,6 +3003,10 @@ def process_bulk_images(images, create_products=False):
         'created_products': 0,
         'not_matched': 0,
         'not_matched_files': [],
+        'reassigned': 0,
+        'reassigned_files': [],
+        'rejected_mismatch': 0,
+        'rejected_mismatch_files': [],
         'duplicates': 0,
         'duplicate_files': [],
     }
@@ -2935,6 +3035,16 @@ def process_bulk_images(images, create_products=False):
             )
             stats['created_products'] += 1
         
+        if product:
+            product, attach_status = _confirm_bulk_image_product(filename, product)
+            if attach_status == 'reassigned' and product:
+                stats['reassigned'] += 1
+                stats['reassigned_files'].append(filename)
+            elif attach_status == 'rejected':
+                stats['rejected_mismatch'] += 1
+                stats['rejected_mismatch_files'].append(filename)
+                continue
+
         if product:
             incoming_stem = os.path.splitext(os.path.basename((filename or '').strip()))[0].strip()
             base_filename = _normalize_bulk_image_basename_for_dedupe(incoming_stem)
