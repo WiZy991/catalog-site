@@ -1341,32 +1341,57 @@ class ProductImageAdmin(admin.ModelAdmin):
 
     def get_search_results(self, request, queryset, search_term):
         """
-        Поиск по названию товара с учётом русских окончаний.
-        «опоры амортизатора» находит «Опора амортизатора …».
+        Поиск как на витрине + учёт русских окончаний.
+        На SQLite обычный icontains не игнорирует регистр кириллицы
+        («опора» ≠ «Опора»), поэтому дополнительно используем iregex.
         """
+        import re
+        from catalog.search_utils import product_search_words
+
         term = (search_term or '').strip()
         if not term:
             return queryset, False
 
-        words = [w for w in term.split() if w]
-        for word in words:
-            variants = {word}
-            # Снимаем типичные русские окончания: опоры→опор, амортизатора→амортизатор
-            if len(word) > 5:
-                variants.add(word[:-1])
-                variants.add(word[:-2])
-            elif len(word) > 4:
-                variants.add(word[:-1])
+        for word in product_search_words(term):
+            variants = {word, word.lower()}
+            if word:
+                # «Опора», «опора»
+                variants.add(word[:1].upper() + word[1:].lower())
+                variants.add(word.upper())
+            # Снимаем типичные окончания: опоры→опор, амортизатора→амортизатор
+            for base in list(variants):
+                if len(base) > 5:
+                    variants.add(base[:-1])
+                    variants.add(base[:-2])
+                elif len(base) > 4:
+                    variants.add(base[:-1])
 
             word_q = Q()
             for v in variants:
+                if not v:
+                    continue
                 word_q |= (
                     Q(product__name__icontains=v)
                     | Q(product__article__icontains=v)
                     | Q(product__supplier_article__icontains=v)
                     | Q(product__brand__icontains=v)
+                    | Q(product__cross_numbers__icontains=v)
                     | Q(alt__icontains=v)
                 )
+            # Регистронезависимый поиск по кириллице (как на сайте)
+            word_escaped = re.escape(word)
+            word_q |= (
+                Q(product__name__iregex=word_escaped)
+                | Q(product__article__iregex=word_escaped)
+                | Q(product__supplier_article__iregex=word_escaped)
+                | Q(product__brand__iregex=word_escaped)
+            )
+            # Стем тоже через iregex
+            if len(word) > 4:
+                stem = re.escape(word[:-1] if len(word) == 5 else word[:-2])
+                if stem:
+                    word_q |= Q(product__name__iregex=stem)
+
             queryset = queryset.filter(word_q)
 
         return queryset.distinct(), True
