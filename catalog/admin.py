@@ -1319,18 +1319,104 @@ class ProductAdmin(ImportExportModelAdmin, FarpostExportMixin, admin.ModelAdmin)
 @admin.register(ProductImage)
 class ProductImageAdmin(admin.ModelAdmin):
     """Админка для изображений."""
-    list_display = ['id', 'product', 'image_preview', 'is_main', 'order']
-    list_filter = ['is_main']
+    list_display = [
+        'id', 'product_name', 'product_article', 'image_preview',
+        'is_main', 'order', 'delete_button',
+    ]
+    list_filter = ['is_main', 'product__catalog_type']
     list_editable = ['is_main', 'order']
-    search_fields = ['product__name', 'product__article']
+    list_per_page = 50
+    search_fields = [
+        'product__name',
+        'product__article',
+        'product__supplier_article',
+        'product__brand',
+        'alt',
+    ]
     autocomplete_fields = ['product']
-    actions = ['delete_all_product_images']
+    actions = ['delete_selected_images', 'delete_all_product_images']
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related('product')
+
+    def get_search_results(self, request, queryset, search_term):
+        """
+        Поиск по названию товара с учётом русских окончаний.
+        «опоры амортизатора» находит «Опора амортизатора …».
+        """
+        term = (search_term or '').strip()
+        if not term:
+            return queryset, False
+
+        words = [w for w in term.split() if w]
+        for word in words:
+            variants = {word}
+            # Снимаем типичные русские окончания: опоры→опор, амортизатора→амортизатор
+            if len(word) > 5:
+                variants.add(word[:-1])
+                variants.add(word[:-2])
+            elif len(word) > 4:
+                variants.add(word[:-1])
+
+            word_q = Q()
+            for v in variants:
+                word_q |= (
+                    Q(product__name__icontains=v)
+                    | Q(product__article__icontains=v)
+                    | Q(product__supplier_article__icontains=v)
+                    | Q(product__brand__icontains=v)
+                    | Q(alt__icontains=v)
+                )
+            queryset = queryset.filter(word_q)
+
+        return queryset.distinct(), True
+
+    def product_name(self, obj):
+        if not obj.product_id:
+            return '-'
+        name = obj.product.name or ''
+        url = f'/admin/catalog/product/{obj.product_id}/change/'
+        short = name[:90] + ('…' if len(name) > 90 else '')
+        return format_html('<a href="{}">{}</a>', url, short)
+    product_name.short_description = 'Товар'
+    product_name.admin_order_field = 'product__name'
+
+    def product_article(self, obj):
+        if not obj.product_id:
+            return '-'
+        p = obj.product
+        return (p.supplier_article or p.article or '—')
+    product_article.short_description = 'Артикул'
+    product_article.admin_order_field = 'product__article'
 
     def image_preview(self, obj):
         if obj.image:
             return format_html('<img src="{}" style="max-height: 50px;"/>', obj.image.url)
         return '-'
     image_preview.short_description = 'Превью'
+
+    def delete_button(self, obj):
+        from django.urls import reverse
+        url = reverse('admin:catalog_productimage_delete', args=[obj.pk])
+        return format_html(
+            '<a class="button" href="{}" style="background:#ba2121;color:#fff;'
+            'padding:4px 10px;border-radius:4px;white-space:nowrap;">Удалить</a>',
+            url,
+        )
+    delete_button.short_description = 'Удалить'
+
+    @admin.action(description='Удалить выбранные изображения')
+    def delete_selected_images(self, request, queryset):
+        """Удаляет отмеченные галочками фото (записи + файлы)."""
+        count = 0
+        for img in queryset.iterator():
+            img.delete()
+            count += 1
+        self.message_user(
+            request,
+            f'Удалено изображений: {count}.',
+            messages.SUCCESS,
+        )
 
     def delete_all_product_images(self, request, queryset):
         """
