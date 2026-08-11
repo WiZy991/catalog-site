@@ -1,0 +1,556 @@
+Отчёт: дубли артикулов в выгрузке Farpost
+Источник: https://onesimus25.ru/farpost/price-list.csv
+Колонка артикула: 'Артикул'
+Всего строк в файле: 2598
+Уникальных артикулов: 2542
+Артикулов с дублями: 46
+Лишних строк из‑за дублей: 56
+Ожидаемо на Farpost после дедупа: 2542
+
+================================================================================
+
+Артикул: TD04  —  повторов: 5
+--------------------------------------------------------------------------------
+  1. Турбина MITSUBISHI TD04, 49177-01513, 4D56, ВОДА/МАСЛО (3X5)
+     Артикул (1С): 05739
+     Бренд: MITSUBISHI | Цена: 9000.00 | Кол-во: 10
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/turbiny/turbina-mitsubishi-td04-49177-0151301515-4d56-vodamaslo-3x5-td04/
+  2. Турбина MITSUBISHI TD04, 49177-01512, 4D56, ВОДА/МАСЛО (3X3)
+     Артикул (1С): 05753
+     Бренд: MITSUBISHI | Цена: 9000.00 | Кол-во: 10
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/turbiny/turbina-mitsubishi-td04-49177-01512-4d56-vodamaslo-3x3-td04/
+  3. Турбина MITSUBISHI TD04, 49177-01510, 4D56, МАСЛО (3X3)
+     Артикул (1С): 05731
+     Бренд: MITSUBISHI | Цена: 9000.00 | Кол-во: 6
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/turbiny/turbina-mitsubishi-td04-49177-01510-4d56-maslo-3x3-td04/
+  4. Турбина MITSUBISHI TD04, 49177-01500, 4D56, МАСЛО (3X5)
+     Артикул (1С): 05751
+     Бренд: MITSUBISHI | Цена: 9500.00 | Кол-во: 11
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/turbiny/turbina-mitsubishi-td04-49177-01500-4d56-maslo-3x5-td04/
+  5. Турбина HYUNDAI TD04, 28200-4A210, 4DBF
+     Артикул (1С): 05728
+     Бренд: HYUNDAI | Цена: 10000.00 | Кол-во: 3
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/turbiny/turbina-hyundai-td04-28200-4a210-4dbfd4bh4d56-td04/
+
+Артикул: 38BWD12 / DAC38720036  —  повторов: 4
+--------------------------------------------------------------------------------
+  1. Подшипник ступичный YOURUIMA 38BWD12, 90363-38006, AE95, F/R/L 38*72*36
+     Артикул (1С): 06267
+     Бренд: YOURUIMA | Цена: 800.00 | Кол-во: 31
+     URL: https://onesimus25.ru/catalog/transmissija-i-tormoznaja-sistema/podshipnik-stupichnyj/podshipnik-stupichnyj-youruima-06267-38bwd12-dac38720036-90363-38006-ae951011ce1011ee1011-frl-387236-90369-38011-06267/
+  2. Подшипник ступичный KOYO 38BWD12, 90363-38006, AE95, F/R/L 38*72*36
+     Артикул (1С): 06265
+     Бренд: KOYO | Цена: 800.00 | Кол-во: 4
+     URL: https://onesimus25.ru/catalog/transmissija-i-tormoznaja-sistema/podshipnik-stupichnyj/podshipnik-stupichnyj-koyo-06265-38bwd12-dac38720036-90363-38006-ae951011ce1011ee1011-frl-387236-90369-38011-06265/
+  3. Подшипник ступичный TOYOTA 38BWD12, 90363-38006, AE95, F/R/L 38*72*36
+     Артикул (1С): 06193
+     Бренд: TOYOTA | Цена: 800.00 | Кол-во: 1
+     URL: https://onesimus25.ru/catalog/transmissija-i-tormoznaja-sistema/podshipnik-stupichnyj/retail-15bc2f5d-e3f1-4299-b6ea-618c0106b835-b90aae42-6ab0-11f1-812c-00155d01d802/
+  4. Подшипник ступичный NSK 38BWD12, 90363-38006, AE95, F/R/L 38*72*36
+     Артикул (1С): 02942
+     Бренд: NSK | Цена: 1000.00 | Кол-во: 6
+     URL: https://onesimus25.ru/catalog/transmissija-i-tormoznaja-sistema/podshipnik-stupichnyj/podshipnik-stupichnyj-nsk-38bwd12-dac38720036-90363-38006-ae951011ce1011ee1011-frl-387236-38bwd12-dac38720036/
+
+Артикул: 04111-54094  —  повторов: 3
+--------------------------------------------------------------------------------
+  1. Ремкомплект двигателя TOYOTA 04111-54094, 54092, 3L, МЕТАЛЛ/ПРОКЛАДКА
+     Артикул (1С): 06231
+     Бренд: TOYOTA | Цена: 2500.00 | Кол-во: 16
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/remkomplekt-dvigatelja/remkomplekt-dvigatelja-toyota-06231-04111-54094-54092-3l-metallprokladka-06231/
+  2. Ремкомплект двигателя TOYOTA 04111-54094, 54092, 3L, ПАРОНИТ/ПРОКЛАДКА
+     Артикул (1С): 04661
+     Бренд: TOYOTA | Цена: 2300.00 | Кол-во: 15
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/remkomplekt-dvigatelja/remkomplekt-dvigatelja-toyota-04661-04111-54094-54092-3l-metallprokladka-04661/
+  3. Ремкомплект двигателя TOYOTA 04111-54094, 54092, 3L, ПАРОНИТ/ПРОКЛАДКА (SP)
+     Артикул (1С): 04396
+     Бренд: TOYOTA | Цена: 2200.00 | Кол-во: 3
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/remkomplekt-dvigatelja/remkomplekt-dvigatelja-toyota-04111-54094-54092-3l-paronitprokladka-sp-04111-54094/
+
+Артикул: 04111-64010  —  повторов: 3
+--------------------------------------------------------------------------------
+  1. Ремкомплект двигателя TOYOTA, 04111-64010, 1C, ПАРОНИТ/ПРОКЛАДКА (SP)
+     Артикул (1С): 04472
+     Бренд: TOYOTA | Цена: 2000.00 | Кол-во: 2
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/remkomplekt-dvigatelja/remkomplekt-dvigatelja-toyota-04111-64010-1c-paronitprokladka-sp-04111-64010/
+  2. Ремкомплект двигателя TOYOTA, 04111-64010, 1C, МЕТАЛЛ/ПРОКЛАДКА (SP)
+     Артикул (1С): 04548
+     Бренд: TOYOTA | Цена: 2300.00 | Кол-во: 1
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/remkomplekt-dvigatelja/remkomplekt-dvigatelja-toyota-04111-64010-1c-metallprokladka-sp-04111-64010/
+  3. Ремкомплект двигателя TOYOTA, 04111-64010, 1C, МЕТАЛЛ/ПРОКЛАДКА (GW)
+     Артикул (1С): 04547
+     Бренд: TOYOTA | Цена: 2300.00 | Кол-во: 1
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/remkomplekt-dvigatelja/remkomplekt-dvigatelja-toyota-04111-64010-1c-metallprokladka-gw-04111-64010/
+
+Артикул: 10101-4M425  —  повторов: 3
+--------------------------------------------------------------------------------
+  1. Ремкомплект двигателя NISSAN, 10101-4M425, QG13DE, ПАРОНИТ/ПРОКЛАДКА
+     Артикул (1С): 04523
+     Бренд: NISSAN | Цена: 2200.00 | Кол-во: 6
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/remkomplekt-dvigatelja/remkomplekt-dvigatelja-nissan-10101-4m425-qg13deqg15de-paronitprokladka-10101-4m425/
+  2. Ремкомплект двигателя NISSAN, 10101-4M425, QG13DE, МЕТАЛЛ/ПРОКЛАДКА (SP)
+     Артикул (1С): 04681
+     Бренд: NISSAN | Цена: 2200.00 | Кол-во: 9
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/remkomplekt-dvigatelja/remkomplekt-dvigatelja-nissan-10101-4m425-qg13deqg15de-metallprokladka-sp-10101-4m425/
+  3. Ремкомплект двигателя NISSAN, 10101-4M425, QG13DE, МЕТАЛЛ/ПРОКЛАДКА (GW)
+     Артикул (1С): 04576
+     Бренд: NISSAN | Цена: 2500.00 | Кол-во: 6
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/remkomplekt-dvigatelja/remkomplekt-dvigatelja-nissan-10101-4m425-qg13deqg15de-metallprokladka-gw-10101-4m425/
+
+Артикул: 62TB0103 / PU126213  —  повторов: 3
+--------------------------------------------------------------------------------
+  1. Подшипник натяжной NSK 62TB0103, 13503-64012, 1C
+     Артикул (1С): 06241
+     Бренд: NSK | Цена: 600.00 | Кол-во: 86
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/podshipnik-natjazhnoj/podshipnik-natjazhnoj-nsk-06241-62tb0103-pu126213-13503-64012-1c2c3c-06241/
+  2. Подшипник натяжной KOYO 62TB0103, 13503-64012, 1C
+     Артикул (1С): 06186
+     Бренд: KOYO | Цена: 600.00 | Кол-во: 30
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/podshipnik-natjazhnoj/podshipnik-natjazhnoj-koyo-06186-62tb0103-pu126213-13503-64012-1c2c3c-06186/
+  3. Подшипник натяжной ONESIMUS 62TB0103, 13503-64012, 1C
+     Артикул (1С): 02652
+     Бренд: ONESIMUS | Цена: 600.00 | Кол-во: 37
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/podshipnik-natjazhnoj/podshipnik-natjazhnoj-nsk-62tb0103-pu126213-13503-64012-1c2c3c-62tb0103-pu126213/
+
+Артикул: TITAN-P4  —  повторов: 3
+--------------------------------------------------------------------------------
+  1. Предпусковой подогреватель двигателя, TITAN-P4, 3000W/220V
+     Артикул (1С): 03368
+     Бренд: VVKB | Цена: 2500.00 | Кол-во: 22
+     URL: https://onesimus25.ru/catalog/avtoelektrika/predpuskovoj-podogrevatel-dvigatelja/retail-80c86833-b6af-11ea-80c8-00155d01d802-1b41396e-1b6a-11f1-811f-00155d01d802/
+  2. Предпусковой подогреватель двигателя, TITAN-P4, 2000W/220V
+     Артикул (1С): 03357
+     Бренд: VVKB | Цена: 2500.00 | Кол-во: 630
+     URL: https://onesimus25.ru/catalog/avtoelektrika/predpuskovoj-podogrevatel-dvigatelja/retail-80c86833-b6af-11ea-80c8-00155d01d802-fe0b02e0-3c44-11eb-80d1-00155d01d802/
+  3. Предпусковой подогреватель двигателя, TITAN-P4, 1500W/220V
+     Артикул (1С): 06042
+     Бренд: VVKB | Цена: 2000.00 | Кол-во: 46
+     URL: https://onesimus25.ru/catalog/avtoelektrika/predpuskovoj-podogrevatel-dvigatelja/predpuskovoj-podogrevatel-dvigatelja-vvkb-titan-p4-2000w220v-titan-p4/
+
+Артикул: 04111-16270  —  повторов: 2
+--------------------------------------------------------------------------------
+  1. Ремкомплект двигателя TOYOTA 04111-16270, 16282, 7AFE, МЕТАЛЛ/ПРОКЛАДКА (SP)
+     Артикул (1С): 04732
+     Бренд: TOYOTA | Цена: 2500.00 | Кол-во: 7
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/remkomplekt-dvigatelja/remkomplekt-dvigatelja-toyota-04111-16270-16282-7afe-metallprokladka-sp-04111-16270/
+  2. Ремкомплект двигателя TOYOTA, 04111-16270, 7AFE, ПАРОНИТ/ПРОКЛАДКА (SP)
+     Артикул (1С): 04654
+     Бренд: TOYOTA | Цена: 2200.00 | Кол-во: 4
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/remkomplekt-dvigatelja/remkomplekt-dvigatelja-toyota-04111-16270-7afe-paronitprokladka-sp-04111-16270/
+
+Артикул: 04111-31560  —  повторов: 2
+--------------------------------------------------------------------------------
+  1. Ремкомплект двигателя TOYOTA 04111-31560, 31300, 5GR, МЕТАЛЛ/ПРОКЛАДКА (TOYOTA)
+     Артикул (1С): 04542
+     Бренд: TOYOTA | Цена: 3500.00 | Кол-во: 8
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/remkomplekt-dvigatelja/remkomplekt-dvigatelja-toyota-04111-31560-31300-5gr3gr-metallprokladka-toyota-04111-31560/
+  2. Ремкомплект двигателя TOYOTA 04111-31560, 31300, 5GR, МЕТАЛЛ/ПРОКЛАДКА (SP)
+     Артикул (1С): 04700
+     Бренд: TOYOTA | Цена: 3500.00 | Кол-во: 1
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/remkomplekt-dvigatelja/remkomplekt-dvigatelja-toyota-04111-31560-31300-5gr3gr-metallprokladka-sp-04111-31560/
+
+Артикул: 04111-46065  —  повторов: 2
+--------------------------------------------------------------------------------
+  1. Ремкомплект двигателя TOYOTA 04111-46065, 46060, 1JZGE, ПАРОНИТ/ПРОКЛАДКА
+     Артикул (1С): 04688
+     Бренд: TOYOTA | Цена: 2300.00 | Кол-во: 15
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/remkomplekt-dvigatelja/remkomplekt-dvigatelja-toyota-04688-04111-46065-46060-1jzge2jzge-paronitprokladka-04688/
+  2. Ремкомплект двигателя TOYOTA 04111-46065, 46060, 1JZGE, МЕТАЛЛ/ПРОКЛАДКА
+     Артикул (1С): 04448
+     Бренд: TOYOTA | Цена: 2500.00 | Кол-во: 15
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/remkomplekt-dvigatelja/remkomplekt-dvigatelja-toyota-04448-04111-46065-46060-1jzge2jzge-metallprokladka-04448/
+
+Артикул: 04111-54050  —  повторов: 2
+--------------------------------------------------------------------------------
+  1. Ремкомплект двигателя TOYOTA, 04111-54050, 2L, МЕТАЛЛ/ПРОКЛАДКА
+     Артикул (1С): 06230
+     Бренд: TOYOTA | Цена: 2500.00 | Кол-во: 20
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/remkomplekt-dvigatelja/remkomplekt-dvigatelja-toyota-06230-04111-54050-2l-metallprokladka-06230/
+  2. Ремкомплект двигателя TOYOTA, 04111-54050, 2L, ПАРОНИТ/ПРОКЛАДКА (SP)
+     Артикул (1С): 04410
+     Бренд: TOYOTA | Цена: 2200.00 | Кол-во: 2
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/remkomplekt-dvigatelja/remkomplekt-dvigatelja-toyota-04111-54050-2l-paronitprokladka-sp-04111-54050/
+
+Артикул: 04111-54100  —  повторов: 2
+--------------------------------------------------------------------------------
+  1. Ремкомплект двигателя TOYOTA 04111-54100, 54051, 2L, ПАРОНИТ/ПРОКЛАДКА
+     Артикул (1С): 04748
+     Бренд: TOYOTA | Цена: 2300.00 | Кол-во: 17
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/remkomplekt-dvigatelja/remkomplekt-dvigatelja-toyota-04748-04111-54100-54051-2l2lt-paronitprokladka-04748/
+  2. Ремкомплект двигателя TOYOTA 04111-54100, 54051, 2L, ПАРОНИТ/ПРОКЛАДКА (TOYOTA)
+     Артикул (1С): 04545
+     Бренд: TOYOTA | Цена: 2200.00 | Кол-во: 4
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/remkomplekt-dvigatelja/remkomplekt-dvigatelja-toyota-04111-54100-54051-2l2lt-paronitprokladka-toyota-04111-54100/
+
+Артикул: 04111-64240  —  повторов: 2
+--------------------------------------------------------------------------------
+  1. Ремкомплект двигателя TOYOTA 04111-64240, 64174, 3CT, ПАРОНИТ/ПРОКЛАДКА (SP)
+     Артикул (1С): 04393
+     Бренд: TOYOTA | Цена: 2200.00 | Кол-во: 29
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/remkomplekt-dvigatelja/remkomplekt-dvigatelja-toyota-04111-64240-64174-3ct-paronitprokladka-sp-04111-64240/
+  2. Ремкомплект двигателя TOYOTA 04111-64240, 64174, 3CT, МЕТАЛЛ/ПРОКЛАДКА (SP)
+     Артикул (1С): 04761
+     Бренд: TOYOTA | Цена: 2500.00 | Кол-во: 12
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/remkomplekt-dvigatelja/remkomplekt-dvigatelja-toyota-04111-64240-64174-3ct-metallprokladka-sp-04111-64240/
+
+Артикул: 06110-PT0-010  —  повторов: 2
+--------------------------------------------------------------------------------
+  1. Ремкомплект двигателя HONDA, 06110-PT0-010, F20A, МЕТАЛЛ/ПРОКЛАДКА (SP)
+     Артикул (1С): 04377
+     Бренд: HONDA | Цена: 2500.00 | Кол-во: 5
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/remkomplekt-dvigatelja/remkomplekt-dvigatelja-honda-06110-pt0-010-f20a-metallprokladka-sp-06110-pt0-010/
+  2. Ремкомплект двигателя HONDA, 06110-PT0-010, F20A, МЕТАЛЛ/ПРОКЛАДКА (GW)
+     Артикул (1С): 04564
+     Бренд: HONDA | Цена: 2600.00 | Кол-во: 4
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/remkomplekt-dvigatelja/remkomplekt-dvigatelja-honda-06110-pt0-010-f20a-metallprokladka-gw-06110-pt0-010/
+
+Артикул: 06110-REB-010  —  повторов: 2
+--------------------------------------------------------------------------------
+  1. Ремкомплект двигателя HONDA, 06110-REB-010, L15A, МЕТАЛЛ/ПРОКЛАДКА (SP)
+     Артикул (1С): 04509
+     Бренд: HONDA | Цена: 2500.00 | Кол-во: 1
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/remkomplekt-dvigatelja/remkomplekt-dvigatelja-honda-06110-reb-010-l15a-metallprokladka-sp-06110-reb-010/
+  2. Ремкомплект двигателя HONDA, 06110-REB-010, L15A, МЕТАЛЛ/ПРОКЛАДКА (HONDA)
+     Артикул (1С): 04567
+     Бренд: HONDA | Цена: 2200.00 | Кол-во: 1
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/remkomplekt-dvigatelja/remkomplekt-dvigatelja-honda-06110-reb-010-l15a-metallprokladka-honda-06110-reb-010/
+
+Артикул: 061A1-PM3-T00  —  повторов: 2
+--------------------------------------------------------------------------------
+  1. Ремкомплект двигателя HONDA, 061A1-PM3-T00, D15B, ПАРОНИТ/ПРОКЛАДКА (TM)
+     Артикул (1С): 04734
+     Бренд: HONDA | Цена: 2200.00 | Кол-во: 5
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/remkomplekt-dvigatelja/remkomplekt-dvigatelja-honda-061a1-pm3-t00-d15b-paronitprokladka-tm-061a1-pm3-t00/
+  2. Ремкомплект двигателя HONDA, 061A1-PM3-T00, D15B, ПАРОНИТ/ПРОКЛАДКА (GW)
+     Артикул (1С): 04568
+     Бренд: HONDA | Цена: 2200.00 | Кол-во: 7
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/remkomplekt-dvigatelja/remkomplekt-dvigatelja-honda-061a1-pm3-t00-d15b-paronitprokladka-gw-061a1-pm3-t00/
+
+Артикул: 1000A069  —  повторов: 2
+--------------------------------------------------------------------------------
+  1. Ремкомплект двигателя MITSUBISHI, 1000A069, 4G94, ПАРОНИТ/ПРОКЛАДКА (SP)
+     Артикул (1С): 04488
+     Бренд: MITSUBISHI | Цена: 2000.00 | Кол-во: 1
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/remkomplekt-dvigatelja/remkomplekt-dvigatelja-mitsubishi-1000a069-4g94-paronitprokladka-sp-1000a069/
+  2. Ремкомплект двигателя MITSUBISHI, 1000A069, 4G94, ПАРОНИТ/ПРОКЛАДКА (MITSUBISHI)
+     Артикул (1С): 04569
+     Бренд: MITSUBISHI | Цена: 2000.00 | Кол-во: 1
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/remkomplekt-dvigatelja/remkomplekt-dvigatelja-mitsubishi-1000a069-4g94-paronitprokladka-mitsubishi-1000a069/
+
+Артикул: 10101-43G25  —  повторов: 2
+--------------------------------------------------------------------------------
+  1. Ремкомплект двигателя NISSAN, 10101-43G25, TD25, МЕТАЛЛ/ПРОКЛАДКА (GW)
+     Артикул (1С): 04575
+     Бренд: NISSAN | Цена: 2500.00 | Кол-во: 4
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/remkomplekt-dvigatelja/remkomplekt-dvigatelja-nissan-10101-43g25-td25-metallprokladka-gw-10101-43g25/
+  2. Ремкомплект двигателя NISSAN, 10101-43G25, TD23, МЕТАЛЛ/ПРОКЛАДКА (GW)
+     Артикул (1С): 04574
+     Бренд: NISSAN | Цена: 2500.00 | Кол-во: 7
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/remkomplekt-dvigatelja/remkomplekt-dvigatelja-nissan-10101-43g25-td23td25-metallprokladka-gw-10101-43g25/
+
+Артикул: 10101-43G27  —  повторов: 2
+--------------------------------------------------------------------------------
+  1. Ремкомплект двигателя NISSAN, 10101-43G27, TD27, МЕТАЛЛ/ПРОКЛАДКА
+     Артикул (1С): 04664
+     Бренд: NISSAN | Цена: 2500.00 | Кол-во: 13
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/remkomplekt-dvigatelja/remkomplekt-dvigatelja-nissan-04664-10101-43g27-td27-metallprokladka-04664/
+  2. Ремкомплект двигателя NISSAN, 10101-43G27, TD27, ПАРОНИТ/ПРОКЛАДКА
+     Артикул (1С): 04350
+     Бренд: NISSAN | Цена: 2300.00 | Кол-во: 19
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/remkomplekt-dvigatelja/remkomplekt-dvigatelja-nissan-04350-10101-43g27-td27-paronitprokladka-04350/
+
+Артикул: 10101-4M728  —  повторов: 2
+--------------------------------------------------------------------------------
+  1. Ремкомплект двигателя NISSAN, 10101-4M728, QG18DE, МЕТАЛЛ/ПРОКЛАДКА (NISSAN)
+     Артикул (1С): 04579
+     Бренд: NISSAN | Цена: 2500.00 | Кол-во: 1
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/remkomplekt-dvigatelja/remkomplekt-dvigatelja-nissan-10101-4m728-qg18de-metallprokladka-nissan-10101-4m728/
+  2. Ремкомплект двигателя NISSAN, 10101-4M728, QG18DE, МЕТАЛЛ/ПРОКЛАДКА (GW)
+     Артикул (1С): 04578
+     Бренд: NISSAN | Цена: 2500.00 | Кол-во: 4
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/remkomplekt-dvigatelja/remkomplekt-dvigatelja-nissan-10101-4m728-qg18de-metallprokladka-gw-10101-4m728/
+
+Артикул: 40BWD12 / DAC40740042  —  повторов: 2
+--------------------------------------------------------------------------------
+  1. Подшипник ступичный ONESIMUS 40BWD12, 90369-40066, AZT24#, F/R/L 40*74*42
+     Артикул (1С): 02802
+     Бренд: ONESIMUS | Цена: 1000.00 | Кол-во: 58
+     URL: https://onesimus25.ru/catalog/transmissija-i-tormoznaja-sistema/podshipnik-stupichnyj/podshipnik-stupichnyj-onesimus-40bwd12-dac40740042-90369-40066-azt2425ce121nze1214zze12zre14ane1zne1-frl-407442-40bwd12-dac40740042/
+  2. Подшипник ступичный NSK 40BWD12, 90369-40066, AZT24#, F/R/L 40*74*42
+     Артикул (1С): 02759
+     Бренд: NSK | Цена: 1000.00 | Кол-во: 5
+     URL: https://onesimus25.ru/catalog/transmissija-i-tormoznaja-sistema/podshipnik-stupichnyj/podshipnik-stupichnyj-nsk-40bwd12-dac40740042-90369-40066-azt2425ce121nze1214zze12zre14ane1zne1-frl-407442-40bwd12-dac40740042/
+
+Артикул: 40BWD17 / DAC40750039  —  повторов: 2
+--------------------------------------------------------------------------------
+  1. Подшипник ступичный NSK 40BWD17, 90363-40079, NHP10, 40*75*39
+     Артикул (1С): 02886
+     Бренд: NSK | Цена: 1200.00 | Кол-во: 10
+     URL: https://onesimus25.ru/catalog/transmissija-i-tormoznaja-sistema/podshipnik-stupichnyj/podshipnik-stupichnyj-nsk-02886-40bwd17-dac40750039-90363-40079-nhp10ksp92nze16ncp16nhp170nsp13-407539-02886/
+  2. Подшипник ступичный ONESIMUS 40BWD17, 90363-40079, NHP10, 40*75*39
+     Артикул (1С): 02803
+     Бренд: ONESIMUS | Цена: 1000.00 | Кол-во: 6
+     URL: https://onesimus25.ru/catalog/transmissija-i-tormoznaja-sistema/podshipnik-stupichnyj/podshipnik-stupichnyj-onesimus-40bwd17-dac40750039-90363-40079-nhp10ksp92nze16ncp16nhp170nsp13-407539-40bwd17-dac40750039/
+
+Артикул: 58TKB3505RA / 58SCRN37  —  повторов: 2
+--------------------------------------------------------------------------------
+  1. Подшипник выжимной NACHI 58TKB3505RA, 31230-60170, 1KZTE, 35*78*58
+     Артикул (1С): 02573
+     Бренд: NACHI | Цена: 1400.00 | Кол-во: 1
+     URL: https://onesimus25.ru/catalog/transmissija-i-tormoznaja-sistema/podshipnik-vyzhimnoj/podshipnik-vyzhimnoj-nachi-02573-58tkb3505ra-58scrn37-31230-60170-1kzte1rz2kdftv2l-357858-02573/
+  2. Подшипник выжимной TOYOTA 58TKB3505RA, 31230-60170, 1KZTE, 35*78*58
+     Артикул (1С): 06213
+     Бренд: TOYOTA | Цена: 1400.00 | Кол-во: 8
+     URL: https://onesimus25.ru/catalog/transmissija-i-tormoznaja-sistema/podshipnik-vyzhimnoj/podshipnik-vyzhimnoj-nsk-58tkb3505ra-58scrn37-31230-60170-1kzte1rz2kdftv2l-357858-58tkb3505ra-58scrn37/
+
+Артикул: 60TB0326B01  —  повторов: 2
+--------------------------------------------------------------------------------
+  1. Подшипник натяжной ONESIMUS 60TB0326B01, MD050125, 4D56
+     Артикул (1С): 02303
+     Бренд: ONESIMUS | Цена: 1200.00 | Кол-во: 24
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/natjazhitel/natjazhitel-mitsubishi-md050125-60tb0326b01-4d56d4bb-md050125/
+  2. Подшипник натяжной NSK 60TB0326B01, MD030605, 4G13
+     Артикул (1С): 02302
+     Бренд: NSK | Цена: 1200.00 | Кол-во: 4
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/natjazhitel/natjazhitel-mitsubishi-md030605-60tb0326b01-4g134g15g13b-md030605/
+
+Артикул: 62TB0520B01 / PU246234  —  повторов: 2
+--------------------------------------------------------------------------------
+  1. Подшипник натяжной ONESIMUS 62TB0520B01, 13505-64011, 2C
+     Артикул (1С): 06144
+     Бренд: ONESIMUS | Цена: 1000.00 | Кол-во: 5
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/podshipnik-natjazhnoj/podshipnik-natjazhnoj-onesimus-06144-13505-64011-06144/
+  2. Подшипник натяжной NSK 62TB0520B01, 48121-01210, 1C
+     Артикул (1С): 06155
+     Бренд: NSK | Цена: 1000.00 | Кол-во: 1
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/podshipnik-natjazhnoj/podshipnik-natjazhnoj-nsk-06155-60tb0520-06155/
+
+Артикул: 62TB0631B01  —  повторов: 2
+--------------------------------------------------------------------------------
+  1. Подшипник натяжной ONESIMUS 62TB0631B01, 13505-20010, 1MZFE
+     Артикул (1С): 06168
+     Бренд: ONESIMUS | Цена: 1000.00 | Кол-во: 12
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/podshipnik-natjazhnoj/podshipnik-natjazhnoj-onesimus-06168-13505-20010-06168/
+  2. Подшипник натяжной ONESIMUS 62TB0631B01, 16603-28010, 2AZ
+     Артикул (1С): 06148
+     Бренд: ONESIMUS | Цена: 800.00 | Кол-во: 1
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/podshipnik-natjazhnoj/podshipnik-natjazhnoj-onesimus-06148-16603-28010-06148/
+
+Артикул: 8AZ6-10-271  —  повторов: 2
+--------------------------------------------------------------------------------
+  1. Ремкомплект двигателя MAZDA, 8AZ6-10-271, R2, ПАРОНИТ/ПРОКЛАДКА (SP)
+     Артикул (1С): 04359
+     Бренд: MAZDA | Цена: 2200.00 | Кол-во: 7
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/remkomplekt-dvigatelja/remkomplekt-dvigatelja-mazda-8az6-10-271a-r2rf-paronitprokladka-sp-8az6-10-271a/
+  2. Ремкомплект двигателя MAZDA, 8AZ6-10-271, R2, ПАРОНИТ/ПРОКЛАДКА (GW)
+     Артикул (1С): 04444
+     Бренд: MAZDA | Цена: 2200.00 | Кол-во: 12
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/remkomplekt-dvigatelja/remkomplekt-dvigatelja-mazda-8az6-10-271a-r2rf-paronitprokladka-gw-8az6-10-271a/
+
+Артикул: A0101-JK20A  —  повторов: 2
+--------------------------------------------------------------------------------
+  1. Ремкомплект двигателя NISSAN, A0101-JK20A, VQ25, ПАРОНИТ/ПРОКЛАДКА (SP)
+     Артикул (1С): 04372
+     Бренд: NISSAN | Цена: 3500.00 | Кол-во: 1
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/remkomplekt-dvigatelja/remkomplekt-dvigatelja-nissan-a0101-jk20a-vq25-paronitprokladka-sp-a0101-jk20a/
+  2. Ремкомплект двигателя NISSAN, A0101-JK20A, VQ25, ПАРОНИТ/ПРОКЛАДКА (NISSAN)
+     Артикул (1С): 04595
+     Бренд: NISSAN | Цена: 3500.00 | Кол-во: 1
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/remkomplekt-dvigatelja/remkomplekt-dvigatelja-nissan-a0101-jk20a-vq25-paronitprokladka-nissan-a0101-jk20a/
+
+Артикул: CIM846  —  повторов: 2
+--------------------------------------------------------------------------------
+  1. Регулятор напряжения генератора CIM846, MD618735, 4D56, 12~14.7V
+     Артикул (1С): 04225
+     Бренд: MITSUBISHI | Цена: 1800.00 | Кол-во: 1
+     URL: https://onesimus25.ru/catalog/avtoelektrika/reguljator-naprjazhenija-generatora/reguljator-naprjazhenija-generatora-mitsubishi-cim846-md618735-4d564d68-12147v-cim846/
+  2. Регулятор напряжения генератора CIM846, MD618735, 4D56, 24V
+     Артикул (1С): 04236
+     Бренд: MITSUBISHI | Цена: 1500.00 | Кол-во: 2
+     URL: https://onesimus25.ru/catalog/avtoelektrika/reguljator-naprjazhenija-generatora/reguljator-naprjazhenija-generatora-mitsubishi-cim846-md618735-4d56-24v-cim846/
+
+Артикул: CT12  —  повторов: 2
+--------------------------------------------------------------------------------
+  1. Турбина TOYOTA CT12, 17201-64050, 2CT
+     Артикул (1С): 05741
+     Бренд: TOYOTA | Цена: 11000.00 | Кол-во: 35
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/turbiny/turbina-toyota-05741-ct12-17201-64050-2ct-05741/
+  2. Ремкомплект турбины TOYOTA CT12, 17201-64050, 2CT
+     Артикул (1С): 04781
+     Бренд: TOYOTA | Цена: 1500.00 | Кол-во: 5
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/remkomplekt-turbiny/remkomplekt-turbiny-toyota-ct12-17201-64050-2ct3ct-ct12/
+
+Артикул: CT12B  —  повторов: 2
+--------------------------------------------------------------------------------
+  1. Турбина TOYOTA CT12B, 17201-67010, 1KZT
+     Артикул (1С): 05742
+     Бренд: TOYOTA | Цена: 11500.00 | Кол-во: 36
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/turbiny/turbina-toyota-05742-ct12b-17201-67010-1kzt-05742/
+  2. Ремкомплект турбины TOYOTA CT12B, 17201-67010, 1KZTE
+     Артикул (1С): 04785
+     Бренд: TOYOTA | Цена: 1500.00 | Кол-во: 5
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/remkomplekt-turbiny/remkomplekt-turbiny-toyota-ct12b-17201-67010-1kzte-ct12b/
+
+Артикул: CT16  —  повторов: 2
+--------------------------------------------------------------------------------
+  1. Турбина TOYOTA CT16, 17201-30090, 2KDFTV
+     Артикул (1С): 05720
+     Бренд: TOYOTA | Цена: 11000.00 | Кол-во: 1
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/turbiny/turbina-toyota-ct16-17201-30090-2kdftv-ct16/
+  2. Турбина TOYOTA CT16, 17201-30030, 1
+     Артикул (1С): 05719
+     Бренд: TOYOTA | Цена: 12000.00 | Кол-во: 4
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/turbiny/turbina-toyota-ct16-17201-30030-12kd-ct16/
+
+Артикул: CT20  —  повторов: 2
+--------------------------------------------------------------------------------
+  1. Турбина TOYOTA CT20, 17201-64030/54030, 2LT
+     Артикул (1С): 05754
+     Бренд: TOYOTA | Цена: 13500.00 | Кол-во: 11
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/turbiny/turbina-toyota-05754-ct20-17201-6403054030-2lt-05754/
+  2. Ремкомплект турбины TOYOTA CT20, 17201-64030, 2LT
+     Артикул (1С): 04782
+     Бренд: TOYOTA | Цена: 1500.00 | Кол-во: 5
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/remkomplekt-turbiny/remkomplekt-turbiny-toyota-ct20-17201-64030-2lt2ct-ct20/
+
+Артикул: CT9  —  повторов: 2
+--------------------------------------------------------------------------------
+  1. Турбина TOYOTA CT9, 17201-54090, 2C
+     Артикул (1С): 05734
+     Бренд: TOYOTA | Цена: 10000.00 | Кол-во: 7
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/turbiny/turbina-toyota-ct9-17201-54090-2c3c-ct9/
+  2. Ремкомплект турбины TOYOTA CT9, 17201-54090, 2C-T
+     Артикул (1С): 04783
+     Бренд: TOYOTA | Цена: 1500.00 | Кол-во: 5
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/remkomplekt-turbiny/remkomplekt-turbiny-toyota-ct9-17201-54090-2c-t3c-t3c-te-ct9/
+
+Артикул: CT9-2  —  повторов: 2
+--------------------------------------------------------------------------------
+  1. Турбина TOYOTA CT9-2, 17201-64130, 3C
+     Артикул (1С): 05752
+     Бренд: TOYOTA | Цена: 11500.00 | Кол-во: 34
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/turbiny/turbina-toyota-ct9-2-17201-64130-3c-ct9-2/
+  2. Ремкомплект турбины TOYOTA CT9-2, 17201-64130, 3CT
+     Артикул (1С): 04786
+     Бренд: TOYOTA | Цена: 1500.00 | Кол-во: 5
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/remkomplekt-turbiny/remkomplekt-turbiny-toyota-ct9-2-17201-64130-3ct-ct9-2/
+
+Артикул: EP-500-1  —  повторов: 2
+--------------------------------------------------------------------------------
+  1. Насос низкого давления, EP-500-1, 24V РЕЛЕ
+     Артикул (1С): 02233
+     Бренд: EP-500-1 | Цена: 1500.00 | Кол-во: 16
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/nasos-nizkogo-davlenija/nasos-nizkogo-davlenija-ep-500-1-24v-rele-ep-500-1/
+  2. Насос низкого давления, EP-500-1, 12V РЕЛЕ
+     Артикул (1С): 02234
+     Бренд: EP-500-1 | Цена: 1500.00 | Кол-во: 222
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/nasos-nizkogo-davlenija/nasos-nizkogo-davlenija-ep-500-1-12v-rele-ep-500-1/
+
+Артикул: H11  —  повторов: 2
+--------------------------------------------------------------------------------
+  1. Лампа светодиодная ONESIMUS, H11, LED 9V-36V 120W 6500K 4800Lm
+     Артикул (1С): 06037
+     Бренд: ONESIMUS | Цена: 2500.00 | Кол-во: 493
+     URL: https://onesimus25.ru/catalog/avtoelektrika/lampa-svetodiodnaja-onesimus-led/lampa-svetodiodnaja-onesimus-06037-h11-led-9v-36v-120w-6500k-4800lm-06037/
+  2. Лампа светодиодная ONESIMUS, H11, LED 9V-36V 120W 6500K 4800Lm
+     Артикул (1С): 06034
+     Бренд: ONESIMUS | Цена: 2500.00 | Кол-во: 364
+     URL: https://onesimus25.ru/catalog/avtoelektrika/lampa-svetodiodnaja-onesimus-led/lampa-svetodiodnaja-onesimus-06034-h11-led-9v-36v-120w-6500k-4800lm-h11/
+
+Артикул: KA-24  —  повторов: 2
+--------------------------------------------------------------------------------
+  1. Ремкомплект ГРМ TOYOTA KA-24, 13506-37010, 1
+     Артикул (1С): 04246
+     Бренд: TOYOTA | Цена: 4500.00 | Кол-во: 6
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/remkomplekt-grm/remkomplekt-grm-toyota-ka-24-13506-37010-123zrfe-ka-24/
+  2. Ремкомплект ГРМ TOYOTA KA-24, 13501-0T010, 1ZR
+     Артикул (1С): 04265
+     Бренд: TOYOTA | Цена: 4500.00 | Кол-во: 4
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/remkomplekt-grm/remkomplekt-grm-toyota-ka-24-13501-0t010-1zr2zr-ka-24/
+
+Артикул: LM68149/10 / LM68149/10  —  повторов: 2
+--------------------------------------------------------------------------------
+  1. Подшипник ступичный NSK LM68149, 40215-M0205, B10, F/R/L 35*59*17
+     Артикул (1С): 02756
+     Бренд: NSK | Цена: 600.00 | Кол-во: 1
+     URL: https://onesimus25.ru/catalog/transmissija-i-tormoznaja-sistema/podshipnik-stupichnyj/podshipnik-stupichnyj-nsk-02756-lm6814910-lm6814910-40215-m0205-b1011n1012k10-frl-355917-02756/
+  2. Подшипник ступичный KOYO LM68149, 40215-M0205, B10, F/R/L 35*59*17
+     Артикул (1С): 02930
+     Бренд: KOYO | Цена: 600.00 | Кол-во: 5
+     URL: https://onesimus25.ru/catalog/transmissija-i-tormoznaja-sistema/podshipnik-stupichnyj/podshipnik-stupichnyj-koyo-02930-lm6814910-lm6814910-40215-m0205-b1011n1012k10-frl-355917-02930/
+
+Артикул: PB1206  —  повторов: 2
+--------------------------------------------------------------------------------
+  1. Подшипник натяжной ONESIMUS PB1206, 13505-62070, 5VZFE
+     Артикул (1С): 06143
+     Бренд: ONESIMUS | Цена: 1200.00 | Кол-во: 7
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/podshipnik-natjazhnoj/podshipnik-natjazhnoj-onesimus-06143-pb1206-13505-62070-5vzfe1vzfe-06143/
+  2. Подшипник натяжной TOYOTA PB1206, 13505-62070, 5VZFE
+     Артикул (1С): 02313
+     Бренд: TOYOTA | Цена: 1200.00 | Кол-во: 10
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/natjazhitel/natjazhitel-toyota-13505-62070-pb1206-5vzfe1vzfe-13505-62070/
+
+Артикул: PB5033  —  повторов: 2
+--------------------------------------------------------------------------------
+  1. Подшипник натяжной ONESIMUS PB5033, 16603-0W024, 1JZ
+     Артикул (1С): 06146
+     Бренд: ONESIMUS | Цена: 800.00 | Кол-во: 51
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/podshipnik-natjazhnoj/podshipnik-natjazhnoj-onesimus-06146-16603-0w024-06146/
+  2. Натяжитель TOYOTA PB5033, 16620-0W035, Toyota Crown UZS131 UZS141, 1UZFE
+     Артикул (1С): 02296
+     Бренд: TOYOTA | Цена: 2500.00 | Кол-во: 3
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/natjazhitel/natjazhitel-toyota-02296-16620-0w035-pb5033-1uzfe-02296/
+
+Артикул: R201-10-271  —  повторов: 2
+--------------------------------------------------------------------------------
+  1. Прокладка ГБЦ MAZDA, R201-10-271, R2, ПАРОНИТ
+     Артикул (1С): 03480
+     Бренд: MAZDA | Цена: 500.00 | Кол-во: 40
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/prokladka-gbts/prokladka-gbts-mazda-r201-10-271-r2-paronit-r201-10-271/
+  2. Прокладка ГБЦ MAZDA, R201-10-271, R2-T, МЕТАЛЛ
+     Артикул (1С): 03519
+     Бренд: MAZDA | Цена: 1000.00 | Кол-во: 28
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/prokladka-gbts/prokladka-gbts-mazda-r201-10-271-r2-t-metall-r201-10-271/
+
+Артикул: SL07-18-300  —  повторов: 2
+--------------------------------------------------------------------------------
+  1. Генератор MAZDA SL07-18-300, S515-18-300, SL, 12V/35A/П.КР/1РУЧ/ЗАДН.ВАК/КВ.Ф/2КОНТ
+     Артикул (1С): 06299
+     Бренд: MAZDA | Цена: 9500.00 | Кол-во: 3
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/generator/generator-mazda-06299-sl07-18-300-s515-18-300-slxaha-12v35apkr1ruchzadnvakkvf2kont-06299/
+  2. Генератор MAZDA SL07-18-300, S515-18-300, SL, 24V/35A/П.КР/1РУЧ/ЗАДН.ВАК/КВ.Ф/2КОНТ
+     Артикул (1С): 00763
+     Бренд: MAZDA | Цена: 9500.00 | Кол-во: 6
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/generator/generator-mazda-sl07-18-300-s515-18-300-slxaha-24v35apkr1ruchzadnvakkvf2kont-sl07-18-300/
+
+Артикул: TD04L  —  повторов: 2
+--------------------------------------------------------------------------------
+  1. Турбина SUBARU TD04L, 14412-AA560, EJ25
+     Артикул (1С): 05724
+     Бренд: SUBARU | Цена: 15000.00 | Кол-во: 4
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/turbiny/turbina-subaru-td04l-14412-aa560-ej25-td04l/
+  2. Турбина NISSAN TD04L, 14411-7T600, QD32T
+     Артикул (1С): 05703
+     Бренд: NISSAN | Цена: 11000.00 | Кол-во: 17
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/turbiny/turbina-nissan-td04l-14411-7t600-qd32ttd27t-td04l/
+
+Артикул: TF035HM  —  повторов: 2
+--------------------------------------------------------------------------------
+  1. Турбина MITSUBISHI TF035HM, 49135-03310, 4M40, МАСЛО
+     Артикул (1С): 05707
+     Бренд: MITSUBISHI | Цена: 9500.00 | Кол-во: 9
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/turbiny/turbina-mitsubishi-tf035hm-49135-03310-4m40-maslo-tf035hm/
+  2. Турбина MITSUBISHI TF035HM, 49135-03101, 4M40, ВОДА/МАСЛО
+     Артикул (1С): 05743
+     Бренд: MITSUBISHI | Цена: 9500.00 | Кол-во: 2
+     URL: https://onesimus25.ru/catalog/dvigatel-i-vyhlopnaja-sistema/turbiny/turbina-mitsubishi-tf035hm-49135-03101-4m40-vodamaslo-tf035hm/
+
+Артикул: TITAN-P1  —  повторов: 2
+--------------------------------------------------------------------------------
+  1. Предпусковой подогреватель двигателя, TITAN-P1, 2000W/220V
+     Артикул (1С): 03365
+     Бренд: VVKB | Цена: 2000.00 | Кол-во: 5
+     URL: https://onesimus25.ru/catalog/avtoelektrika/predpuskovoj-podogrevatel-dvigatelja/retail-80c86833-b6af-11ea-80c8-00155d01d802-837e16b4-806e-11ee-8103-00155d01d802/
+  2. Предпусковой подогреватель двигателя, TITAN-P1, 1500W/220V
+     Артикул (1С): 03366
+     Бренд: VVKB | Цена: 2000.00 | Кол-во: 46
+     URL: https://onesimus25.ru/catalog/avtoelektrika/predpuskovoj-podogrevatel-dvigatelja/predpuskovoj-podogrevatel-dvigatelja-vvkb-titan-p1-2000w220v-titan-p1/

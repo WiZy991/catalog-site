@@ -2,7 +2,7 @@ from urllib.parse import urlencode
 
 from django.contrib import admin
 from django.contrib import messages
-from django.contrib.auth.models import User
+from django.contrib.auth.models import User, Group
 from django.utils.html import format_html
 from django.utils import timezone
 from django.core.mail import send_mail
@@ -16,6 +16,16 @@ from django.utils.html import format_html
 from import_export import resources, fields
 from import_export.admin import ImportExportModelAdmin
 from import_export.widgets import ForeignKeyWidget
+
+PARTNERS_GROUP_NAME = 'Партнёры'
+
+
+def ensure_user_in_partners_group(user):
+    """Добавляет пользователя в группу «Партнёры» (создаёт группу при необходимости)."""
+    if not user:
+        return
+    group, _ = Group.objects.get_or_create(name=PARTNERS_GROUP_NAME)
+    user.groups.add(group)
 
 
 class PartnerRequestAdmin(admin.ModelAdmin):
@@ -35,13 +45,83 @@ class PartnerRequestAdmin(admin.ModelAdmin):
             'fields': ('full_name', 'phone', 'email', 'city', 'comment', 'newsletter_consent')
         }),
         ('Статус', {
-            'fields': ('status', 'admin_comment', 'partner')
+            'fields': ('status', 'admin_comment', 'partner'),
+            'description': (
+                'При смене статуса на «Одобрена» автоматически создаётся партнёр, '
+                'ставится дата обработки и пользователь добавляется в группу «Партнёры». '
+                'Либо отметьте заявки галочками и выполните действие «Одобрить выбранные заявки».'
+            ),
         }),
         ('Информация', {
             'fields': ('created_at', 'updated_at', 'processed_at', 'processed_by'),
             'classes': ('collapse',)
         }),
     )
+
+    def save_model(self, request, obj, form, change):
+        """
+        Если статус сменили вручную в карточке заявки — доводим процесс до конца
+        (дата обработки, создание партнёра, группа «Партнёры»).
+        Раньше ручная смена статуса только писала «Одобрена» без остального.
+        """
+        old_status = None
+        if change and obj.pk:
+            old_status = (
+                PartnerRequest.objects.filter(pk=obj.pk)
+                .values_list('status', flat=True)
+                .first()
+            )
+
+        # Не даём «голому» approved сохраниться без обработки:
+        # сначала сохраняем остальные поля, потом прогоняем approve/reject.
+        incoming_status = obj.status
+        if change and old_status == 'pending' and incoming_status == 'approved':
+            # Сохраняем форму со статусом pending, затем полный approve
+            obj.status = 'pending'
+            super().save_model(request, obj, form, change)
+            partner = self.create_partner_from_request(obj, request.user)
+            if partner:
+                self.message_user(
+                    request,
+                    'Заявка одобрена: создан партнёр, отправлены данные для входа, '
+                    'пользователь добавлен в группу «Партнёры».',
+                    messages.SUCCESS,
+                )
+            else:
+                self.message_user(
+                    request,
+                    'Не удалось полностью обработать одобрение. Проверьте email заявки.',
+                    messages.ERROR,
+                )
+            return
+
+        if change and old_status == 'pending' and incoming_status == 'rejected':
+            obj.status = 'pending'
+            super().save_model(request, obj, form, change)
+            obj.status = 'rejected'
+            obj.processed_at = timezone.now()
+            obj.processed_by = request.user
+            obj.save(update_fields=['status', 'processed_at', 'processed_by', 'updated_at'])
+            return
+
+        # Уже «Одобрена», но партнёр не создан / нет даты — дочищаем при сохранении
+        if incoming_status == 'approved' and (not obj.partner_id or not obj.processed_at):
+            super().save_model(request, obj, form, change)
+            partner = self.create_partner_from_request(obj, request.user)
+            if partner and not obj.processed_at:
+                PartnerRequest.objects.filter(pk=obj.pk, processed_at__isnull=True).update(
+                    processed_at=timezone.now(),
+                    processed_by=request.user,
+                )
+            if partner:
+                self.message_user(
+                    request,
+                    'Досоздан партнёр / заполнена дата обработки для одобренной заявки.',
+                    messages.SUCCESS,
+                )
+            return
+
+        super().save_model(request, obj, form, change)
     
     def status_badge(self, obj):
         colors = {
@@ -100,7 +180,7 @@ class PartnerRequestAdmin(admin.ModelAdmin):
             self.message_user(
                 request,
                 f'Создано партнёров: {created_count}. Партнёрам отправлены данные для входа.',
-                messages.SUCCESS
+                messages.SUCCESS,
             )
         else:
             self.message_user(
@@ -114,6 +194,11 @@ class PartnerRequestAdmin(admin.ModelAdmin):
         """Создать партнёра из заявки."""
         # Если партнёр уже создан и связан с этой заявкой, возвращаем его
         if req.partner:
+            ensure_user_in_partners_group(req.partner.user)
+            if not req.processed_at:
+                req.processed_at = timezone.now()
+                req.processed_by = admin_user
+                req.save(update_fields=['processed_at', 'processed_by', 'updated_at'])
             return req.partner
         
         # Генерируем пароль
@@ -144,6 +229,7 @@ class PartnerRequestAdmin(admin.ModelAdmin):
                     # Отправляем новый пароль
                     user.set_password(password)
                     user.save()
+                    ensure_user_in_partners_group(user)
                     self.send_credentials_email(req.email, req.full_name, password)
                     return partner
                 
@@ -161,6 +247,7 @@ class PartnerRequestAdmin(admin.ModelAdmin):
                 # Отправляем новый пароль
                 user.set_password(password)
                 user.save()
+                ensure_user_in_partners_group(user)
                 self.send_credentials_email(req.email, req.full_name, password)
                 return partner
         else:
@@ -195,6 +282,8 @@ class PartnerRequestAdmin(admin.ModelAdmin):
         # Используем update для избежания конфликта
         PartnerRequest.objects.filter(pk=req.pk).update(partner=partner)
         req.refresh_from_db()
+
+        ensure_user_in_partners_group(user)
         
         # Отправляем email с данными для входа
         self.send_credentials_email(req.email, req.full_name, password)
