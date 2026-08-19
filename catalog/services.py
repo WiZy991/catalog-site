@@ -4012,20 +4012,17 @@ def farpost_export_brand(product):
     return ''
 
 
-def product_part_number_value(product):
-    """
-    Поле «Номер» из 1С: характеристики товара или JSON properties.
-    Используется в оптовом каталоге в колонке «Код детали» (отдельно от артикула).
-    """
+def _product_characteristic_value_by_keys(product, keys):
+    """Первое непустое значение характеристики/свойства по набору ключей 1С."""
     def _clean(v):
         return str(v or '').strip().lstrip('/')
 
-    part_keys = PART_NUMBER_SOURCE_KEYS | {PART_NUMBER_DISPLAY_LABEL.lower()}
+    keys = {str(k).strip().lower() for k in keys if k}
 
     try:
         for key, value in product.get_display_characteristics_list():
             kn = str(key or '').strip().lower()
-            if kn in part_keys:
+            if kn in keys:
                 val = _clean(value)
                 if val:
                     return val
@@ -4035,7 +4032,7 @@ def product_part_number_value(product):
     try:
         for key, value in product.get_characteristics_list():
             kn = str(key or '').strip().lower()
-            if kn in part_keys:
+            if kn in keys:
                 val = _clean(value)
                 if val:
                     return val
@@ -4046,11 +4043,30 @@ def product_part_number_value(product):
     if isinstance(props, dict):
         for key, value in props.items():
             kn = str(key or '').strip().lower()
-            if kn in part_keys:
+            if kn in keys:
                 val = _clean(value)
                 if val:
                     return val
     return ''
+
+
+def product_part_number_value(product):
+    """
+    Поле «Номер производителя» из 1С: характеристики товара или JSON properties.
+    Используется в оптовом каталоге в колонке «Код детали» (отдельно от артикула).
+    """
+    part_keys = PART_NUMBER_SOURCE_KEYS | {PART_NUMBER_DISPLAY_LABEL.lower()}
+    return _product_characteristic_value_by_keys(product, part_keys)
+
+
+OEM_SOURCE_KEYS = frozenset({
+    'oem', 'артикул2', 'article2', 'oem номер', 'oem-номер', 'oem-номер:',
+})
+
+
+def product_oem_value(product):
+    """Поле OEM / Артикул2 из характеристик 1С."""
+    return _product_characteristic_value_by_keys(product, OEM_SOURCE_KEYS)
 
 
 def product_catalog_article_value(product):
@@ -4095,39 +4111,13 @@ def enrich_wholesale_catalog_codes(product):
 
 def farpost_export_article(product):
     """
-    Артикул для колонки «Артикул» в Farpost.
-    Приоритет:
-    1) «Номер» из характеристик/свойств (данные обмена 1С),
-    2) product.article,
-    3) product.supplier_article,
-    4) эвристика из названия.
+    Колонка «Артикул» в выгрузке Farpost — номер производителя / OEM из 1С.
+    Не подставляем артикул 1С (он идёт отдельной колонкой «Артикул (1С)»).
     """
-    def _clean(v):
-        return str(v or '').strip().lstrip('/')
-
     val = product_part_number_value(product)
     if val:
         return val
-
-    val = _clean(getattr(product, 'article', ''))
-    if val:
-        return val
-
-    val = _clean(getattr(product, 'supplier_article', ''))
-    if val:
-        return val
-
-    name = str(getattr(product, 'name', '') or '')
-    inside = ''
-    if '(' in name and ')' in name and name.find('(') < name.rfind(')'):
-        inside = name[name.find('(') + 1:name.rfind(')')]
-    source = inside or name
-    parts = [p.strip() for p in source.split(',') if p and p.strip()]
-    if len(parts) >= 3:
-        candidate = _clean(parts[2])
-        if candidate:
-            return candidate
-    return ''
+    return product_oem_value(product) or ''
 
 
 def farpost_csv_cell_excel_text_preserve(value):
