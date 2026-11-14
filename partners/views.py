@@ -221,6 +221,7 @@ class PartnerRegisterView(FormView):
 Новая заявка на партнёрство:
 
 ФИО: {request_obj.full_name}
+Компания: {request_obj.company_name}
 Телефон: {request_obj.phone}
 Email: {request_obj.email}
 Город: {request_obj.city}

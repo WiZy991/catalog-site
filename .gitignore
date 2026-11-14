@@ -5,7 +5,10 @@ __pycache__/
 
 # === Django ===
 db.sqlite3
-media/
+*.sqlite3
+*.sqlite3.bak*
+media/**
+!media/.gitkeep
 staticfiles/
 
 # === Virtualenv ===

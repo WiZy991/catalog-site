@@ -31,10 +31,10 @@ def ensure_user_in_partners_group(user):
 class PartnerRequestAdmin(admin.ModelAdmin):
     """Админка для заявок партнёров."""
     list_display = [
-        'full_name', 'email', 'phone', 'city', 'newsletter_consent', 'status_badge', 'created_at', 'processed_at'
+        'full_name', 'company_name', 'email', 'phone', 'city', 'newsletter_consent', 'status_badge', 'created_at', 'processed_at'
     ]
     list_filter = ['status', 'created_at', 'city']
-    search_fields = ['full_name', 'email', 'phone', 'city', 'comment']
+    search_fields = ['full_name', 'company_name', 'email', 'phone', 'city', 'comment']
     readonly_fields = ['created_at', 'updated_at', 'processed_at', 'processed_by', 'partner']
     date_hierarchy = 'created_at'
     ordering = ['-created_at']
@@ -42,7 +42,7 @@ class PartnerRequestAdmin(admin.ModelAdmin):
     
     fieldsets = (
         ('Контактные данные', {
-            'fields': ('full_name', 'phone', 'email', 'city', 'comment', 'newsletter_consent')
+            'fields': ('full_name', 'company_name', 'phone', 'email', 'city', 'comment', 'newsletter_consent')
         }),
         ('Статус', {
             'fields': ('status', 'admin_comment', 'partner'),
@@ -263,6 +263,7 @@ class PartnerRequestAdmin(admin.ModelAdmin):
         # Создаём профиль партнёра
         partner = Partner.objects.create(
             user=user,
+            company_name=getattr(req, 'company_name', '') or '',
             full_name=req.full_name,
             phone=req.phone,
             city=req.city,

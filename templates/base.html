@@ -3,7 +3,12 @@
 <html lang="{{ SEO_LANGUAGE|default:'ru' }}">
 <head>
     <meta charset="UTF-8">
+    {% if FORCE_PARTNER_DESKTOP %}
+    {# После входа в ЛК партнёра на мобильных показываем ПК-версию оптового раздела #}
+    <meta name="viewport" content="width=1280">
+    {% else %}
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    {% endif %}
     
     <!-- Primary Meta Tags -->
     {% block title %}<title>{{ SITE_NAME }}</title>{% endblock %}
@@ -252,7 +257,16 @@
     
     {% block extra_schema %}{% endblock %}
 </head>
-<body>
+<body{% if FORCE_PARTNER_DESKTOP %} class="partner-desktop-viewport"{% endif %}>
+    {% if FORCE_PARTNER_DESKTOP %}
+    <style>
+      /* ЛК партнёра: фиксированная ПК-ширина даже на телефоне */
+      html, body.partner-desktop-viewport {
+        min-width: 1280px;
+        overflow-x: auto;
+      }
+    </style>
+    {% endif %}
     <!-- Header -->
     <header class="header">
         <div class="header__top">

@@ -14,6 +14,11 @@ class PartnerRequest(models.Model):
     
     # Контактные данные
     full_name = models.CharField('ФИО контактного лица', max_length=255)
+    company_name = models.CharField(
+        'Название компании',
+        max_length=255,
+        help_text='С указанием формы: ИП или ООО',
+    )
     phone = models.CharField('Телефон', max_length=50)
     email = models.EmailField('E-mail')
     city = models.CharField('Город', max_length=100)

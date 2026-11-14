@@ -1,3 +1,5 @@
+import re
+
 from django import forms
 from django.contrib.auth.forms import AuthenticationForm, PasswordResetForm, SetPasswordForm
 from django.contrib.auth.models import User
@@ -21,11 +23,16 @@ class PartnerRequestForm(forms.ModelForm):
     )
     class Meta:
         model = PartnerRequest
-        fields = ['full_name', 'phone', 'email', 'city', 'comment', 'newsletter_consent']
+        fields = ['full_name', 'company_name', 'phone', 'email', 'city', 'comment', 'newsletter_consent']
         widgets = {
             'full_name': forms.TextInput(attrs={
                 'class': 'form-input',
                 'placeholder': 'Иванов Иван Иванович',
+                'required': True,
+            }),
+            'company_name': forms.TextInput(attrs={
+                'class': 'form-input',
+                'placeholder': 'ООО «Название» или ИП Иванов И.И.',
                 'required': True,
             }),
             'phone': forms.TextInput(attrs={
@@ -53,6 +60,24 @@ class PartnerRequestForm(forms.ModelForm):
                 'id': 'id_newsletter_consent',
             }),
         }
+
+    def clean_company_name(self):
+        name = (self.cleaned_data.get('company_name') or '').strip()
+        if not name:
+            raise forms.ValidationError('Укажите название компании.')
+        normalized = re.sub(r'\s+', ' ', name).upper()
+        has_ip = bool(
+            re.search(r'(^|\s)ИП(\s|$)|ИНДИВИДУАЛЬНЫЙ\s+ПРЕДПРИНИМАТЕЛЬ', normalized)
+        )
+        has_ooo = bool(
+            re.search(r'(^|\s)ООО(\s|$)|ОБЩЕСТВО\s+С\s+ОГРАНИЧЕННОЙ', normalized)
+        )
+        if not (has_ip or has_ooo):
+            raise forms.ValidationError(
+                'Укажите организационно-правовую форму: ИП или ООО '
+                '(например: ООО «Название» или ИП Иванов И.И.).'
+            )
+        return name
 
     def clean_email(self):
         email = self.cleaned_data.get('email')
@@ -101,7 +126,8 @@ class PartnerProfileForm(forms.ModelForm):
         widgets = {
             'company_name': forms.TextInput(attrs={
                 'class': 'form-input',
-                'placeholder': 'ООО "Компания"',
+                'placeholder': 'ООО «Название» или ИП Иванов И.И.',
+                'required': True,
             }),
             'full_name': forms.TextInput(attrs={
                 'class': 'form-input',
@@ -129,6 +155,24 @@ class PartnerProfileForm(forms.ModelForm):
                 'rows': 3,
             }),
         }
+
+    def clean_company_name(self):
+        name = (self.cleaned_data.get('company_name') or '').strip()
+        if not name:
+            raise forms.ValidationError('Укажите название компании.')
+        normalized = re.sub(r'\s+', ' ', name).upper()
+        has_ip = bool(
+            re.search(r'(^|\s)ИП(\s|$)|ИНДИВИДУАЛЬНЫЙ\s+ПРЕДПРИНИМАТЕЛЬ', normalized)
+        )
+        has_ooo = bool(
+            re.search(r'(^|\s)ООО(\s|$)|ОБЩЕСТВО\s+С\s+ОГРАНИЧЕННОЙ', normalized)
+        )
+        if not (has_ip or has_ooo):
+            raise forms.ValidationError(
+                'Укажите организационно-правовую форму: ИП или ООО '
+                '(например: ООО «Название» или ИП Иванов И.И.).'
+            )
+        return name
 
 
 class PartnerPasswordChangeForm(forms.Form):
