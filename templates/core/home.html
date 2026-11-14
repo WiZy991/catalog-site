@@ -15,6 +15,39 @@
 
 {% block content %}
 <!-- Hero Section -->
+{% if hero_slides %}
+<section class="hero hero--carousel">
+    <div class="container">
+        <div class="hero-carousel" id="heroCarousel" data-interval="{{ hero_interval_ms }}" role="region" aria-roledescription="карусель" aria-label="Изображения" tabindex="0">
+            <div class="hero-carousel__stage">
+                <div class="hero-carousel__viewport">
+                    {% for slide in hero_slides %}
+                    <div class="hero-carousel__slide{% if forloop.first %} is-active{% endif %}" {% if not forloop.first %}aria-hidden="true"{% endif %}>
+                        <img src="{{ slide.image.url }}" alt="{{ slide.alt|default:COMPANY_NAME|default:SITE_NAME }}" class="hero-carousel__image"{% if forloop.first %} fetchpriority="high"{% endif %}>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% if hero_slides|length > 1 %}
+                <button type="button" class="hero-carousel__btn hero-carousel__btn--prev" aria-label="Предыдущее изображение">
+                    <i class="bi bi-chevron-left" aria-hidden="true"></i>
+                </button>
+                <button type="button" class="hero-carousel__btn hero-carousel__btn--next" aria-label="Следующее изображение">
+                    <i class="bi bi-chevron-right" aria-hidden="true"></i>
+                </button>
+                {% endif %}
+            </div>
+            {% if hero_slides|length > 1 %}
+            <div class="hero-carousel__indicators">
+                {% for slide in hero_slides %}
+                <button type="button" class="hero-carousel__indicator{% if forloop.first %} is-active{% endif %}" aria-label="Изображение {{ forloop.counter }}"{% if forloop.first %} aria-current="true"{% endif %}></button>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    <div class="hero__bg"></div>
+</section>
+{% else %}
 <section class="hero">
     <div class="container">
         <div class="hero__content">
@@ -25,6 +58,7 @@
     </div>
     <div class="hero__bg"></div>
 </section>
+{% endif %}
 
 <!-- Hero CTA Section -->
 <section class="hero-cta">

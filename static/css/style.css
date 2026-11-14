@@ -1006,6 +1006,132 @@ h1, h2, h3, h4, h5, h6 {
     flex-wrap: wrap;
 }
 
+.hero--carousel {
+    padding: var(--space-lg) 0 var(--space-md);
+}
+
+.hero-carousel {
+    position: relative;
+    z-index: 1;
+    outline: none;
+}
+
+.hero-carousel:focus-visible {
+    outline: 2px solid var(--color-brand-white);
+    outline-offset: 4px;
+}
+
+.hero-carousel__stage {
+    position: relative;
+}
+
+.hero-carousel__viewport {
+    position: relative;
+    overflow: hidden;
+    border-radius: var(--radius-lg);
+    background: #111;
+    aspect-ratio: 1600 / 700;
+}
+
+.hero-carousel__slide {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    transition: opacity 0.6s ease;
+    pointer-events: none;
+}
+
+.hero-carousel__slide.is-active {
+    opacity: 1;
+    z-index: 1;
+    pointer-events: auto;
+}
+
+.hero-carousel__image {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+}
+
+.hero-carousel__btn {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 2;
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.92);
+    color: var(--color-primary);
+    border: none;
+    border-radius: 50%;
+    font-size: 1.35rem;
+    cursor: pointer;
+    transition: background var(--transition-fast), color var(--transition-fast), transform var(--transition-fast);
+    box-shadow: var(--shadow-md);
+}
+
+.hero-carousel__btn:hover {
+    background: var(--color-primary);
+    color: var(--color-white);
+    transform: translateY(-50%) scale(1.06);
+}
+
+.hero-carousel__btn:focus-visible {
+    outline: 2px solid var(--color-brand-white);
+    outline-offset: 2px;
+}
+
+.hero-carousel__btn--prev {
+    left: var(--space-md);
+}
+
+.hero-carousel__btn--next {
+    right: var(--space-md);
+}
+
+.hero-carousel__indicators {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: var(--space-sm);
+    margin-top: var(--space-md);
+}
+
+.hero-carousel__indicator {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 2px solid var(--color-brand-white);
+    background: transparent;
+    cursor: pointer;
+    padding: 0;
+    transition: background var(--transition-fast), transform var(--transition-fast);
+}
+
+.hero-carousel__indicator:hover {
+    background: rgba(255, 255, 255, 0.45);
+}
+
+.hero-carousel__indicator.is-active {
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+}
+
+.hero-carousel__indicator:focus-visible {
+    outline: 2px solid var(--color-brand-white);
+    outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .hero-carousel__slide {
+        transition: none;
+    }
+}
+
 /* ========================================
    Hero CTA Section
 ======================================== */
@@ -3112,6 +3238,28 @@ body > p:first-child:not(.header):not(.mobile-menu) {
     
     .hero__logo {
         max-width: 80%;
+    }
+
+    .hero--carousel {
+        padding: var(--space-md) 0;
+    }
+
+    .hero-carousel__viewport {
+        border-radius: var(--radius-md);
+    }
+
+    .hero-carousel__btn {
+        width: 36px;
+        height: 36px;
+        font-size: 1.1rem;
+    }
+
+    .hero-carousel__btn--prev {
+        left: var(--space-sm);
+    }
+
+    .hero-carousel__btn--next {
+        right: var(--space-sm);
     }
     
     .hero__title-wrapper {

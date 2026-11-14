@@ -12,7 +12,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-change-this-in-production-abc123xyz789'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = False
 
 ALLOWED_HOSTS = ['*', 'onesimus25.ru', 'www.onesimus25.ru', 'onesim8n.beget.tech']
 
@@ -171,7 +171,7 @@ IMPORT_EXPORT_USE_TRANSACTIONS = True
 PRODUCTS_PER_PAGE = 24
 
 # Static files versioning (обновляйте при изменении CSS/JS)
-STATIC_VERSION = '2.7'
+STATIC_VERSION = '2.8'
 
 # API для 1С
 ONE_C_API_KEY = '1XV8XYzbGBNVsMKhV8jYZ6823o9Aw7JZjpuvSYQiAhdhsS2V6M2tyBCUAGvtwHZxrn1u2sDjzU6FQ9lECSnzvHgEeE1ZRuLcTwVlHPcM5pEwr6tZ9M04ptPLE1vZK81r'
@@ -335,6 +335,7 @@ JAZZMIN_SETTINGS = {
     # Порядок приложений в меню
     "order_with_respect_to": [
         "catalog",
+        "core",
         "auth",
     ],
     
@@ -349,6 +350,8 @@ JAZZMIN_SETTINGS = {
         "catalog.Brand": "fas fa-tag",
         "catalog.ImportLog": "fas fa-file-import",
         "core.Page": "fas fa-file-alt",
+        "core.HeroSlide": "fas fa-images",
+        "core.HeroCarouselSettings": "fas fa-sliders-h",
         "orders.Order": "fas fa-shopping-cart",
         "partners.PartnerRequest": "fas fa-user-plus",
         "partners.Partner": "fas fa-handshake",

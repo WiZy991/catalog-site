@@ -4,7 +4,7 @@ from django.http import HttpResponse
 from django.db import OperationalError
 from django.conf import settings
 from catalog.models import Category, Product, Promotion
-from .models import Page
+from .models import HeroCarouselSettings, HeroSlide, Page
 from . import legal_documents
 
 
@@ -49,6 +49,7 @@ class HomeView(TemplateView):
                 import logging
                 logger = logging.getLogger(__name__)
                 logger.warning(f"Error loading promotions: {e}")
+        context.update(_hero_carousel_context())
         return context
 
 
@@ -174,6 +175,30 @@ class WholesaleView(TemplateView):
         except Page.DoesNotExist:
             context['page'] = None
         return context
+
+
+def _hero_carousel_context():
+    """Кадры и скорость карусели на главной. Пустой набор — шаблон оставляет логотип."""
+    try:
+        settings_obj = HeroCarouselSettings.objects.filter(pk=1).first()
+        interval_seconds = settings_obj.interval_seconds if settings_obj else 5
+        visible_count = settings_obj.visible_count if settings_obj else 0
+        slides = HeroSlide.objects.filter(is_active=True).order_by('order', 'id')
+        if visible_count:
+            slides = slides[:visible_count]
+        interval_seconds = max(1, min(int(interval_seconds or 5), 120))
+        return {
+            'hero_slides': list(slides),
+            'hero_interval_ms': interval_seconds * 1000,
+        }
+    except (OperationalError, Exception) as e:
+        if settings.DEBUG:
+            import logging
+            logging.getLogger(__name__).warning(f"Error loading hero carousel: {e}")
+        return {
+            'hero_slides': [],
+            'hero_interval_ms': 5000,
+        }
 
 
 def robots_txt(request):

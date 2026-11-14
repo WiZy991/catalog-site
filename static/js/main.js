@@ -24,6 +24,9 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Promotions carousel
     initPromotionsCarousel();
+
+    // Hero image carousel
+    initHeroCarousel();
     
     // Cookie consent banner
     initCookieConsent();
@@ -591,6 +594,138 @@ function initMegaMenu() {
             }
         });
     });
+}
+
+/**
+ * Hero carousel on the homepage. Speed comes from data-interval (ms).
+ */
+function initHeroCarousel() {
+    const carousel = document.getElementById('heroCarousel');
+    if (!carousel) return;
+
+    const slides = carousel.querySelectorAll('.hero-carousel__slide');
+    const indicators = carousel.querySelectorAll('.hero-carousel__indicator');
+    const prevBtn = carousel.querySelector('.hero-carousel__btn--prev');
+    const nextBtn = carousel.querySelector('.hero-carousel__btn--next');
+
+    if (slides.length <= 1) return;
+
+    let currentSlide = 0;
+    let autoplayTimer = null;
+    const rawInterval = parseInt(carousel.getAttribute('data-interval'), 10);
+    const delay = Number.isFinite(rawInterval) && rawInterval >= 1000 ? rawInterval : 5000;
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    let autoplayEnabled = !reduceMotion;
+
+    function showSlide(index) {
+        slides.forEach(function(slide, slideIndex) {
+            const active = slideIndex === index;
+            slide.classList.toggle('is-active', active);
+            slide.setAttribute('aria-hidden', active ? 'false' : 'true');
+        });
+        indicators.forEach(function(indicator, indicatorIndex) {
+            const active = indicatorIndex === index;
+            indicator.classList.toggle('is-active', active);
+            if (active) {
+                indicator.setAttribute('aria-current', 'true');
+            } else {
+                indicator.removeAttribute('aria-current');
+            }
+        });
+        currentSlide = index;
+    }
+
+    function nextSlide() {
+        showSlide((currentSlide + 1) % slides.length);
+    }
+
+    function prevSlide() {
+        showSlide((currentSlide - 1 + slides.length) % slides.length);
+    }
+
+    function stopAutoplay() {
+        if (autoplayTimer !== null) {
+            clearInterval(autoplayTimer);
+            autoplayTimer = null;
+        }
+    }
+
+    function startAutoplay() {
+        stopAutoplay();
+        if (!autoplayEnabled || document.hidden) return;
+        autoplayTimer = setInterval(nextSlide, delay);
+    }
+
+    function resumeIfIdle() {
+        if (carousel.matches(':hover') || carousel.contains(document.activeElement)) return;
+        startAutoplay();
+    }
+
+    if (nextBtn) {
+        nextBtn.addEventListener('click', function() {
+            nextSlide();
+            startAutoplay();
+        });
+    }
+
+    if (prevBtn) {
+        prevBtn.addEventListener('click', function() {
+            prevSlide();
+            startAutoplay();
+        });
+    }
+
+    indicators.forEach(function(indicator, index) {
+        indicator.addEventListener('click', function() {
+            showSlide(index);
+            startAutoplay();
+        });
+    });
+
+    carousel.addEventListener('keydown', function(event) {
+        if (event.key === 'ArrowRight') {
+            nextSlide();
+            startAutoplay();
+            event.preventDefault();
+        } else if (event.key === 'ArrowLeft') {
+            prevSlide();
+            startAutoplay();
+            event.preventDefault();
+        }
+    });
+
+    carousel.addEventListener('mouseenter', stopAutoplay);
+    carousel.addEventListener('mouseleave', startAutoplay);
+    carousel.addEventListener('focusin', stopAutoplay);
+    carousel.addEventListener('focusout', function() {
+        setTimeout(resumeIfIdle, 0);
+    });
+
+    document.addEventListener('visibilitychange', function() {
+        if (document.hidden) {
+            stopAutoplay();
+        } else {
+            resumeIfIdle();
+        }
+    });
+
+    let touchStartX = 0;
+    carousel.addEventListener('touchstart', function(event) {
+        touchStartX = event.changedTouches[0].screenX;
+    }, { passive: true });
+
+    carousel.addEventListener('touchend', function(event) {
+        const diff = touchStartX - event.changedTouches[0].screenX;
+        if (Math.abs(diff) < 50) return;
+        if (diff > 0) {
+            nextSlide();
+        } else {
+            prevSlide();
+        }
+        startAutoplay();
+    }, { passive: true });
+
+    startAutoplay();
 }
 
 /**
