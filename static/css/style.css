@@ -1009,6 +1009,7 @@ h1, h2, h3, h4, h5, h6 {
 .hero--carousel {
     padding: 0;
     background: transparent;
+    container-type: inline-size;
 }
 
 .hero-carousel {
@@ -1027,12 +1028,16 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .hero-carousel__viewport {
+    --hero-logo-scale: 1;
+    --hero-band-pad: var(--space-xl);
+    --hero-title-gap: 0px;
     position: relative;
     width: 100%;
     overflow: hidden;
     border-radius: 0;
     background: #111;
-    aspect-ratio: 1600 / 700;
+    /* Высота всей чёрной полосы, в которой на пустой главной стоит логотип. */
+    height: calc((min(600px, 100cqi - (2 * var(--container-padding))) - (2 * var(--space-md))) * var(--hero-logo-scale) * 758 / 1145 + (2 * var(--hero-band-pad)) + (2 * var(--space-md)) + var(--hero-title-gap));
 }
 
 .hero-carousel__slide {
@@ -3251,6 +3256,12 @@ body > p:first-child:not(.header):not(.mobile-menu) {
         max-width: 80%;
     }
 
+    .hero-carousel__viewport {
+        --hero-logo-scale: 0.8;
+        --hero-band-pad: var(--space-lg);
+        --hero-title-gap: var(--space-md);
+    }
+
     .hero--carousel {
         padding: 0;
     }
@@ -3580,6 +3591,10 @@ body > p:first-child:not(.header):not(.mobile-menu) {
     .hero__logo {
         max-width: 90%;
     }
+
+    .hero-carousel__viewport {
+        --hero-logo-scale: 0.9;
+    }
     
     .hero-cta__subtitle {
         font-size: 0.9375rem;
@@ -3743,6 +3758,10 @@ body > p:first-child:not(.header):not(.mobile-menu) {
     
     .hero__logo {
         max-width: 95%;
+    }
+
+    .hero-carousel__viewport {
+        --hero-logo-scale: 0.95;
     }
     
     .products-grid {
