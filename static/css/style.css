@@ -1008,6 +1008,7 @@ h1, h2, h3, h4, h5, h6 {
 
 .hero--carousel {
     padding: 0;
+    background: transparent;
 }
 
 .hero-carousel {
@@ -1098,11 +1099,16 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .hero-carousel__indicators {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 14px;
+    z-index: 3;
     display: flex;
     justify-content: center;
     flex-wrap: wrap;
     gap: var(--space-sm);
-    margin-top: var(--space-md);
+    margin: 0;
 }
 
 .hero-carousel__indicator {
@@ -1113,6 +1119,7 @@ h1, h2, h3, h4, h5, h6 {
     background: transparent;
     cursor: pointer;
     padding: 0;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
     transition: background var(--transition-fast), transform var(--transition-fast);
 }
 
