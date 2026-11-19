@@ -115,7 +115,7 @@ class HeroSlide(models.Model):
         'Изображение',
         upload_to='hero/',
         validators=[validate_hero_slide_image],
-        help_text='Любой размер. Картинка целиком помещается в блок, без обрезки. JPG, PNG, WEBP или GIF, до 8 МБ. Новая загрузка заменяет текущий файл.',
+        help_text='Любой размер. Картинка растягивается на весь блок, без обрезки. JPG, PNG, WEBP или GIF, до 8 МБ. Новая загрузка заменяет текущий файл.',
     )
     alt = models.CharField(
         'Подпись',
