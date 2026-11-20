@@ -1029,10 +1029,9 @@ h1, h2, h3, h4, h5, h6 {
 .hero-carousel__viewport {
     position: relative;
     width: 100%;
-    aspect-ratio: 1920 / 472;
     overflow: hidden;
     border-radius: 0;
-    background: #111;
+    background: transparent;
 }
 
 .hero-carousel__slide {
@@ -1046,6 +1045,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .hero-carousel__slide.is-active {
+    position: relative;
     opacity: 1;
     z-index: 1;
     pointer-events: auto;
@@ -1053,9 +1053,7 @@ h1, h2, h3, h4, h5, h6 {
 
 .hero-carousel__image {
     width: 100%;
-    height: 100%;
-    object-fit: contain;
-    object-position: center;
+    height: auto;
     display: block;
 }
 
