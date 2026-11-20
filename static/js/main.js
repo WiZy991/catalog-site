@@ -645,17 +645,13 @@ function initHeroCarousel() {
 
     let currentSlide = 0;
     let autoplayTimer = null;
+    let animating = false;
     const rawInterval = parseInt(carousel.getAttribute('data-interval'), 10);
     const delay = Number.isFinite(rawInterval) && rawInterval >= 1000 ? rawInterval : 5000;
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     let autoplayEnabled = !reduceMotion;
 
-    function showSlide(index) {
-        slides.forEach(function(slide, slideIndex) {
-            const active = slideIndex === index;
-            slide.classList.toggle('is-active', active);
-            slide.setAttribute('aria-hidden', active ? 'false' : 'true');
-        });
+    function updateIndicators(index) {
         indicators.forEach(function(indicator, indicatorIndex) {
             const active = indicatorIndex === index;
             indicator.classList.toggle('is-active', active);
@@ -665,15 +661,62 @@ function initHeroCarousel() {
                 indicator.removeAttribute('aria-current');
             }
         });
+    }
+
+    function markSlide(slide, active) {
+        slide.classList.toggle('is-active', active);
+        slide.setAttribute('aria-hidden', active ? 'false' : 'true');
+    }
+
+    function showSlide(index, direction) {
+        if (index === currentSlide || animating) return;
+
+        const forward = direction === -1 ? false : (direction === 1 ? true : index > currentSlide);
+        const outgoing = slides[currentSlide];
+        const incoming = slides[index];
+
+        updateIndicators(index);
         currentSlide = index;
+
+        if (reduceMotion) {
+            outgoing.classList.remove('is-active', 'is-before');
+            incoming.classList.remove('is-before');
+            markSlide(outgoing, false);
+            markSlide(incoming, true);
+            return;
+        }
+
+        animating = true;
+        incoming.style.transition = 'none';
+        incoming.classList.remove('is-active', 'is-before');
+        if (!forward) incoming.classList.add('is-before');
+        void incoming.offsetWidth;
+        incoming.style.transition = '';
+        void incoming.offsetWidth;
+
+        outgoing.classList.remove('is-active');
+        outgoing.classList.toggle('is-before', forward);
+        incoming.classList.remove('is-before');
+        markSlide(outgoing, false);
+        markSlide(incoming, true);
+
+        function finish(event) {
+            if (event.propertyName !== 'transform') return;
+            incoming.removeEventListener('transitionend', finish);
+            animating = false;
+        }
+        incoming.addEventListener('transitionend', finish);
+        window.setTimeout(function() {
+            animating = false;
+        }, 700);
     }
 
     function nextSlide() {
-        showSlide((currentSlide + 1) % slides.length);
+        showSlide((currentSlide + 1) % slides.length, 1);
     }
 
     function prevSlide() {
-        showSlide((currentSlide - 1 + slides.length) % slides.length);
+        showSlide((currentSlide - 1 + slides.length) % slides.length, -1);
     }
 
     function stopAutoplay() {
