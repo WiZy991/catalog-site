@@ -1031,7 +1031,7 @@ h1, h2, h3, h4, h5, h6 {
     width: 100%;
     overflow: hidden;
     border-radius: 0;
-    background: transparent;
+    background: #111;
 }
 
 .hero-carousel__slide {
@@ -1055,6 +1055,20 @@ h1, h2, h3, h4, h5, h6 {
     width: 100%;
     height: auto;
     display: block;
+}
+
+.hero-carousel.is-measured .hero-carousel__slide,
+.hero-carousel.is-measured .hero-carousel__slide.is-active {
+    position: absolute;
+    inset: 0;
+    height: 100%;
+}
+
+.hero-carousel.is-measured .hero-carousel__image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
 }
 
 .hero-carousel__btn {

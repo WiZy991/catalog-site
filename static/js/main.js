@@ -596,6 +596,35 @@ function initMegaMenu() {
     });
 }
 
+function fitHeroCarousel(carousel, viewport, images) {
+    if (!viewport || !images.length) return;
+
+    function apply() {
+        const width = viewport.clientWidth;
+        if (!width) return;
+
+        let maxRatio = 0;
+        images.forEach(function(img) {
+            if (!img.naturalWidth || !img.naturalHeight) return;
+            const ratio = img.naturalHeight / img.naturalWidth;
+            if (ratio > maxRatio) maxRatio = ratio;
+        });
+        if (!maxRatio) return;
+
+        viewport.style.height = Math.round(width * maxRatio) + 'px';
+        carousel.classList.add('is-measured');
+    }
+
+    images.forEach(function(img) {
+        if (img.complete && img.naturalWidth) {
+            apply();
+        } else {
+            img.addEventListener('load', apply);
+        }
+    });
+    window.addEventListener('resize', apply);
+}
+
 /**
  * Hero carousel on the homepage. Speed comes from data-interval (ms).
  */
@@ -604,9 +633,13 @@ function initHeroCarousel() {
     if (!carousel) return;
 
     const slides = carousel.querySelectorAll('.hero-carousel__slide');
+    const images = carousel.querySelectorAll('.hero-carousel__image');
+    const viewport = carousel.querySelector('.hero-carousel__viewport');
     const indicators = carousel.querySelectorAll('.hero-carousel__indicator');
     const prevBtn = carousel.querySelector('.hero-carousel__btn--prev');
     const nextBtn = carousel.querySelector('.hero-carousel__btn--next');
+
+    fitHeroCarousel(carousel, viewport, images);
 
     if (slides.length <= 1) return;
 
